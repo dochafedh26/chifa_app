@@ -1,0 +1,241 @@
+================================================================================
+SERVICE - MALADIES INFECTIEUSES
+OBSERVATIONS MEDICALES DU JOUR - 06/05/2026
+================================================================================
+
+--------------------------------------------------------------------------------
+PATIENT 1: BOULARIAH DJAMAL
+--------------------------------------------------------------------------------
+J7 DE DOXY 200MG/J + GENTA  80MG/12H POUR BRUCELLOSE AIGUE AVEC SIGNES DE FOCALISATION 
+APYREXIE
+DLR DE LA HANCHE GAUCHE
+BILAN DE CONTROLE: SANS ANOMALIE HORMIS BILAN HEPATIQUE A 2XNle
+EPP + ECBU EN COURS
+
+CAT/RECOMMANDATION: 
+POURSUIVRE TRT
+SI PAS D'AMELIORATION = IRM
+SURVEILLANCE
+
+--------------------------------------------------------------------------------
+PATIENT 2: BADAOUI OMAR = PATIENT DE L'ORTHOPEDIE
+--------------------------------------------------------------------------------
+J2 DE AUGMENTIN 1G/8h
+DIABETE INAUGURAL DECOUVERTE DEPUIS 26/06/2026
+APYREXIE,
+OEDEME ROUGE CHAUD TRES DLReux
+MANQUE D'HYGIENE ++++
+KERATODERMIE ++++
+INTERTRIGO
+
+ECHOGRAPHIE: CELLULITE AVEC COLLECTION EN REGARD DES 4 DERNIER ORTEIL DE 41mmX11mm
+
+BILAN: GB 20,000, CRP > 100, CREAT A 11 (DFG: 72.42ml/min)
+SEROLOGIE DE WRIGHT ET RB: W NEGATIVE, RB 200 UI
+LABSTIX: 
+AVIS ORTHOPEDIE: APPELER LE ORTHOPEDISTE DE GARDE DE 05/05/2026: DR MOHAMMED
+
+CAT/RECOMMANDATION: 
+RAJOUTER GENTA 80MG/12H
+DOTUR 200MG/J
+SURVEILLANCE
+
+--------------------------------------------------------------------------------
+PATIENT 3: KETABI CHERIFA
+--------------------------------------------------------------------------------
+J7 DE CEFA 2G/8H
+APYREXIE
+TRES BONNE EVOLUTION AVEC REGRESSION DE L'OEDEME ET LES SIGNES INFLAMMATOIRE
+PAS D'ECOULEMENT CE JOUR
+ECB DE PUS NEGATIVE
+
+CAT/RECOMMANDATION: 
+POURSUIVRE TRT
+CONTROLE MAXILLO LE MARDI
+SURVEILLANCE
+
+--------------------------------------------------------------------------------
+PATIENT 4: MESSAOUDENE BESSMA
+--------------------------------------------------------------------------------
+J2 DE MENINGITE A LIQ CLAIR AVEC SUSPISCION DE BK
+APYREXIE
+PAS DE TROUBLE DE CONSCIENCE NI DE RETENTISSEMENT NEUROLOGIQUE CE JOUR
+
+CAT/RECOMMANDATION: 
+- ADRESSER LE LCR POUR PCR MULTIPLEX
+- SURVEILLANCE
+
+--------------------------------------------------------------------------------
+PATIENT 5: KAOUCHA RAHAF
+--------------------------------------------------------------------------------
+J 11 DE MEO POUR MLAB . febrile HIER SOIR À 39.5° 
+EG CONSERVE
+
+CAT : 
+- ECBU EN COURS
+- MAINTENIR LA MEO
+
+--------------------------------------------------------------------------------
+PATIENT 6: LEDJZAR ISRAA 
+--------------------------------------------------------------------------------
+J2 DE MEO POUR UNE MENINGITE A LIQ TROUBLE
+APYRETIQUE PDT TOUTE LA GARDE
+EXAMEN DU JOUR: 
+EG CONSERVE
+PAS DE DEFICIT NEUROLOGIQUE
+RAIDEUR +++
+LABORATOIRE CONTACTE = CONFIRME LES 10.000 e/mm3 avec presence de Globule Rouge
+FNS: GB 13.9, CRP 24
+PL REFAITE CE JOUR: 2376e => 100% LYMPH
+CAT/RECOMMANDATION: 
+POURSUIVRE LA MEO
+SURVEILLANCE
+
+--------------------------------------------------------------------------------
+PATIENT 7: DEBIEB NADJIA
+--------------------------------------------------------------------------------
+J3 DE MEROPENEM 1G/8H + DIFLUCAN 
+APYREXIE
+REGRESSION DES SIGNES URINAIRE SELON LA PATIENTE
+CAT/RECOMMANDATION: 
+POURSUIVRE LE TRT
+DIFLUCAN A J07 SELON DR NETTAH
+TRT SYMPTO
+RECUPERER LES RESULTAT DES EXAMEN FAIT HIER
+SURVEILANCE
+
+--------------------------------------------------------------------------------
+PATIENT 8: BOUMENIR SIFEDDINE
+--------------------------------------------------------------------------------
+J2 AUGMENTIN 500MG/12H POUR UNE ANGINE PULTACE AVEC PL A 63e (90% LYMPH)
+APYREXIE
+PAS DE Sd MENINGE CE JOUR
+CAT/RECOMMANDATION: 
+POURSUIVRE TRT
+SURVEILANCE
+
+--------------------------------------------------------------------------------
+PATIENT 9: HAMR ELAIN TAKBIRE RATIL
+--------------------------------------------------------------------------------
+J2 MEO POUR MLAB LE PLUS PROBABLE
+APYREXIE
+SD POST PL
+CAT/RECOMMANDATION: 
+POURSUIVRE MEO
+SURVEILANCE
+
+
+************* NOUVELLES ADMISSION ******************
+
+--------------------------------------------------------------------------------
+PATIENT 01: OUGRID ABDELMOUMEN
+--------------------------------------------------------------------------------
+1. AGE: 4.5 ANS
+2. ATCD: RAS
+3. MOTIF: MLAB 38e/mm3 80% PNNA
+4. A L'ADMISSION
+CONSCIENTE COOPERANTE
+APYRETIQUE
+PAS DE CEPHALEE
+PAS DE SD POST PL
+PAS DE DEFICIT NEURO
+5. BILAN: GB 9.8, CRP 06
+6. CAT: 
+MEO + TRT SYMPTO
+
+--------------------------------------------------------------------------------
+PATIENT 02: KHELFI BILLEL
+--------------------------------------------------------------------------------
+1. AGE: 5 ANS
+2. ATCD: RAS
+3. MOTIF: MLAB 450e/mm3 100% PN => 50% PNNA
+4. A L'ADMISSION
+CONSCIENTE COOPERANTE
+FIEVRE A 38.9
+CEPHALEE INTENSES +++++
+PAS DE SD POST PL
+PAS DE DEFICIT NEURO
+5. BILAN: GB 11, CRP NEGATIVE
+6. CAT: 
+MEO + TRT SYMPTO
+
+--------------------------------------------------------------------------------
+PATIENT 03: HAMMADOU WISSEM
+--------------------------------------------------------------------------------
+1. AGE: 07 ANS
+2. ATCD: RAS
+3. MOTIF: MLAB 150e/mm3 80% LYMPH
+4. A L'ADMISSION
+CONSCIENTE COOPERANTE
+APYREXIE
+CEPHALEE +/-
+PAS DE SD POST PL
+PAS DE DEFICIT NEURO
+5. BILAN: GB 7.8, CRP NEGATIVE
+6. CAT: 
+MEO + TRT SYMPTO
+
+--------------------------------------------------------------------------------
+PATIENT 04: HADJ MOUSSA HOUSSEM
+--------------------------------------------------------------------------------
+1. AGE: 06 ANS
+2. ATCD: RAS
+3. MOTIF: MLAB 234e/mm3 70% PNNA
+4. A L'ADMISSION
+CONSCIENTE COOPERANTE
+APYREXIE
+PAS DE CEPHALEE
+PAS DE SD POST PL
+PAS DE DEFICIT NEURO
+5. BILAN: GB 4.0, CRP NEGATIVE
+6. CAT: 
+MEO + TRT SYMPTO
+
+--------------------------------------------------------------------------------
+PATIENT 05: SNOUSSI AHMED MONCEF
+--------------------------------------------------------------------------------
+1. AGE: 04 ANS
+2. ATCD: RAS
+3. MOTIF: MLAB 96e/mm3 70% PNNA
+4. A L'ADMISSION
+CONSCIENTE COOPERANTE
+APYREXIE
+PAS DE CEPHALEE
+PAS DE SD POST PL
+PAS DE DEFICIT NEURO
+5. BILAN: GB 8.9, SUP 96mg/L GLYCO 0.37
+6. CAT: 
+MEO + TRT SYMPTO
+
+--------------------------------------------------------------------------------
+PATIENT 06: DAHBINE HANANE
+--------------------------------------------------------------------------------
+1. AGE: 08 ANS
+2. ATCD: RAS
+3. MOTIF: MLAB 624e/mm3 70% PNNA GLYCO 0,49
+4. A L'ADMISSION
+CONSCIENTE COOPERANTE
+APYREXIE
+PAS DE CEPHALEE
+PAS DE SD POST PL
+PAS DE DEFICIT NEURO
+5. BILAN: GB 11.1, SUP 48mg/L
+6. CAT: 
+MEO + TRT SYMPTO
+
+--------------------------------------------------------------------------------
+PATIENT 07: MEZRI IBRAHIM ELKHALIL
+--------------------------------------------------------------------------------
+1. AGE: 07 ANS
+2. ATCD: RAS
+3. MOTIF: MLAB 52e/mm3 95% PNNA GLYCO 0,44, PROT A 1.50
+4. A L'ADMISSION
+CONSCIENTE COOPERANTE
+APYREXIE
+PAS DE CEPHALEE
+PAS DE SD POST PL
+PAS DE DEFICIT NEURO
+5. BILAN: GB 7.5, SUP 06mg/L
+6. CAT: 
+SURVEILLANCE VIS A VIS L'HYPER-PROTEINORRACHIE
+MEO + TRT SYMPTO

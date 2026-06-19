@@ -1,0 +1,94 @@
+name: chifa
+description: "Clinic Management Desktop Application"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # Icons
+  cupertino_icons: ^1.0.8
+
+  # URL Launcher
+  url_launcher: ^6.2.5
+
+  # State Management - BLoC
+  flutter_bloc: ^9.1.1
+  bloc: ^9.2.1
+  equatable: ^2.0.5
+
+  # Database
+
+  # Navigation
+  go_router: ^17.2.3
+
+  # Functional Programming (Either type for error handling)
+  dartz: ^0.10.1
+
+  # Utilities
+  intl: ^0.20.2
+  uuid: ^4.3.3
+  crypto: ^3.0.3
+  bcrypt: ^1.2.0
+
+  # PDF Generation
+  pdf: ^3.11.0
+  printing: ^5.12.0
+  image: ^4.5.4
+
+  # UI Components
+  table_calendar: ^3.1.0
+  fl_chart: ^1.2.0
+  flutter_typeahead: ^6.0.0
+  shared_preferences: ^2.5.5
+  spell_check_on_client: ^1.0.1
+  http: ^1.6.0
+  mysql_client: ^0.0.27
+  path_provider: ^2.1.5
+  file_picker: ^8.1.2
+  flutter_markdown_plus: ^1.0.0
+  path: ^1.9.1
+  connectivity_plus: ^7.1.1
+  flutter_dotenv: ^6.0.1
+  google_genai: ^0.0.1+1
+  flutter_launcher_icons: ^0.14.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  build_runner: ^2.4.0 # Added for code generation
+  bloc_test: ^10.0.0
+
+# For information on the generic Dart part of this file, see the
+# following page: https://dart.dev/tools/pub/pubspec
+
+# The following section is specific to Flutter packages.
+flutter:
+  uses-material-design: true
+
+  # Assets for PDF templates and images
+  assets:
+    - assets/images/
+    - assets/templates/
+    # Assets for spell check dictionary
+    - assets/spell_check_dictionnary/
+    # SQL Bootstrap files
+    - lib/services/db/sql_statmenets/clinic.sql
+    - .env
+
+  # Custom fonts (optional - add later if needed)
+  fonts:
+    - family: Bricolage-Grotesque
+      fonts:
+        - asset: assets/fonts/Bricolage-Grotesque/BricolageGrotesque-Regular.ttf
+        - asset: assets/fonts/Bricolage-Grotesque/BricolageGrotesque-Bold.ttf
+
+  #         weight: 700

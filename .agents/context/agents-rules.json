@@ -1,0 +1,58 @@
+{
+	"project_identity": {
+		"name": "Chifa",
+		"symbol": "CH",
+		"nature": "Clinic Management Desktop & Mobile Application",
+		"philosophy": "Hybrid local-cloud architecture with seamless synchronization and offline support."
+	},
+	"architecture_rules": {
+		"modification_levels": {
+			"L1_independent": [
+				"lib/app/screens/",
+				"lib/app/cubits/",
+				"lib/app/theme/"
+			],
+			"L2_conditional": [
+				"lib/services/db/repositories/",
+				"lib/services/formatters/",
+				"lib/services/pdf_generation_service.dart"
+			],
+			"L3_direct": [
+				"lib/services/db/database_manager.dart",
+				"lib/services/db/sync_manager.dart",
+				"lib/services/db/database.dart"
+			]
+		},
+		"protection_rules": {
+			"protected_directories": [
+				"lib/services/db/"
+			],
+			"comment_required": "Detailed explanation required for changes in core database or sync logic.",
+			"max_changes": "Limit changes to one module at a time."
+		}
+	},
+	"ai_workflow": {
+		"knowledge_principle": "AI knowledge = Developer knowledge (1:1 parity)",
+		"mandatory_pre_checks": [
+			"Read agents-rules.json first",
+			"Identify work nature (Feature/Fix/Sync)",
+			"Apply minimal-change principles"
+		]
+	},
+	"workflows": {
+		"instruction": "Read workflows on demand. Do not load all at once.",
+		"selection_guide": {
+			"reference": ".agents/context/ai-work-index.yaml",
+			"steps": [
+				"Extract keywords from the user request",
+				"Match the category in ai-work-index.yaml",
+				"Read the matching root quick reference first",
+				"Load the workflow document only if the task still needs details"
+			]
+		},
+		"index": {
+			"printing": ".agents/workflows/printing-workflow.md",
+			"database": ".agents/workflows/database-sync-workflow.md"
+		}
+	}
+}

@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rapport de garde - 16/05/2026</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background: #f9f9f9; color: #333; }
+    .header { background: #0077b6; color: white; padding: 15px; text-align: center; border-radius: 8px; }
+    .stats { display: flex; justify-content: space-around; margin: 15px 0; flex-wrap: wrap; }
+    .card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .card h3 { margin: 0; }
+    .card p { margin: 5px 0; }
+    .section-title { font-size: 18px; margin: 20px 0 10px; color: #023e8a; border-bottom: 2px solid #0077b6; padding-bottom: 5px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    table, th, td { border: 1px solid #ccc; }
+    th, td { padding: 5px; text-align: center; }
+
+    /* Couleurs demandées pour les catégories de patients */
+    .card.hospitalized { border-left: 5px solid #0077b6; background-color: #f0f8ff; }
+    .card.hospitalized h3 { color: #0077b6; }
+
+    .card.new-admission { border-left: 5px solid #2a9d8f; background-color: #f4fbf9; }
+    .card.new-admission h3 { color: #2a9d8f; }
+
+    .card.discharged { border-left: 5px solid #e63946; background-color: #fff5f5; }
+    .card.discharged h3 { color: #e63946; }
+  </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+<div class="btn-container" id="action-zone">
+    <button class="btn-export" onclick="exporterEnPNG()">📥 Exporter en PNG</button>
+  </div>
+  <div class="header">
+    <h2>Rapport de garde</h2>
+    <p>Service des Maladies Infectieuses - EPH Médéa</p>
+    <p>Dr. Chikh Touami - 16/05/2026</p>
+  </div>
+
+  <div class="stats">
+    <div>👥 14 Hospitalisés</div>
+    <div>🆕 6 Nouveaux</div>
+    <div>✅ 3 Sortis</div>
+    <div>📊 23 Total</div>
+  </div>
+
+  <div class="section-title">Patients hospitalisés</div>
+
+  <div class="card hospitalized">
+    <h3>Dilmi Ahmed (12 ans)</h3>
+    <p>J02 - Traitement depuis le 15/05/2026</p>
+    <p>TEMP: 36.1 °C</p>
+    <p>Diagnostic: MLAB</p>
+    <p>EXAMEN DU JOUR: Bonne évolution clinique</p>
+    <p>Recommandations: Poursuivre MEO + TRT sympto</p>
+  </div>
+
+  <div class="card hospitalized">
+    <h3>Tabnehas Baraa (2 ans)</h3>
+    <p>J03 - Traitement depuis le 14/05/2026</p>
+    <p>TEMP: 36.7 °C</p>
+    <p>EXAMEN DU JOUR: Très bonne évolution. Vu la non amélioration de son frère, le patient est gardé avec sa maman.</p>
+    <p>Recommandations: Sortant</p>
+  </div>
+
+  <div class="card hospitalized">
+    <h3>Salah Chouaib (3 ans)</h3>
+    <p>J02 - Traitement depuis le 15/05/2026</p>
+    <p>TEMP: 37.1 °C</p>
+    <p>Diagnostic: MLAB</p>
+    <p>EXAMEN DU JOUR: Bonne évolution clinique, apyrétique, pas de Sd post PL, pas de déficit neuro</p>
+    <p>Recommandations: Poursuivre TRT + surveillance</p>
+  </div>
+
+  <div class="card hospitalized">
+    <h3>Bouhniche Dounia (8 ans)</h3>
+    <p>J02 - Traitement depuis le 15/05/2026</p>
+    <p>TEMP: 40.0 °C</p>
+    <p>Diagnostic: MLAB</p>
+    <p>EXAMEN DU JOUR: ATCD épilepsie, EG conservé, céphalées, pas de photophobie</p>
+    <p>Examens complémentaires: Labstix sans anomalie</p>
+    <p>Recommandations: Poursuivre MEO + TRT sympto</p>
+  </div>
+
+  <div class="card hospitalized">
+    <h3>Debakh Khaled (30 ans)</h3>
+    <p>J05 - Traitement depuis le 12/05/2026</p>
+    <p>Diagnostic: Leishmaniose cutanée faciale</p>
+    <p>EXAMEN DU JOUR: Pas de signes d’intolérance, lésion droite en voie de guérison, lésion palpébrale gauche légèrement ulcérée. Marche difficile avec lourdeur et fourmillement des pieds. ATCD trauma vertébral depuis 1 an.</p>
+    <p>Recommandations: Poursuivre LR TRT, avis neurochir si aggravation</p>
+  </div>
+
+  <div class="card hospitalized">
+    <h3>Laidi Khiera (66 ans)</h3>
+    <p>J05 - Traitement depuis le 12/05/2026</p>
+    <table>
+      <tr><th>TEMP</th><th>TA</th><th>POULS</th><th>SPO2</th></tr>
+      <tr><td>36.9 °C</td><td>120/70</td><td>51 bpm</td><td>92%</td></tr>
+    </table>
+    <p>Diagnostic: Sepsis à porte d’entrée urinaire</p>
+    <p>EXAMEN DU JOUR: Dextro 1.13, diurèse 1.5L/24h claire, EG moyen, très asthénique, pas d’OMI</p>
+    <p>Traitement en cours: Claf 2g/8h, Fraxiparine 0.4UI/24h, Lasilix 40mg/8h</p>
+    <p>Examens complémentaires: Urée/Créat = 1.13/54, Na/K = 136/3.3</p>
+    <p>Recommandations: Poursuivre TRT, RHD, surveillance stricte</p>
+    <p>Avis spécialisé: Néphro (Dr Kadri) : poursuivre réhydratation</p>
+  </div>
+
+  <div class="card hospitalized">
+    <h3>Arabe Lkader (45 ans)</h3>
+    <p>J04 - Traitement depuis le 13/05/2026</p>
+    <p>TEMP: 36.2 °C</p>
+    <p>Diagnostic: Brucellose subaiguë</p>
+    <p>EXAMEN DU JOUR: Bonne tolérance au TRT, pas de signes de focalisation</p>
+    <p>Traitement en cours: Doxy 200mg/j, Genta 80mg/12h pdt 7j</p>
+    <p>Recommandations: Poursuivre le TRT à J07, surveillance</p>
+  </div>
+
+  <div class="card hospitalized">
+    <h3>Kalfouni Mahdjoub (67 ans)</h3>
+    <p>J03 - Traitement depuis le 14/05/2026</p>
+    <p>Diagnostic: Cellulite jambe/pied droit à répétition</p>
+    <p>EXAMEN DU JOUR: Dermatophytose, onychomycose, manque d’hygiène, très bonne évolution</p>
+    <p>Traitement en cours: Augmentin 1g/8h pdt 5j</p>
+    <p>Recommandations: Poursuivre TRT, antifongique + crème hydratante, surveillance</p>
+  </div>
+
+  <div class="card hospitalized">
+    <h3>Guessab Mohamed (62 ans)</h3>
+    <p>J07 - Traitement depuis le 10/05/2026</p>
+    <table>
+      <tr><th>TEMP</th><th>TA</th><th>POULS</th><th>SPO2</th></tr>
+      <tr><td>37.6 °C</td><td>120/60</td><td>79 bpm</td><td>81%</td></tr>
+    </table>
+    <p>Diagnostic: Sepsis urinaire</p>
+    <p>EXAMEN DU JOUR: Asthénique, toux grasse, râles bronchiques, diurèse 1.5L claire, pas de choc septique</p>
+    <p>Traitement en cours: Meropenem 1g/8h pdt 5j, Lovenox 0.6UI/24h pdt 5j</p>
+    <p>Recommandations: Poursuivre TRT, réhydratation, surveillance stricte</p>
+  </div>
+
+  <div class="card hospitalized">
+    <h3>Hafsa Mohamed (60 ans)</h3>
+    <p>J06 - Traitement depuis le 11/05/2026</p>
+    <p>TEMP: 35.9 °C</p>
+    <p>Diagnostic: LIH probable</p>
+    <p>EXAMEN DU JOUR: Bonne évolution clinique, régression de l'ictère</p>
+    <p><strong>Traitement en cours :</strong> Clamoxyl 2G/8H pdt 5j</p>
+    <p><strong>Examens complémentaires :</strong> TDM abdominale = HSMG harmonieuse sans signes péjoratifs, reste de l'examen RAS</p>
+    <p><strong>Recommandations :</strong> Poursuivre TRT à J07 puis arrêt. Faire sortir le patient après arrêt du TRT sauf CPC. Reconvoquer le patient pour sérologie de Martin et Petit à J15.</p>
+  </div>
+
+  <div class="card hospitalized">
+    <h3>Tabannehas Mohamed (5 ans)</h3>
+    <p>J03 - Traitement depuis le 14/05/2026</p>
+    <p>TEMP: 37.2 °C</p>
+    <p>Diagnostic: MLAB</p>
+    <p><strong>EXAMEN DU JOUR :</strong> Céphalée +++, vmts ce jour matinal, asthénie, un léger Sd post PL</p>
+    <p><strong>Recommandations :</strong> Poursuivre TRT + surveillance</p>
+  </div>
+
+  <div class="card hospitalized">
+    <h3>Badaoui Omar (A)</h3>
+    <p>J12 - Traitement depuis le 05/05/2026</p>
+    <p>TEMP: 36.8 °C | TA: 120/80</p>
+    <p>Diagnostic: Cellulite collectée sur diabète inaugural</p>
+    <p><strong>EXAMEN DU JOUR :</strong> Lésion du pied gauche sous pansement avec drain en place ramenant du liquide séro-hématique, œdème des orteils [post op et/ou effet de bandage], régression de la douleur</p>
+    <p><strong>Traitement en cours :</strong> Ciprolon 400MG/12H pdt 5j, Genta 160MG/24H pdt 5j</p>
+    <p><strong>Recommandations :</strong> Poursuivre TRT à J15, avis orthopédie demain pour ablation du drain et évaluation post op, surveillance</p>
+  </div>
+
+  <div class="card hospitalized">
+    <h3>Bouhaik Rabia (45 ans)</h3>
+    <p>J04 - Traitement depuis le 13/05/2026</p>
+    <p>TEMP: 37.1 °C</p>
+    <p>Diagnostic: Brucellose subaiguë</p>
+    <p><strong>EXAMEN DU JOUR :</strong> Persistance des sueurs nocturnes, pas de signes de focalisation</p>
+    <p><strong>Traitement en cours :</strong> Doxy 200MG/24H pdt 5j, Genta 80MG/12H pdt 5j</p>
+    <p><strong>Recommandations :</strong> Poursuivre TRT + surveillance</p>
+  </div>
+
+  <div class="card hospitalized">
+    <h3>Benallal Widade (39 ans)</h3>
+    <p>J03 - Traitement depuis le 14/05/2026</p>
+    <p>Diagnostic: Varicelle sur GSS (Grossesse)</p>
+    <p><strong>EXAMEN DU JOUR :</strong> J02 d'Aciclovir 600MG/8H + Cefa 1G/8H pour varicelle sur Gss à terme. Ce jour : Apyrexid, Lesion vesiculeure de différents ages.</p>
+  <p>Avis gg: Arret de la tocolyse, accouchement par voie basse possible</p>  
+    <p><strong>Recommandations (CAT) :</strong> Maintenir TRT, RHD + surveillance TA +++</p>
+  </div>
+
+  <div class="section-title">Nouvelles admissions</div>
+
+  <div class="card new-admission">
+    <h3>Benmibareki Abderahmane (E)</h3>
+    <p>TEMP: 36.1 °C</p>
+    <p>Diagnostic: Méningite à liquide clair</p>
+    <p><strong>ATCD :</strong> RAS</p>
+    <p><strong>Histoire de la maladie (15 J) :</strong> Nausée, vmts, céphalée, fièvre, photophobie</p>
+    <p><strong>Examen à l'admission :</strong> EGC, céphalée, pas de photophobie, pas de raideur</p>
+    <p><strong>Examens complémentaires :</strong> Bilan : GB 6.0, PLQ 370, CRP négative. PL : 90e = 90% LYMPH + GLYCO 0.47</p>
+    <p><strong>Prescription de la garde :</strong> MEO pdt 5j</p>
+    <p><strong>Recommandations :</strong> M.E.O + TRT sympto</p>
+  </div>
+
+  <div class="card new-admission">
+    <h3>Safer Allah (E)</h3>
+    <p>TEMP: 37.7 °C</p>
+    <p>Diagnostic: Méningite à liquide clair</p>
+    <p><strong>ATCD :</strong> RAS</p>
+    <p><strong>Histoire de la maladie (03 J) :</strong> Vmts, céphalée, fièvre</p>
+    <p><strong>Examen à l'admission :</strong> EGC, pas de céphalée, pas de photophobie, pas de raideur, pas de Sd post PL, pas de déficit neuro</p>
+    <p><strong>Examens complémentaires :</strong> Bilan : GB 6.3, PLQ 311, CRP 24. PL : 20e = 100% LYMPH + GLYCO 0.58. TLT : RAS</p>
+    <p><strong>Prescription de la garde :</strong> MEO pdt 5j</p>
+    <p><strong>Recommandations :</strong> M.E.O + TRT sympto (Sortant demain)</p>
+  </div>
+
+  <div class="card new-admission">
+    <h3>Fedhel Amine (E)</h3>
+    <p>TEMP: 36.8 °C</p>
+    <p>Diagnostic: MLAB</p>
+    <p><strong>ATCD :</strong> RAS</p>
+    <p><strong>Histoire de la maladie (07 J) :</strong> Fièvre, céphalées</p>
+    <p><strong>Examen à l'admission :</strong> EGC, pas de céphalée, pas de photophobie, pas de raideur, pas de Sd post PL, pas de déficit neuro</p>
+    <p><strong>Examens complémentaires :</strong> Bilan : GB 8.5, PLQ 351, CRP 12. PL : 256e = 70% LYMPH + GLYCO 0.61. TLT : RAS</p>
+    <p><strong>Prescription de la garde :</strong> MEO pdt 5j</p>
+    <p><strong>Recommandations :</strong> M.E.O + TRT sympto</p>
+  </div>
+
+  <div class="card new-admission">
+    <h3>Safer Khalil (E)</h3>
+    <p>TEMP: 36.1 °C</p>
+    <p>Diagnostic: MLAB</p>
+    <p><strong>ATCD :</strong> RAS</p>
+    <p><strong>Histoire de la maladie (03 J) :</strong> Fièvre à 39, vmts</p>
+    <p><strong>Examen à l'admission :</strong> EGC, pas de céphalée, pas de photophobie, pas de raideur, pas de Sd post PL, pas de déficit neuro</p>
+    <p><strong>Examens complémentaires :</strong> Bilan : GB 12.7, PLQ 351, CRP +. PL : 64e, 90% PNNA + GLYCO 0.52. TLT : RAS</p>
+    <p><strong>Recommandations :</strong> M.E.O + TRT sympto</p>
+  </div>
+
+  <div class="card new-admission">
+    <h3>Nebah Maria (E)</h3>
+    <p>TEMP: 39.3 °C</p>
+    <p>Diagnostic: MLAB</p>
+    <p><strong>ATCD :</strong> RAS</p>
+    <p><strong>Histoire de la maladie (03 J) :</strong> Fièvre 40, vmts</p>
+    <p><strong>Examen à l'admission :</strong> ECG, pas de Sd post PL, pas de déficit neuro, angine érythémateuse</p>
+    <p><strong>Examens complémentaires :</strong> Bilan : GB 14.8, CRP > 96mg. PL : 22e = 22% PNNA + GLYCO 0.54. TLT : RAS</p>
+    <p><strong>Recommandations :</strong> M.E.O + TRT sympto</p>
+  </div>
+
+  <div class="card new-admission">
+    <h3>Gherba Sadjide (E)</h3>
+    <p>TEMP: 37.1 °C</p>
+    <p>Diagnostic: MLAB</p>
+    <p><strong>ATCD :</strong> RAS</p>
+    <p><strong>Histoire de la maladie (07 J) :</strong> Fièvre non chiffrée</p>
+    <p><strong>Examen à l'admission :</strong> Céphalées supportables, pas de raideur, pas de photophobie</p>
+    <p><strong>Examens complémentaires :</strong> Bilan : GB 4.7, CRP < 6mg. PL : 404e = 100% PNNA + GLYCO 0.45. TLT : RAS</p>
+    <p><strong>Recommandations :</strong> MEO + surveillance</p>
+  </div>
+
+  <div class="section-title">Patients sortis</div>
+
+  <div class="card discharged">
+    <h3>Djellal Asma (7 ans)</h3>
+    <p>Diagnostic: MLAB</p>
+    <p><strong>Observation / Examen du jour :</strong> J03 d'observation pour méningite lymphocytaire aiguë. Ce jour : Pas de troubls a la marche, pas de deficit.</p>
+    <p><strong>Recommandations (CAT) :</strong> Sortant.</p>
+  </div>
+
+  <div class="card discharged">
+    <h3>Mekhtiche Racim (8 ans)</h3>
+    <p>Diagnostic: MLAB</p>
+    <p><strong>Observation / Examen du jour :</strong> J04 d'observation pour méningite lymphocytaire aiguë. Ce jour : Pas de troubls a la marche, pas de deficit.</p>
+    <p><strong>Recommandations (CAT) :</strong> Sortant.</p>
+  </div>
+
+  <div class="card discharged">
+    <h3>Bouahmed Yasser (7 ans)</h3>
+    <p>Diagnostic: MLAB</p>
+    <p><strong>Observation / Examen du jour :</strong> J03 d'observation pour méningite lymphocytaire aiguë. Ce jour : enfant conscient + coopérant en EGC.</p>
+    <p><strong>Recommandations (CAT) :</strong> Sortant.</p>
+  </div>
+<script>
+    function exporterEnPNG() {
+      const zoneAction = document.getElementById('action-zone');
+      
+      // 1. Masquer temporairement le bouton pour qu'il n'apparaisse pas sur l'image
+      zoneAction.style.display = 'none';
+
+      // 2. Prendre la capture d'écran du corps entier de la page (document.body)
+      html2canvas(document.body, {
+        scale: 2, // Augmente la qualité et la netteté de l'image exportée
+        useCORS: true // Permet de charger les ressources externes si nécessaire
+      }).then(canvas => {
+        // 3. Créer un lien de téléchargement virtuel
+        const lien = document.createElement('a');
+        lien.download = 'Rapport_de_garde_16_05_2026.png'; // Nom du fichier final
+        lien.href = canvas.toDataURL('image/png');
+        
+        // 4. Déclencher le téléchargement automatique
+        lien.click();
+
+        // 5. Réafficher le bouton sur l'écran de l'utilisateur après l'export
+        zoneAction.style.display = 'block';
+      }).catch(err => {
+        console.error("Erreur lors de l'exportation :", err);
+        zoneAction.style.display = 'block';
+      });
+    }
+  </script>
+</body>
+</html>
