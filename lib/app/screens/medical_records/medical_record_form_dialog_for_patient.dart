@@ -2330,6 +2330,9 @@ class _MedicalRecordFormDialogForPatientState
   Widget build(BuildContext context) {
     return BlocListener<MedicalRecordCubit, MedicalRecordState>(
       listener: (context, state) {
+        // Guard against state pollution from other tabs/dialogs
+        if (!_isLoading) return;
+
         if (!state.isLoading) {
           setState(() => _isLoading = false);
         }
@@ -2371,6 +2374,9 @@ class _MedicalRecordFormDialogForPatientState
             previous.successMessage != current.successMessage ||
             previous.error != current.error,
         listener: (context, state) {
+          // Guard against billing state changes from other tabs/dialogs
+          if (!_isProcessingPayment) return;
+
           if (state.successMessage != null) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(

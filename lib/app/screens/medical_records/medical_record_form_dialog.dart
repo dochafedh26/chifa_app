@@ -295,6 +295,9 @@ class _MedicalRecordFormDialogState extends State<MedicalRecordFormDialog> {
   Widget build(BuildContext context) {
     return BlocListener<MedicalRecordCubit, MedicalRecordState>(
       listener: (context, state) {
+        // Guard against state pollution from other tabs/dialogs
+        if (!_isLoading) return;
+
         if (!state.isLoading) {
           setState(() => _isLoading = false);
         }
