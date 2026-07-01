@@ -64,4 +64,12 @@ node_modules/
 # Large commented-out spell check dictionary
 **/ar_words.txt
 
+# Scratch folder
+/scratch/
+
+# Installation logs
+InstallUtil.InstallLog
+
+
+
 

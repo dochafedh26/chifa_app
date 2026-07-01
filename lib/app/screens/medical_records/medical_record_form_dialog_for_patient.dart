@@ -39,9 +39,11 @@ import 'package:chifa/services/db/models/service.dart';
 import 'package:chifa/services/db/models/soins_service.dart';
 import 'package:chifa/app/screens/medical_records/widgets/patient_history_panel.dart';
 import 'package:chifa/services/db/repositories/payment_repository.dart';
+import 'package:chifa/services/db/repositories/patient_repository.dart';
 import 'package:chifa/services/formatters/formatters.dart';
 import 'package:chifa/services/posology/posology_scraper_service.dart';
 import 'package:chifa/app/widgets/pathology_search_dialog.dart';
+import 'package:chifa/services/cnas/cnas_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -98,6 +100,7 @@ class _MedicalRecordFormDialogForPatientState
   double _totalDoctorCommission = 0.0;
 
   bool _isProcessingPayment = false;
+  String _paymentMethod = 'Cash';
 
   // Template Search for prescriptions
   final _searchController = TextEditingController();
@@ -180,6 +183,17 @@ class _MedicalRecordFormDialogForPatientState
   Future<void> _loadServicesForRecord(int recordId) async {
     try {
       final repo = PaymentRepository();
+      
+      final payResult = await repo.getByRecordId(recordId);
+      payResult.fold((_) {}, (payment) {
+        if (payment != null && mounted) {
+          setState(() {
+            _paymentMethod = payment.paymentMethod ?? 'Cash';
+            _paymentNoteController.text = payment.notes ?? '';
+          });
+        }
+      });
+
       final result = await repo.getServicesByRecordId(recordId);
       result.fold((_) {}, (paymentServices) {
         if (!mounted) return;
@@ -1709,7 +1723,7 @@ class _MedicalRecordFormDialogForPatientState
                       motifLettre: motifLettreCtrl.text,
                       dateCreation: DateTime.now(),
                       template: _selectedTemplate,
-                      backPageTitle: printTitleOnBack ? motifLettreCtrl.text : null,
+                      backPageTitle: printTitleOnBack ? backPageTitleCtrl.text : null,
                     );
                     if (!mounted) return;
                     showPdfPreview(context: context, generatedPdfBytes: pdfFuture);
@@ -2160,6 +2174,7 @@ class _MedicalRecordFormDialogForPatientState
       paymentDate: DateTime.now(),
       recordId: recordId,
       notes: _paymentNoteController.text,
+      paymentMethod: _paymentMethod,
     );
 
     final paymentServices = _selectedServices
@@ -2200,6 +2215,7 @@ class _MedicalRecordFormDialogForPatientState
           amount: _totalPaymentAmount,
           servicesText: servicesText,
           notes: _paymentNoteController.text,
+          paymentMethod: _paymentMethod,
         );
 
         final paymentServices = _selectedServices
@@ -2307,6 +2323,441 @@ class _MedicalRecordFormDialogForPatientState
     _totalDoctorCommission = _selectedServices.fold(
       0.0,
       (sum, item) => sum + item.doctorCommission,
+    );
+  }
+
+  void _showCnasVerificationDialog() {
+    List<CnasBeneficiary>? beneficiaries;
+    CnasBeneficiary? selectedBeneficiary;
+    bool isLoading = false;
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            void checkValidity(CnasBeneficiary chosen) {
+              if (chosen.isValid) {
+                setDialogState(() {
+                  selectedBeneficiary = chosen;
+                });
+              } else {
+                // Expired or Already consulted! Look for another beneficiary
+                CnasBeneficiary? other;
+                for (final item in beneficiaries!) {
+                  if (item.isValid) {
+                    other = item;
+                    break;
+                  }
+                }
+                if (other != null) {
+                  setDialogState(() {
+                    selectedBeneficiary = other;
+                  });
+                  final reason = chosen.status == 'already_consulted'
+                      ? "Déjà consulté aujourd'hui"
+                      : "Droits expirés";
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        "$reason pour ${chosen.text}. Sélection automatique de ${other.text}.",
+                      ),
+                      backgroundColor: Colors.orange,
+                      duration: const Duration(seconds: 4),
+                    ),
+                  );
+                } else {
+                  setDialogState(() {
+                    selectedBeneficiary = null;
+                  });
+                  final title = chosen.status == 'already_consulted'
+                      ? 'Déjà Consulté'
+                      : 'Droits Expirés';
+                  final message = chosen.status == 'already_consulted'
+                      ? "Alerte: Le patient a déjà effectué une consultation aujourd'hui."
+                      : 'Alerte: La date de fin de droit a expiré pour tous les bénéficiaires.';
+                  showDialog(
+                    context: dialogContext,
+                    builder: (context) => AlertDialog(
+                      title: Row(
+                        children: [
+                          const Icon(Icons.warning, color: Colors.red),
+                          const SizedBox(width: 8),
+                          Text(title),
+                        ],
+                      ),
+                      content: Text(message),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('OK'),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+              }
+            }
+
+            return AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.security, color: Colors.blue),
+                  const SizedBox(width: 8),
+                  const Text('Vérification Carte CHIFA'),
+                ],
+              ),
+              content: SizedBox(
+                width: 400,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (isLoading)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(8.0),
+                          child: CircularProgressIndicator(),
+                        ),
+                      )
+                    else if (beneficiaries == null)
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.credit_card),
+                        label: const Text('Lire la Carte CHIFA'),
+                        onPressed: () async {
+                          String currentAssurance = _currentPatient.nationalId ?? "";
+                          
+                          Future<void> runFetch(String assurance) async {
+                            setDialogState(() {
+                              isLoading = true;
+                            });
+                            List<CnasBeneficiary> list = [];
+                            String? errorMessage;
+                            try {
+                              list = await CnasService.instance.fetchBeneficiaries(assurance);
+                            } catch (e) {
+                              errorMessage = e.toString().replaceAll('Exception:', '').trim();
+                            }
+                            
+                            if (errorMessage != null && 
+                                (errorMessage.contains("indicateurs au rouge") || 
+                                 errorMessage.contains("lecteur de carte") ||
+                                 errorMessage.contains("Lecteur de carte"))) {
+                              
+                              setDialogState(() {
+                                isLoading = false;
+                              });
+                              
+                              final enteredNo = await _showInsuranceNumberDialog(dialogContext, assurance);
+                              if (enteredNo != null && enteredNo.isNotEmpty) {
+                                final saved = await _updatePatientNationalId(enteredNo);
+                                if (saved) {
+                                  await runFetch(enteredNo);
+                                }
+                              }
+                              return;
+                            }
+                            
+                            setDialogState(() {
+                              beneficiaries = errorMessage == null ? list : [];
+                              isLoading = false;
+                              if (list.isNotEmpty) {
+                                final first = list.first;
+                                if (first.isValid) {
+                                  selectedBeneficiary = first;
+                                } else {
+                                  CnasBeneficiary? validOne;
+                                  for (final b in list) {
+                                    if (b.isValid) {
+                                      validOne = b;
+                                      break;
+                                    }
+                                  }
+                                  if (validOne != null) {
+                                    selectedBeneficiary = validOne;
+                                    final reason = first.status == 'already_consulted'
+                                        ? "Déjà consulté aujourd'hui"
+                                        : "Droits expirés";
+                                    ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          "$reason pour ${first.text}. Sélection automatique de ${validOne.text}.",
+                                        ),
+                                        backgroundColor: Colors.orange,
+                                        duration: const Duration(seconds: 4),
+                                      ),
+                                    );
+                                  } else {
+                                    selectedBeneficiary = null;
+                                    final title = first.status == 'already_consulted'
+                                        ? 'Déjà Consulté'
+                                        : 'Droits Expirés';
+                                    final message = first.status == 'already_consulted'
+                                        ? "Alerte: Le patient a déjà effectué une consultation aujourd'hui."
+                                        : 'Alerte: La date de fin de droit a expiré pour tous les bénéficiaires.';
+                                    showDialog(
+                                      context: dialogContext,
+                                      builder: (context) => AlertDialog(
+                                        title: Row(
+                                          children: [
+                                            const Icon(Icons.warning, color: Colors.red),
+                                            const SizedBox(width: 8),
+                                            Text(title),
+                                          ],
+                                        ),
+                                        content: Text(message),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(context),
+                                            child: const Text('OK'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }
+                                }
+                              }
+                            });
+                            
+                            if (errorMessage != null) {
+                              ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                SnackBar(
+                                  content: Text(errorMessage),
+                                  backgroundColor: Colors.red,
+                                  duration: const Duration(seconds: 8),
+                                ),
+                              );
+                            } else if (list.isEmpty) {
+                              ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Aucun bénéficiaire trouvé.'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                          
+                          if (currentAssurance.isEmpty) {
+                            final enteredNo = await _showInsuranceNumberDialog(dialogContext, "");
+                            if (enteredNo != null && enteredNo.isNotEmpty) {
+                              final saved = await _updatePatientNationalId(enteredNo);
+                              if (saved) {
+                                await runFetch(enteredNo);
+                              }
+                            }
+                          } else {
+                            await runFetch(currentAssurance);
+                          }
+                        },
+                      )
+                    else ...[
+                      DropdownButtonFormField<CnasBeneficiary>(
+                        value: selectedBeneficiary,
+                        decoration: const InputDecoration(
+                          labelText: 'Bénéficiaire',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        items: beneficiaries!.map((b) {
+                          String labelText = 'Valide';
+                          Color labelColor = Colors.green;
+                          Color itemColor = Colors.black;
+                          if (b.status == 'already_consulted') {
+                            labelText = 'Déjà consulté';
+                            labelColor = Colors.orange.shade700;
+                            itemColor = Colors.orange.shade900;
+                          } else if (!b.isValid) {
+                            labelText = 'Expiré';
+                            labelColor = Colors.red;
+                            itemColor = Colors.red;
+                          }
+                          return DropdownMenuItem<CnasBeneficiary>(
+                            value: b,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    b.text,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: itemColor,
+                                      fontWeight: b.isValid ? FontWeight.normal : FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  labelText,
+                                  style: TextStyle(
+                                    color: labelColor,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: isSubmitting
+                            ? null
+                            : (b) {
+                                if (b != null) {
+                                  checkValidity(b);
+                                }
+                              },
+                      ),
+                      const SizedBox(height: 8),
+                      if (selectedBeneficiary != null)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4.0),
+                          child: Text(
+                            "Date Fin Droit: ${selectedBeneficiary!.dfd}",
+                            style: TextStyle(
+                              color: selectedBeneficiary!.isValid ? Colors.green.shade800 : Colors.red.shade800,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+                      if (isSubmitting)
+                        const Column(
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 8),
+                            Text(
+                              "Enregistrement de la prescription sur le portail CNAS...",
+                              style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        )
+                      else
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.cloud_upload),
+                          label: const Text('Enregistrer la Prescription sur CNAS'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: selectedBeneficiary != null && selectedBeneficiary!.isValid
+                                ? Colors.green.shade700
+                                : Colors.grey,
+                            foregroundColor: Colors.white,
+                          ),
+                          onPressed: selectedBeneficiary == null || !selectedBeneficiary!.isValid
+                              ? null
+                              : () async {
+                                  setDialogState(() {
+                                    isSubmitting = true;
+                                  });
+
+                                  final rawText = _prescriptionsFieldController.text;
+                                  final lines = rawText
+                                      .split('\n')
+                                      .map((l) => l.trim())
+                                      .where((l) => l.isNotEmpty)
+                                      .toList();
+                                  final medicines = lines.map((l) {
+                                    var clean = l.replaceFirst(RegExp(r'^\d+[\.\s\-]*'), '').trim();
+                                    if (clean.contains('-')) {
+                                      clean = clean.split('-')[0].trim();
+                                    }
+                                    return clean;
+                                  }).where((m) => m.isNotEmpty).toList();
+
+                                  if (medicines.isEmpty) {
+                                    ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Veuillez d\'abord saisir une ordonnance.'),
+                                        backgroundColor: Colors.orange,
+                                      ),
+                                    );
+                                    setDialogState(() {
+                                      isSubmitting = false;
+                                    });
+                                    return;
+                                  }
+
+                                  final success = await CnasService.instance.runPrescription(
+                                    assuranceNumber: widget.patient.nationalId ?? "",
+                                    beneficiaryValue: selectedBeneficiary!.value,
+                                    medicines: medicines,
+                                  );
+
+                                  setDialogState(() {
+                                    isSubmitting = false;
+                                  });
+
+                                  if (success) {
+                                    Navigator.pop(dialogContext);
+                                    showDialog(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        title: const Row(
+                                          children: [
+                                            Icon(Icons.check_circle, color: Colors.green),
+                                            SizedBox(width: 8),
+                                            Text('Succès'),
+                                          ],
+                                        ),
+                                        content: const Text(
+                                          'L\'ordonnance a été validée et enregistrée avec succès sur le portail PNC CNAS.',
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(context),
+                                            child: const Text('OK'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  } else {
+                                    showDialog(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        title: const Row(
+                                          children: [
+                                            Icon(Icons.error, color: Colors.red),
+                                            SizedBox(width: 8),
+                                            Text('Erreur'),
+                                          ],
+                                        ),
+                                        content: const Text(
+                                          'Une erreur s\'est produite lors de l\'enregistrement de l\'ordonnance sur le portail CNAS.',
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(context),
+                                            child: const Text('OK'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }
+                                },
+                        ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSubmitting
+                      ? null
+                      : () {
+                          Navigator.pop(dialogContext);
+                          setState(() {
+                            _paymentMethod = 'Cash';
+                          });
+                        },
+                  child: const Text('Annuler'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -3505,6 +3956,40 @@ class _MedicalRecordFormDialogForPatientState
                             ],
                           ),
                           const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            value: _paymentMethod,
+                            decoration: const InputDecoration(
+                              labelText: 'Mode de paiement',
+                              border: OutlineInputBorder(),
+                              prefixIcon: Icon(Icons.payment),
+                              isDense: true,
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'Cash',
+                                child: Text('Espèces (Cash)'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Credit Card',
+                                child: Text('Carte Bancaire'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'CARTE CHIFA',
+                                child: Text('CARTE CHIFA'),
+                              ),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() {
+                                  _paymentMethod = val;
+                                });
+                                if (val == 'CARTE CHIFA') {
+                                  _showCnasVerificationDialog();
+                                }
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 16),
                           BlocBuilder<BillingCubit, BillingState>(
                             buildWhen: (previous, current) =>
                                 previous.services != current.services ||
@@ -4293,6 +4778,87 @@ class _MedicalRecordFormDialogForPatientState
         ],
       ),
     );
+  }
+
+  Future<String?> _showInsuranceNumberDialog(BuildContext context, String currentVal) async {
+    final controller = TextEditingController(text: currentVal);
+    final formKey = GlobalKey<FormState>();
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Numéro d\'assurance requis'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Le lecteur de carte CHIFA n\'est pas connecté ou la carte n\'est pas détectée. Veuillez saisir le numéro d\'assurance du patient pour effectuer une recherche à distance.',
+                  style: TextStyle(fontSize: 14),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: controller,
+                  decoration: const InputDecoration(
+                    labelText: 'Numéro d\'assurance (N° Sécurité Sociale)',
+                    border: OutlineInputBorder(),
+                    hintText: 'Ex: 630026048450',
+                  ),
+                  keyboardType: TextInputType.number,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Veuillez saisir un numéro valide.';
+                    }
+                    if (value.trim().length < 8) {
+                      return 'Le numéro est trop court.';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, null),
+              child: const Text('Annuler'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  Navigator.pop(ctx, controller.text.trim());
+                }
+              },
+              child: const Text('Valider'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<bool> _updatePatientNationalId(String nationalId) async {
+    try {
+      final updatedPatient = _currentPatient.copyWith(nationalId: nationalId);
+      final repo = PatientRepository();
+      final result = await repo.update(_currentPatient.patientId!, updatedPatient);
+      return result.fold(
+        (failure) => false,
+        (success) {
+          if (success) {
+            setState(() {
+              _currentPatient = updatedPatient;
+            });
+            return true;
+          }
+          return false;
+        },
+      );
+    } catch (e) {
+      return false;
+    }
   }
 }
 

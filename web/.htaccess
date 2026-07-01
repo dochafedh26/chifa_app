@@ -1,0 +1,27 @@
+# Enable rewrite engine for Flutter HTML5 routing (GoRouter / clean URLs)
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L]
+</IfModule>
+
+# Allow CORS for font files (prevents 403 / CORS blocking)
+<IfModule mod_headers.c>
+  <FilesMatch "\.(ttf|otf|eot|woff|woff2)$">
+    Header set Access-Control-Allow-Origin "*"
+  </FilesMatch>
+</IfModule>
+
+# Set correct MIME types for web fonts
+AddType font/ttf .ttf
+AddType font/opentype .otf
+
+# Attempt to bypass server-wide blocks on .env files in the assets folder
+<Files ".env">
+  Order allow,deny
+  Allow from all
+  Satisfy Any
+</Files>
