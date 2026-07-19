@@ -186,6 +186,15 @@ class BackgroundTunnelTaskHandler extends TaskHandler {
       case 'device_list_response':
       case 'print_job_response':
       case 'terminal_command_response':
+      case 'rdp_sessions_response':
+      case 'rdp_wrapper_status_response':
+      case 'rdp_wrapper_install_response':
+      case 'rdp_configure_response':
+      case 'usb_share_response':
+      case 'usb_unshare_response':
+      case 'usb_bind_response':
+      case 'usb_unbind_response':
+      case 'usb_eject_response':
         try {
           FlutterForegroundTask.sendDataToMain({
             'type': 'file_explorer_response',
