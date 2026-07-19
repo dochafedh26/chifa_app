@@ -4,6 +4,7 @@ import "dart:io";
 import "dart:typed_data";
 import "package:pdf/pdf.dart";
 import "package:pdf/widgets.dart" as pw;
+import 'rich_text_pdf_renderer.dart';
 
 
 /// Generates the Lettre de Liaison (Medical Liaison Letter) PDF using the
@@ -328,14 +329,12 @@ Future<Uint8List> generateLettreDeLiaisonPdf({
         pw.Text('- Examen Clinique:', style: normalStyle),
         pw.SizedBox(height: 4),
         if (examenClinique.isNotEmpty)
-          ...examenClinique
-              .split('\n')
-              .expand(
-                (line) => [
-                  pw.Text(line, style: boldStyle),
-                  pw.SizedBox(height: 2),
-                ],
-              )
+          ...parseDeltaToPdfWidgets(
+            text: examenClinique,
+            baseStyle: normalStyle,
+            boldFont: boldFont,
+            regularFont: regularFont,
+          )
         else
           ...List.generate(
             5,

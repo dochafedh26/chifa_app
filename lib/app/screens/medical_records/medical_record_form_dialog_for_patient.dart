@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:flutter_quill/flutter_quill.dart' as quill;
 
 import 'package:chifa/app/cubits/appointment_cubit.dart';
 import 'package:chifa/app/cubits/auth_cubit.dart';
@@ -79,6 +81,7 @@ class _MedicalRecordFormDialogForPatientState
   bool _includeDateInOrdonnance = true;
   final _motifController = TextEditingController();
   final _detailsController = TextEditingController();
+  late quill.QuillController _detailsQuillController;
   final _diagnosticController = TextEditingController();
   final _prescriptionsFieldController = TextEditingController();
   final _doctorController = TextEditingController();
@@ -158,10 +161,30 @@ class _MedicalRecordFormDialogForPatientState
       _loadServicesForRecord(widget.recordToEdit!.id!);
     }
 
+    final initialDetails = widget.recordToEdit != null ? widget.recordToEdit!.details : '';
+    quill.Document detailsDoc;
+    final trimmedDetails = initialDetails.trim();
+    if ((trimmedDetails.startsWith('[') && trimmedDetails.endsWith(']')) || 
+        (trimmedDetails.startsWith('{') && trimmedDetails.endsWith('}'))) {
+      try {
+        final decoded = jsonDecode(trimmedDetails);
+        final List<dynamic> ops = decoded is List ? decoded : (decoded['ops'] ?? decoded);
+        detailsDoc = quill.Document.fromJson(ops);
+      } catch (_) {
+        detailsDoc = quill.Document()..insert(0, initialDetails);
+      }
+    } else {
+      detailsDoc = quill.Document()..insert(0, initialDetails);
+    }
+    _detailsQuillController = quill.QuillController(
+      document: detailsDoc,
+      selection: const TextSelection.collapsed(offset: 0),
+    );
+    _detailsQuillController.addListener(_markAsDirty);
+
     // Add listeners to mark the form as dirty when typing
     final controllers = [
       _motifController,
-      _detailsController,
       _diagnosticController,
       _prescriptionsFieldController,
       _weightController,
@@ -227,6 +250,7 @@ class _MedicalRecordFormDialogForPatientState
   void dispose() {
     _motifController.dispose();
     _detailsController.dispose();
+    _detailsQuillController.dispose();
     _diagnosticController.dispose();
     _prescriptionsFieldController.dispose();
     _doctorController.dispose();
@@ -1616,11 +1640,30 @@ class _MedicalRecordFormDialogForPatientState
   }
 
   void _showLettreDeLiaisonDialog() {
+    final detailsPlain = _detailsQuillController.document.toPlainText().trim();
     final examen =
-        'Temperature: ${_temperatureController.text.isNotEmpty ? '${double.parse(_temperatureController.text).toStringAsFixed(2)}°C' : 'N/A'}\nTension: ${_tensionController.text.isNotEmpty ? _tensionController.text : 'N/A'}\nFrequence: ${_frequenceController.text.isNotEmpty ? _frequenceController.text : 'N/A'}\nSpao2: ${_spao2Controller.text.isNotEmpty ? _spao2Controller.text : 'N/A'}\n\n${_detailsController.text}';
+        'Temperature: ${_temperatureController.text.isNotEmpty ? '${double.parse(_temperatureController.text).toStringAsFixed(2)}°C' : 'N/A'}\nTension: ${_tensionController.text.isNotEmpty ? _tensionController.text : 'N/A'}\nFrequence: ${_frequenceController.text.isNotEmpty ? _frequenceController.text : 'N/A'}\nSpao2: ${_spao2Controller.text.isNotEmpty ? _spao2Controller.text : 'N/A'}\n\n$detailsPlain';
     final atcdCtrl = TextEditingController(text: _currentPatient.atcd);
     final motifConsCtrl = TextEditingController(text: _motifController.text);
-    final examenCtrl = TextEditingController(text: examen);
+    
+    quill.Document doc;
+    if ((examen.startsWith('[') && examen.endsWith(']')) || 
+        (examen.startsWith('{') && examen.endsWith('}'))) {
+      try {
+        final decoded = jsonDecode(examen);
+        final List<dynamic> ops = decoded is List ? decoded : (decoded['ops'] ?? decoded);
+        doc = quill.Document.fromJson(ops);
+      } catch (_) {
+        doc = quill.Document()..insert(0, examen);
+      }
+    } else {
+      doc = quill.Document()..insert(0, examen);
+    }
+    final examenQuillController = quill.QuillController(
+      document: doc,
+      selection: const TextSelection.collapsed(offset: 0),
+    );
+
     final motifLettreCtrl = TextEditingController();
     final backPageTitleCtrl = TextEditingController();
     bool printTitleOnBack = false;
@@ -1655,13 +1698,51 @@ class _MedicalRecordFormDialogForPatientState
                       maxLines: 2,
                     ),
                     const SizedBox(height: 16),
-                    TextFormField(
-                      controller: examenCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Examen Clinique',
-                        border: OutlineInputBorder(),
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Examen Clinique',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                       ),
-                      maxLines: 10,
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade400),
+                      ),
+                      child: Column(
+                        children: [
+                          quill.QuillSimpleToolbar(
+                            controller: examenQuillController,
+                            config: const quill.QuillSimpleToolbarConfig(
+                              showSearchButton: false,
+                              showFontFamily: false,
+                              showFontSize: false,
+                              showInlineCode: false,
+                              showSubscript: false,
+                              showSuperscript: false,
+                              showCodeBlock: false,
+                              showQuote: false,
+                              showIndent: false,
+                              showLink: false,
+                              showListCheck: false,
+                            ),
+                          ),
+                          const Divider(height: 1),
+                          Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: quill.QuillEditor.basic(
+                              controller: examenQuillController,
+                              config: const quill.QuillEditorConfig(
+                                minHeight: 200,
+                                scrollable: false,
+                                expands: false,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
@@ -1715,11 +1796,12 @@ class _MedicalRecordFormDialogForPatientState
                   icon: const Icon(Icons.visibility),
                   onPressed: () {
                     if (!mounted) return;
+                    final examenCliniqueJson = jsonEncode(examenQuillController.document.toDelta().toJson());
                     final pdfFuture = generateLettreDeLiaisonPdf(
                       patient: _currentPatient,
                       atcd: atcdCtrl.text,
                       motifConsultation: motifConsCtrl.text,
-                      examenClinique: examenCtrl.text,
+                      examenClinique: examenCliniqueJson,
                       motifLettre: motifLettreCtrl.text,
                       dateCreation: DateTime.now(),
                       template: _selectedTemplate,
@@ -1745,12 +1827,13 @@ class _MedicalRecordFormDialogForPatientState
                       );
                       return;
                     }
+                    final examenCliniqueJson = jsonEncode(examenQuillController.document.toDelta().toJson());
                     final lettre = Lettre(
                       patientId: _currentPatient.patientId!,
                       doctorId: int.tryParse(_doctorId ?? ''),
                       atcd: atcdCtrl.text,
                       motifConsultation: motifConsCtrl.text,
-                      examenClinique: examenCtrl.text,
+                      examenClinique: examenCliniqueJson,
                       motifLettre: motifLettreCtrl.text,
                     );
                     context.read<CertificateCubit>().createLettre(lettre);
@@ -1759,7 +1842,7 @@ class _MedicalRecordFormDialogForPatientState
                       patient: _currentPatient,
                       atcd: atcdCtrl.text,
                       motifConsultation: motifConsCtrl.text,
-                      examenClinique: examenCtrl.text,
+                      examenClinique: examenCliniqueJson,
                       motifLettre: motifLettreCtrl.text,
                       dateCreation: DateTime.now(),
                       template: _selectedTemplate,
@@ -1780,7 +1863,7 @@ class _MedicalRecordFormDialogForPatientState
     ).then((_) {
       atcdCtrl.dispose();
       motifConsCtrl.dispose();
-      examenCtrl.dispose();
+      examenQuillController.dispose();
       motifLettreCtrl.dispose();
       backPageTitleCtrl.dispose();
     });
@@ -2107,6 +2190,16 @@ class _MedicalRecordFormDialogForPatientState
   }
 
   void _submit() {
+    final plainDetails = _detailsQuillController.document.toPlainText().trim();
+    if (plainDetails.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Détails required'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
     if (!_formKey.currentState!.validate()) return;
     if (_doctorController.text.isEmpty) {
       ScaffoldMessenger.of(
@@ -2123,7 +2216,7 @@ class _MedicalRecordFormDialogForPatientState
       doctorId: int.tryParse(_doctorId ?? '') ?? 0,
       recordDate: _prescriptionDate,
       motif: _motifController.text.isEmpty ? null : _motifController.text,
-      details: _detailsController.text,
+      details: jsonEncode(_detailsQuillController.document.toDelta().toJson()),
       diagnostic: _diagnosticController.text.isEmpty
           ? null
           : _diagnosticController.text,
@@ -2893,11 +2986,9 @@ class _MedicalRecordFormDialogForPatientState
                 },
                 onImportDetails: (val) {
                   setState(() {
-                    if (_detailsController.text.isNotEmpty) {
-                      _detailsController.text += '\n$val';
-                    } else {
-                      _detailsController.text = val;
-                    }
+                    final currentDoc = _detailsQuillController.document;
+                    final prefix = currentDoc.toPlainText().trim().isEmpty ? '' : '\n';
+                    _detailsQuillController.document.insert(currentDoc.length - 1, prefix + val);
                     _markAsDirty();
                   });
                   Navigator.pop(context);
@@ -3066,18 +3157,50 @@ class _MedicalRecordFormDialogForPatientState
                             maxLines: 2,
                           ),
                           const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _detailsController,
-                            decoration: const InputDecoration(
-                              labelText: 'Détails *',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.notes),
+                          const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Détails *',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                             ),
-                            maxLines: 4,
-                            validator: (value) =>
-                                (value == null || value.isEmpty)
-                                ? 'Détails required'
-                                : null,
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.grey.shade400),
+                            ),
+                            child: Column(
+                              children: [
+                                quill.QuillSimpleToolbar(
+                                  controller: _detailsQuillController,
+                                  config: const quill.QuillSimpleToolbarConfig(
+                                    showSearchButton: false,
+                                    showFontFamily: false,
+                                    showFontSize: false,
+                                    showInlineCode: false,
+                                    showSubscript: false,
+                                    showSuperscript: false,
+                                    showCodeBlock: false,
+                                    showQuote: false,
+                                    showIndent: false,
+                                    showLink: false,
+                                    showListCheck: false,
+                                  ),
+                                ),
+                                const Divider(height: 1),
+                                Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: quill.QuillEditor.basic(
+                                    controller: _detailsQuillController,
+                                    config: const quill.QuillEditorConfig(
+                                      scrollable: false,
+                                      expands: false,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                           const SizedBox(height: 16),
                           Wrap(
@@ -4473,11 +4596,9 @@ class _MedicalRecordFormDialogForPatientState
                                 },
                                 onImportDetails: (val) {
                                   setState(() {
-                                    if (_detailsController.text.isNotEmpty) {
-                                      _detailsController.text += '\n$val';
-                                    } else {
-                                      _detailsController.text = val;
-                                    }
+                                    final currentDoc = _detailsQuillController.document;
+                                    final prefix = currentDoc.toPlainText().trim().isEmpty ? '' : '\n';
+                                    _detailsQuillController.document.insert(currentDoc.length - 1, prefix + val);
                                     _markAsDirty();
                                   });
                                 },

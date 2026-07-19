@@ -38,10 +38,16 @@ import 'package:chifa/services/db/repositories/service_repository.dart';
 import 'package:chifa/services/db/repositories/soins_service_repository.dart';
 import 'package:chifa/services/db/sync_worker_manager.dart';
 import 'package:chifa/services/xampp_service.dart';
+import 'package:chifa/tunnel/services/settings_service.dart';
+import 'package:chifa/tunnel/services/tunnel_service.dart';
+import 'package:chifa/tunnel/services/terminal_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_quill/flutter_quill.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -69,10 +75,25 @@ void main() async {
     // Don't rethrow - let the app start and show the dialog
   }
 
+  // Initialize TCP Tunnel services
+  final tunnelSettings = SettingsService();
+  await tunnelSettings.init();
+  final tunnelService = TunnelService();
+  final tunnelTerminal = TerminalService();
+
   // Spell checker disabled for performance
   // AppSpellCheckService().init();
 
-  runApp(const MyApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: tunnelService),
+        ChangeNotifierProvider.value(value: tunnelSettings),
+        ChangeNotifierProvider.value(value: tunnelTerminal),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -186,6 +207,17 @@ class MyApp extends StatelessWidget {
           title: 'Chifa - Clinic Management',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.lightTheme,
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            FlutterQuillLocalizations.delegate,
+          ],
+          supportedLocales: const [
+            Locale('en', 'US'),
+            Locale('fr', 'FR'),
+            Locale('ar', 'DZ'),
+          ],
           home: BlocBuilder<AuthCubit, AuthState>(
             builder: (context, state) {
               if (state is AuthLoading || state is AuthInitial) {

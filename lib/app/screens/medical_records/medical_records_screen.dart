@@ -7,6 +7,7 @@ import 'package:chifa/services/db/models/medical_record.dart';
 import 'package:chifa/services/db/models/patient.dart';
 import 'package:chifa/services/db/repositories/medical_record_repository.dart';
 import 'package:flutter/material.dart';
+import 'package:chifa/app/widgets/rich_text_viewer.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
@@ -834,7 +835,7 @@ class _DetailRow extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
-          Expanded(child: Text(value)),
+          Expanded(child: RichTextViewer(text: value)),
         ],
       ),
     );

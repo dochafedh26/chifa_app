@@ -1,0 +1,852 @@
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
+import '../services/settings_service.dart';
+import '../services/updater_service.dart';
+import '../models/machine_profile.dart';
+
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _autoReconnect = true;
+
+  Future<void> _discoverAgents() async {
+    final settings = context.read<SettingsService>();
+    final currentProfile = settings.selectedProfile;
+    final relayUrlCtrl = TextEditingController(text: currentProfile.relayUrl);
+
+    bool isLoading = false;
+    List<Map<String, dynamic>> agents = [];
+    String? errorMessage;
+    bool hasQueried = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+
+          // Render free tier sleeps; give it more time to cold-start
+          int timeoutFor(String rawUrl) {
+            final url = rawUrl.toLowerCase();
+            if (url.contains('onrender.com')) return 35;
+            return 10;
+          }
+
+          String friendlyError(String relay, Object e) {
+            final msg = e.toString();
+            final isTimeout = msg.contains('TimeoutException') || msg.contains('timed out');
+            if (isTimeout) {
+              final isRender = relay.toLowerCase().contains('onrender.com');
+              if (isRender) {
+                return '${_relayLabel(relay)}: Server is waking up (free-tier cold start). Wait ~30s and scan again.';
+              }
+              return '${_relayLabel(relay)}: Timed out. Server may be offline.';
+            }
+            return '${_relayLabel(relay)}: ${msg.replaceAll('Exception: ', '')}';
+          }
+
+          Future<void> fetchFromRelay(String rawUrl, List<Map<String, dynamic>> out) async {
+            var url = rawUrl.trim();
+            if (url.isEmpty) return;
+            if (url.startsWith('wss://')) {
+              url = url.replaceFirst('wss://', 'https://');
+            } else if (url.startsWith('ws://')) {
+              url = url.replaceFirst('ws://', 'http://');
+            } else {
+              url = 'https://$url';
+            }
+            if (url.endsWith('/')) url = url.substring(0, url.length - 1);
+            final timeout = timeoutFor(rawUrl);
+            final response = await http.get(Uri.parse('$url/health')).timeout(Duration(seconds: timeout));
+            if (response.statusCode == 200) {
+              final data = jsonDecode(response.body) as Map<String, dynamic>;
+              final sessions = data['sessions'] as List<dynamic>? ?? [];
+              for (final s in sessions) {
+                final m = Map<String, dynamic>.from(s as Map);
+                m['_relayUrl'] = rawUrl.trim();
+                out.add(m);
+              }
+            }
+          }
+
+          Future<void> performQuery() async {
+            setDialogState(() {
+              isLoading = true;
+              errorMessage = null;
+              hasQueried = true;
+            });
+
+            final List<Map<String, dynamic>> found = [];
+            final List<String> errors = [];
+
+            final relaysToScan = {
+              SettingsService.renderRelayUrl,
+              SettingsService.railwayRelayUrl,
+              if (relayUrlCtrl.text.trim().isNotEmpty) relayUrlCtrl.text.trim(),
+            }.toList();
+
+            await Future.wait(relaysToScan.map((relay) async {
+              try {
+                await fetchFromRelay(relay, found);
+              } catch (e) {
+                errors.add(friendlyError(relay, e));
+              }
+            }));
+
+            setDialogState(() {
+              agents = found;
+              errorMessage = errors.isEmpty ? null : errors.join('\n');
+              isLoading = false;
+            });
+          }
+
+          Future<void> selectAgent(Map<String, dynamic> agent) async {
+            final agentName = agent['agentName'] as String? ?? 'Unknown Agent';
+            final agentRelayUrl = agent['_relayUrl'] as String? ?? relayUrlCtrl.text.trim();
+            final tokenCtrl = TextEditingController(text: agent['token'] as String? ?? '');
+            bool tokenObscured = true;
+
+            final pairSuccess = await showDialog<bool>(
+              context: ctx,
+              builder: (pCtx) => StatefulBuilder(
+                builder: (context, setPairState) => AlertDialog(
+                  backgroundColor: const Color(0xFF0F1629),
+                  title: Text('Pair with $agentName', style: const TextStyle(color: Colors.white)),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Please enter the Auth Token shown in the agent terminal on your work machine.',
+                        style: TextStyle(color: Colors.white70, fontSize: 13),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: tokenCtrl,
+                        obscureText: tokenObscured,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Auth Token (UUID)',
+                          labelStyle: const TextStyle(color: Color(0xFF8892A4)),
+                          enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF1A2340))),
+                          focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF00BFA5))),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              tokenObscured ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                              size: 18,
+                              color: const Color(0xFF8892A4),
+                            ),
+                            onPressed: () => setPairState(() => tokenObscured = !tokenObscured),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(pCtx, false),
+                      child: const Text('Cancel', style: TextStyle(color: Color(0xFF8892A4))),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00BFA5)),
+                      onPressed: () {
+                        final tokenVal = tokenCtrl.text.trim();
+                        if (tokenVal.isNotEmpty) {
+                          Navigator.pop(pCtx, true);
+                        }
+                      },
+                      child: const Text('Pair & Connect'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+
+            if (pairSuccess == true) {
+              final tokenVal = tokenCtrl.text.trim();
+              if (!context.mounted) return;
+              final settings = context.read<SettingsService>();
+              final list = List<MachineProfile>.from(settings.profiles);
+
+              final newProfile = MachineProfile(
+                id: const Uuid().v4(),
+                name: agentName,
+                relayUrl: agentRelayUrl,
+                token: tokenVal,
+              );
+              list.add(newProfile);
+              await settings.saveProfiles(list);
+              await settings.setSelectedProfileId(newProfile.id);
+
+              if (!ctx.mounted) return;
+              Navigator.pop(ctx); // Close discovery dialog
+              _showSnackBar('Paired and selected profile: $agentName');
+            }
+          }
+
+          return AlertDialog(
+            backgroundColor: const Color(0xFF0F1629),
+            title: const Text('Discover Agents', style: TextStyle(color: Colors.white)),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: isLoading ? null : performQuery,
+                          icon: const Icon(Icons.sensors, size: 14),
+                          label: const Text('Scan Both Relays', style: TextStyle(fontSize: 12)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF00BFA5),
+                            side: const BorderSide(color: Color(0xFF00BFA5)),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: relayUrlCtrl,
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    decoration: InputDecoration(
+                      labelText: 'Custom Relay URL (optional)',
+                      labelStyle: const TextStyle(color: Color(0xFF8892A4), fontSize: 11),
+                      hintText: 'wss://... (scanned in addition to both defaults)',
+                      hintStyle: const TextStyle(color: Color(0xFF4A5568), fontSize: 11),
+                      enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF1A2340))),
+                      focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF00BFA5))),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.search, color: Color(0xFF00BFA5), size: 18),
+                        onPressed: isLoading ? null : performQuery,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (isLoading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: CircularProgressIndicator(color: Color(0xFF00BFA5)),
+                    )
+                  else if (!hasQueried)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Text(
+                        'Tap "Scan Both Relays" to discover agents on Render and Railway.',
+                        style: TextStyle(color: Color(0xFF8892A4), fontSize: 12),
+                        textAlign: TextAlign.center,
+                      ),
+                    )
+                  else if (errorMessage != null && agents.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Text(
+                        'Errors:\n$errorMessage',
+                        style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                        textAlign: TextAlign.center,
+                      ),
+                    )
+                  else if (hasQueried && agents.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Text(
+                        'No agents found on either relay.',
+                        style: TextStyle(color: Colors.white70, fontSize: 13),
+                        textAlign: TextAlign.center,
+                      ),
+                    )
+                  else if (agents.isNotEmpty)
+                    Flexible(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: agents.length,
+                        itemBuilder: (context, index) {
+                          final a = agents[index];
+                          final name = a['agentName'] as String? ?? 'Unknown';
+                          final hasClient = a['hasClient'] as bool? ?? false;
+                          final hasAgent = a['hasAgent'] as bool? ?? false;
+                          final relayUrl = a['_relayUrl'] as String? ?? '';
+
+                          if (!hasAgent) return const SizedBox.shrink();
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0A0E1A),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF2A3450)),
+                            ),
+                            child: ListTile(
+                              leading: const Icon(Icons.computer, color: Color(0xFF00E5FF)),
+                              title: Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    hasClient ? 'In Use (Tunnel Busy)' : 'Available',
+                                    style: TextStyle(
+                                      color: hasClient ? Colors.orangeAccent : const Color(0xFF00BFA5),
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                  Text(
+                                    _relayLabel(relayUrl),
+                                    style: const TextStyle(color: Color(0xFF4A90D9), fontSize: 10),
+                                  ),
+                                ],
+                              ),
+                              trailing: const Icon(Icons.chevron_right, color: Color(0xFF8892A4), size: 18),
+                              onTap: () => selectAgent(a),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  if (errorMessage != null && agents.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        '⚠ Partial errors: $errorMessage',
+                        style: const TextStyle(color: Colors.orangeAccent, fontSize: 11),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Close', style: TextStyle(color: Color(0xFF8892A4))),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  late TextEditingController _githubTokenCtrl;
+  bool _githubTokenObscured = true;
+
+  @override
+  void initState() {
+    super.initState();
+    final s = context.read<SettingsService>();
+    _autoReconnect = s.autoReconnect;
+    _githubTokenCtrl = TextEditingController(text: s.githubToken);
+  }
+
+  @override
+  void dispose() {
+    _githubTokenCtrl.dispose();
+    super.dispose();
+  }
+
+  void _showProfileDialog({MachineProfile? existing}) {
+    final isEdit = existing != null;
+    final nameCtrl = TextEditingController(text: existing?.name ?? '');
+    final urlCtrl = TextEditingController(text: existing?.relayUrl ?? (isEdit ? '' : SettingsService.defaultRelayUrl));
+    final tokenCtrl = TextEditingController(text: existing?.token ?? const Uuid().v4());
+    bool tokenObscured = true;
+    String selectedRelay = _relayPresetFor(urlCtrl.text);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF0F1629),
+          title: Text(isEdit ? 'Edit Machine Profile' : 'Add Machine Profile', style: const TextStyle(color: Colors.white)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    labelText: 'Machine Name',
+                    labelStyle: TextStyle(color: Color(0xFF8892A4)),
+                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF1A2340))),
+                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF00BFA5))),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: selectedRelay,
+                  dropdownColor: const Color(0xFF0F1629),
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    labelText: 'Relay Server',
+                    labelStyle: TextStyle(color: Color(0xFF8892A4)),
+                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF1A2340))),
+                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF00BFA5))),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'render', child: Text('Render (tcp-tunnel-wt89)')),
+                    DropdownMenuItem(value: 'railway', child: Text('Railway (tcptunnel-production)')),
+                    DropdownMenuItem(value: 'custom', child: Text('Custom relay URL')),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setDialogState(() {
+                      selectedRelay = value;
+                      switch (value) {
+                        case 'render':
+                          urlCtrl.text = SettingsService.renderRelayUrl;
+                          break;
+                        case 'railway':
+                          urlCtrl.text = SettingsService.railwayRelayUrl;
+                          break;
+                        case 'custom':
+                          break;
+                      }
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: urlCtrl,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    labelText: 'Relay URL',
+                    labelStyle: TextStyle(color: Color(0xFF8892A4)),
+                    hintText: 'wss://...',
+                    hintStyle: TextStyle(color: Color(0xFF4A5568)),
+                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF1A2340))),
+                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF00BFA5))),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: tokenCtrl,
+                  obscureText: tokenObscured,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Auth Token',
+                    labelStyle: const TextStyle(color: Color(0xFF8892A4)),
+                    enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF1A2340))),
+                    focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF00BFA5))),
+                    suffixIcon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(
+                            Icons.refresh_rounded,
+                            size: 18,
+                            color: Color(0xFF00BFA5),
+                          ),
+                          tooltip: 'Generate Random Token',
+                          onPressed: () => setDialogState(() {
+                            tokenCtrl.text = const Uuid().v4();
+                          }),
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            tokenObscured ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                            size: 18,
+                            color: const Color(0xFF8892A4),
+                          ),
+                          onPressed: () => setDialogState(() => tokenObscured = !tokenObscured),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel', style: TextStyle(color: Color(0xFF8892A4))),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00BFA5)),
+              onPressed: () async {
+                final name = nameCtrl.text.trim();
+                final url = urlCtrl.text.trim();
+                final token = tokenCtrl.text.trim();
+
+                if (name.isNotEmpty && url.isNotEmpty && token.isNotEmpty) {
+                  Navigator.pop(ctx);
+                  final settings = context.read<SettingsService>();
+                  final list = List<MachineProfile>.from(settings.profiles);
+
+                  if (isEdit) {
+                    final idx = list.indexWhere((p) => p.id == existing.id);
+                    if (idx != -1) {
+                      list[idx] = existing.copyWith(name: name, relayUrl: url, token: token);
+                    }
+                  } else {
+                    final newProfile = MachineProfile(
+                      id: const Uuid().v4(),
+                      name: name,
+                      relayUrl: url,
+                      token: token,
+                    );
+                    list.add(newProfile);
+                  }
+
+                  await settings.saveProfiles(list);
+                  _showSnackBar('Profile saved');
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _relayPresetFor(String relayUrl) {
+    final url = relayUrl.trim().toLowerCase();
+    if (url.contains('tcp-tunnel-wt89.onrender.com')) return 'render';
+    if (url.contains('tcptunnel-production.up.railway.app')) return 'railway';
+    return 'custom';
+  }
+
+  String _relayLabel(String relayUrl) {
+    final url = relayUrl.trim().toLowerCase();
+    if (url.contains('tcp-tunnel-wt89.onrender.com')) return '🟢 via Render';
+    if (url.contains('tcptunnel-production.up.railway.app')) return '🚂 via Railway';
+    return 'via $relayUrl';
+  }
+
+  Future<void> _deleteProfile(MachineProfile profile) async {
+    final settings = context.read<SettingsService>();
+    if (settings.profiles.length <= 1) {
+      _showSnackBar('Cannot delete the only remaining profile.');
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF0F1629),
+        title: const Text('Delete Profile', style: TextStyle(color: Colors.white)),
+        content: Text('Are you sure you want to delete "${profile.name}"?', style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF8892A4))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final list = List<MachineProfile>.from(settings.profiles);
+      list.removeWhere((p) => p.id == profile.id);
+      await settings.saveProfiles(list);
+
+      // If we deleted the active profile, reset selectedProfileId to the first one
+      if (settings.selectedProfileId == profile.id) {
+        await settings.setSelectedProfileId(list.first.id);
+      }
+      _showSnackBar('Profile deleted');
+    }
+  }
+
+  void _showSnackBar(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: const Color(0xFF00BFA5),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = context.watch<SettingsService>();
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // ── Machine Profiles Section ─────────────────────────────────────
+          _Section(
+            title: 'Machine Profiles',
+            icon: Icons.computer_outlined,
+            children: [
+              ...settings.profiles.map((profile) {
+                final isActive = settings.selectedProfileId == profile.id;
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0A0E1A),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isActive ? const Color(0xFF00BFA5).withValues(alpha: 0.5) : const Color(0xFF2A3450),
+                      width: isActive ? 1.5 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.circle,
+                        size: 10,
+                        color: isActive ? const Color(0xFF00BFA5) : const Color(0xFF4A5568),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              profile.name,
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              profile.relayUrl,
+                              style: const TextStyle(color: Color(0xFF8892A4), fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.edit_outlined, size: 18, color: Color(0xFF00BFA5)),
+                        onPressed: () => _showProfileDialog(existing: profile),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                        onPressed: () => _deleteProfile(profile),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _showProfileDialog(),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add Profile'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF00BFA5),
+                        side: const BorderSide(color: Color(0xFF00BFA5)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _discoverAgents,
+                      icon: const Icon(Icons.sensors, size: 18, color: Colors.white),
+                      label: const Text('Discover', style: TextStyle(color: Colors.white)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00BFA5),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.05, end: 0),
+
+          const SizedBox(height: 16),
+
+          // ── Behaviour ────────────────────────────────────────────────────
+          _Section(
+            title: 'Behaviour',
+            icon: Icons.tune_rounded,
+            children: [
+              _SwitchTile(
+                label: 'Auto-reconnect',
+                subtitle: 'Automatically reconnect on connection loss',
+                value: _autoReconnect,
+                onChanged: (v) async {
+                  setState(() => _autoReconnect = v);
+                  await settings.setAutoReconnect(v);
+                },
+              ),
+            ],
+          ).animate().fadeIn(duration: 400.ms, delay: 80.ms).slideY(begin: 0.05, end: 0),
+
+          const SizedBox(height: 16),
+
+          // ── GitHub Integration ───────────────────────────────────────────
+          _Section(
+            title: 'GitHub Integration',
+            icon: Icons.sync_lock_rounded,
+            children: [
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Enter a Personal Access Token (PAT) to check for updates if your repository is private.',
+                  style: TextStyle(color: Color(0xFF8892A4), fontSize: 11),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _githubTokenCtrl,
+                obscureText: _githubTokenObscured,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                onChanged: (v) async {
+                  await settings.setGithubToken(v.trim());
+                },
+                decoration: InputDecoration(
+                  labelText: 'Personal Access Token (PAT)',
+                  labelStyle: const TextStyle(color: Color(0xFF8892A4), fontSize: 12),
+                  enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF1A2340))),
+                  focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF00BFA5))),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _githubTokenObscured ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                      size: 18,
+                      color: const Color(0xFF8892A4),
+                    ),
+                    onPressed: () => setState(() => _githubTokenObscured = !_githubTokenObscured),
+                  ),
+                ),
+              ),
+            ],
+          ).animate().fadeIn(duration: 400.ms, delay: 120.ms).slideY(begin: 0.05, end: 0),
+
+          const SizedBox(height: 16),
+
+          // ── Quick reference ──────────────────────────────────────────────
+          _Section(
+            title: 'Quick Reference',
+            icon: Icons.info_outline_rounded,
+            children: [
+              const _InfoRow(label: 'Start relay server locally', value: 'node src/server.js'),
+              _InfoRow(
+                label: 'Start agent on work machine',
+                value: 'dart run bin/agent.dart --relay ${settings.selectedProfile.relayUrl} --token ${settings.selectedProfile.token}',
+              ),
+              const _InfoRow(label: 'Compile agent to executable', value: 'dart compile exe bin/agent.dart -o agent.exe'),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+          const Center(
+            child: Text(
+              'TCP Tunnel App v${UpdaterService.currentVersion}',
+              style: TextStyle(color: Color(0xFF8892A4), fontSize: 11),
+            ),
+          ),
+          const SizedBox(height: 40),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Reusable section container ────────────────────────────────────────────────
+
+class _Section extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final List<Widget> children;
+  const _Section({required this.title, required this.icon, required this.children});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: const Color(0xFF1A2340).withValues(alpha: 0.9),
+          border: Border.all(color: const Color(0xFF2A3450), width: 1),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+              child: Row(
+                children: [
+                  Icon(icon, size: 16, color: const Color(0xFF00BFA5)),
+                  const SizedBox(width: 8),
+                  Text(title,
+                      style: const TextStyle(
+                          color: Color(0xFF00BFA5), fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.8)),
+                ],
+              ),
+            ),
+            const Divider(color: Color(0xFF2A3450), height: 1),
+            Padding(padding: const EdgeInsets.all(16), child: Column(children: children)),
+          ],
+        ),
+      );
+}
+
+class _SwitchTile extends StatelessWidget {
+  final String label;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _SwitchTile({required this.label, required this.subtitle, required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) => Row(
+        children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500)),
+              const SizedBox(height: 2),
+              Text(subtitle, style: const TextStyle(color: Color(0xFF8892A4), fontSize: 12)),
+            ]),
+          ),
+          Switch(value: value, onChanged: onChanged, activeThumbColor: const Color(0xFF00BFA5)),
+        ],
+      );
+}
+
+class _InfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _InfoRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: const TextStyle(color: Color(0xFF8892A4), fontSize: 11, letterSpacing: 0.4)),
+            const SizedBox(height: 4),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0A0E1A),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF2A3450)),
+              ),
+              child: Text(value,
+                  style: const TextStyle(
+                      color: Color(0xFF00E5FF), fontSize: 11, fontFamily: 'monospace', letterSpacing: 0.3)),
+            ),
+          ],
+        ),
+      );
+}

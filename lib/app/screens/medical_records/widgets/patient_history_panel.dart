@@ -4,6 +4,7 @@ import 'package:chifa/services/db/models/bilan.dart';
 import 'package:chifa/services/db/models/medical_record.dart';
 import 'package:chifa/services/db/models/patient.dart';
 import 'package:flutter/material.dart';
+import 'package:chifa/app/widgets/rich_text_viewer.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
@@ -293,8 +294,8 @@ class _PatientHistoryPanelState extends State<PatientHistoryPanel>
             color: Colors.grey.shade100,
             borderRadius: BorderRadius.circular(4),
           ),
-          child: Text(
-            content,
+          child: RichTextViewer(
+            text: content,
             style: const TextStyle(fontSize: 12),
           ),
         ),

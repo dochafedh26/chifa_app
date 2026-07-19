@@ -15,6 +15,7 @@ import 'package:chifa/app/theme/app_theme.dart';
 import 'package:chifa/app/widgets/sync_indicator.dart';
 import 'package:chifa/app/widgets/xampp_connection_dialog.dart';
 import 'package:chifa/services/db/sync_manager.dart';
+import 'package:chifa/tunnel/screens/tunnel_shell.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -44,6 +45,7 @@ class _MainShellState extends State<MainShell> {
     _NavItem(Icons.biotech_outlined, Icons.biotech, 'Bilan'),
     _NavItem(Icons.description_outlined, Icons.description, 'Certifs'),
     _NavItem(Icons.auto_awesome_outlined, Icons.auto_awesome, 'IA Clinique'),
+    _NavItem(Icons.lan_outlined, Icons.lan, 'Tunnel'),
     _NavItem(Icons.settings_outlined, Icons.settings, 'Settings'),
   ];
 
@@ -108,6 +110,7 @@ class _MainShellState extends State<MainShell> {
       'bilan': const BilanScreen(),
       'certificates': const CertificatesScreen(),
       'ai_search': const AiSearchScreen(),
+      'tunnel': const TunnelShell(),
       'settings': const SettingsScreen(),
     };
 

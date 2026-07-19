@@ -10,6 +10,7 @@ import 'package:chifa/services/db/models/print_template.dart';
 import 'package:chifa/services/db/repositories/medical_record_repository.dart';
 import 'package:chifa/services/db/repositories/payment_repository.dart';
 import 'package:flutter/material.dart';
+import 'package:chifa/app/widgets/rich_text_viewer.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
@@ -318,7 +319,7 @@ class _PatientMedicalRecordsListDialogState
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  Text(record.details),
+                                  RichTextViewer(text: record.details),
                                   const SizedBox(height: 8),
                                   const Text(
                                     'Prescriptions:',
@@ -604,7 +605,7 @@ class _PatientMedicalRecordsListDialogState
                 fontSize: 13,
               ),
             ),
-            Text(record.details, style: const TextStyle(fontSize: 14)),
+            RichTextViewer(text: record.details, style: const TextStyle(fontSize: 14)),
             // Payment amount for this record
             if (paymentAmount != null) ...[
               const SizedBox(height: 8),
