@@ -2619,7 +2619,16 @@ class _MedicalRecordFormDialogForPatientState
                         runSpacing: 4,
                         children: commonSports.map((s) {
                           return ActionChip(
-                            label: Text(s, style: const TextStyle(fontSize: 12)),
+                            backgroundColor: Colors.teal.shade50,
+                            side: BorderSide(color: Colors.teal.shade200),
+                            label: Text(
+                              s,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.teal.shade900,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                             onPressed: () => setStateDlg(() => sportCtrl.text = s),
                           );
                         }).toList(),
@@ -2632,8 +2641,19 @@ class _MedicalRecordFormDialogForPatientState
                         children: commonPratiques.map((p) {
                           final isSelected = typePratique == p;
                           return ChoiceChip(
-                            label: Text(p),
+                            label: Text(
+                              p,
+                              style: TextStyle(
+                                color: isSelected ? Colors.white : Colors.blueGrey.shade900,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                              ),
+                            ),
                             selected: isSelected,
+                            selectedColor: Colors.teal.shade700,
+                            backgroundColor: Colors.blueGrey.shade50,
+                            side: BorderSide(
+                              color: isSelected ? Colors.teal.shade700 : Colors.blueGrey.shade200,
+                            ),
                             onSelected: (selected) {
                               if (selected) setStateDlg(() => typePratique = p);
                             },
@@ -2791,7 +2811,7 @@ class _MedicalRecordFormDialogForPatientState
             return AlertDialog(
               title: const Text('Compte-rendu d\'Interprétation ECG'),
               content: SizedBox(
-                width: 580,
+                width: 620,
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -2804,27 +2824,66 @@ class _MedicalRecordFormDialogForPatientState
                       const SizedBox(height: 12),
                       Wrap(
                         spacing: 8,
-                        runSpacing: 4,
+                        runSpacing: 6,
                         children: [
-                          const Text('Modèles :', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          const Padding(
+                            padding: EdgeInsets.only(top: 6),
+                            child: Text('Modèles :', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          ),
                           ActionChip(
                             avatar: const Icon(Icons.check_circle_outline, size: 14, color: Colors.green),
-                            label: const Text('ECG Normal', style: TextStyle(fontSize: 12)),
+                            backgroundColor: Colors.green.shade50,
+                            side: BorderSide(color: Colors.green.shade300),
+                            label: Text(
+                              'ECG Normal',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.green.shade900,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                             onPressed: () => applyPreset('normal', setStateDlg),
                           ),
                           ActionChip(
-                            avatar: const Icon(Icons.bolt, size: 14, color: Colors.orange),
-                            label: const Text('Tachycardie', style: TextStyle(fontSize: 12)),
+                            avatar: const Icon(Icons.bolt, size: 14, color: Colors.deepOrange),
+                            backgroundColor: Colors.orange.shade50,
+                            side: BorderSide(color: Colors.orange.shade300),
+                            label: Text(
+                              'Tachycardie',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.orange.shade900,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                             onPressed: () => applyPreset('tachycardie', setStateDlg),
                           ),
                           ActionChip(
                             avatar: const Icon(Icons.arrow_downward, size: 14, color: Colors.blue),
-                            label: const Text('Bradycardie', style: TextStyle(fontSize: 12)),
+                            backgroundColor: Colors.blue.shade50,
+                            side: BorderSide(color: Colors.blue.shade300),
+                            label: Text(
+                              'Bradycardie',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.blue.shade900,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                             onPressed: () => applyPreset('bradycardie', setStateDlg),
                           ),
                           ActionChip(
                             avatar: const Icon(Icons.favorite_border, size: 14, color: Colors.purple),
-                            label: const Text('Bilan HTA', style: TextStyle(fontSize: 12)),
+                            backgroundColor: Colors.purple.shade50,
+                            side: BorderSide(color: Colors.purple.shade300),
+                            label: Text(
+                              'Bilan HTA',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.purple.shade900,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                             onPressed: () => applyPreset('hta', setStateDlg),
                           ),
                         ],
@@ -2843,7 +2902,16 @@ class _MedicalRecordFormDialogForPatientState
                         runSpacing: 4,
                         children: motifs.map((m) {
                           return ActionChip(
-                            label: Text(m, style: const TextStyle(fontSize: 11)),
+                            backgroundColor: Colors.blueGrey.shade50,
+                            side: BorderSide(color: Colors.blueGrey.shade200),
+                            label: Text(
+                              m,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.blueGrey.shade900,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                             onPressed: () => setStateDlg(() => motifCtrl.text = m),
                           );
                         }).toList(),
@@ -2946,17 +3014,15 @@ class _MedicalRecordFormDialogForPatientState
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: TextField(
-                              controller: intervalleQtCtrl,
-                              decoration: const InputDecoration(
-                                labelText: 'Intervalle QT',
-                                border: OutlineInputBorder(),
-                              ),
-                            ),
-                          ),
                         ],
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: intervalleQtCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Intervalle QT / QTc',
+                          border: OutlineInputBorder(),
+                        ),
                       ),
                       const SizedBox(height: 12),
                       TextField(

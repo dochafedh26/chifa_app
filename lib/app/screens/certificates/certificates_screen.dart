@@ -5268,11 +5268,20 @@ class _AptitudeSportListState extends State<_AptitudeSportList> {
               ),
               const SizedBox(height: 8),
               Wrap(
-                spacing: 8,
+                spacing: 6,
                 runSpacing: 4,
                 children: _commonSports.map((s) {
                   return ActionChip(
-                    label: Text(s, style: const TextStyle(fontSize: 12)),
+                    backgroundColor: Colors.teal.shade50,
+                    side: BorderSide(color: Colors.teal.shade200),
+                    label: Text(
+                      s,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.teal.shade900,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     onPressed: () => setState(() => _sportController.text = s),
                   );
                 }).toList(),
@@ -5280,15 +5289,26 @@ class _AptitudeSportListState extends State<_AptitudeSportList> {
               const SizedBox(height: 16),
 
               // Type de pratique
-              const Text('Type de pratique :', style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text('Type de pratique :', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
                 children: _commonPratiques.map((p) {
                   final isSelected = _typePratiqueController.text == p;
                   return ChoiceChip(
-                    label: Text(p),
+                    label: Text(
+                      p,
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : Colors.blueGrey.shade900,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      ),
+                    ),
                     selected: isSelected,
+                    selectedColor: Colors.teal.shade700,
+                    backgroundColor: Colors.blueGrey.shade50,
+                    side: BorderSide(
+                      color: isSelected ? Colors.teal.shade700 : Colors.blueGrey.shade200,
+                    ),
                     onSelected: (selected) {
                       if (selected) setState(() => _typePratiqueController.text = p);
                     },
@@ -5850,27 +5870,66 @@ class _InterpretationEcgListState extends State<_InterpretationEcgList> {
               // Presets rapides
               Wrap(
                 spacing: 8,
-                runSpacing: 4,
+                runSpacing: 6,
                 children: [
-                  const Text('Modèles rapides :', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Padding(
+                    padding: EdgeInsets.only(top: 6),
+                    child: Text('Modèles rapides :', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  ),
                   ActionChip(
                     avatar: const Icon(Icons.check_circle_outline, size: 16, color: Colors.green),
-                    label: const Text('ECG Normal'),
+                    backgroundColor: Colors.green.shade50,
+                    side: BorderSide(color: Colors.green.shade300),
+                    label: Text(
+                      'ECG Normal',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.green.shade900,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     onPressed: () => _applyPreset('normal'),
                   ),
                   ActionChip(
-                    avatar: const Icon(Icons.bolt, size: 16, color: Colors.orange),
-                    label: const Text('Tachycardie Sinusale'),
+                    avatar: const Icon(Icons.bolt, size: 16, color: Colors.deepOrange),
+                    backgroundColor: Colors.orange.shade50,
+                    side: BorderSide(color: Colors.orange.shade300),
+                    label: Text(
+                      'Tachycardie Sinusale',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.orange.shade900,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     onPressed: () => _applyPreset('tachycardie'),
                   ),
                   ActionChip(
                     avatar: const Icon(Icons.arrow_downward, size: 16, color: Colors.blue),
-                    label: const Text('Bradycardie Sinusale'),
+                    backgroundColor: Colors.blue.shade50,
+                    side: BorderSide(color: Colors.blue.shade300),
+                    label: Text(
+                      'Bradycardie Sinusale',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.blue.shade900,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     onPressed: () => _applyPreset('bradycardie'),
                   ),
                   ActionChip(
                     avatar: const Icon(Icons.favorite_border, size: 16, color: Colors.purple),
-                    label: const Text('Bilan HTA'),
+                    backgroundColor: Colors.purple.shade50,
+                    side: BorderSide(color: Colors.purple.shade300),
+                    label: Text(
+                      'Bilan HTA',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.purple.shade900,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     onPressed: () => _applyPreset('hta'),
                   ),
                 ],
@@ -5938,11 +5997,20 @@ class _InterpretationEcgListState extends State<_InterpretationEcgList> {
               ),
               const SizedBox(height: 8),
               Wrap(
-                spacing: 8,
+                spacing: 6,
                 runSpacing: 4,
                 children: _motifs.map((m) {
                   return ActionChip(
-                    label: Text(m, style: const TextStyle(fontSize: 12)),
+                    backgroundColor: Colors.blueGrey.shade50,
+                    side: BorderSide(color: Colors.blueGrey.shade200),
+                    label: Text(
+                      m,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.blueGrey.shade900,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     onPressed: () => setState(() => _motifController.text = m),
                   );
                 }).toList(),
@@ -6051,17 +6119,15 @@ class _InterpretationEcgListState extends State<_InterpretationEcgList> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: _intervalleQtController,
-                      decoration: const InputDecoration(
-                        labelText: 'Intervalle QT / QTc',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
                 ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _intervalleQtController,
+                decoration: const InputDecoration(
+                  labelText: 'Intervalle QT / QTc',
+                  border: OutlineInputBorder(),
+                ),
               ),
               const SizedBox(height: 16),
 
