@@ -14,10 +14,12 @@ import 'package:chifa/app/cubits/prescription_cubit.dart';
 import 'package:chifa/app/cubits/soins_service_cubit.dart';
 import 'package:chifa/app/cubits/workspace_cubit.dart';
 import 'package:chifa/app/printing/appointment_pdf.dart';
+import 'package:chifa/app/printing/aptitude_sport.dart';
 import 'package:chifa/app/printing/arret_de_travail.dart';
 import 'package:chifa/app/printing/bilan.dart';
 import 'package:chifa/app/printing/certificat_bonne_sante.dart';
 import 'package:chifa/app/printing/dispense_sport.dart';
+import 'package:chifa/app/printing/interpretation_ecg.dart';
 import 'package:chifa/app/printing/lettre_de_liaison.dart';
 import 'package:chifa/app/printing/maladie_chronique.dart';
 import 'package:chifa/app/printing/certificat_prenuptial.dart';
@@ -30,7 +32,9 @@ import 'package:chifa/app/printing/soins_medicaux.dart';
 import 'package:chifa/services/db/database.dart';
 import 'package:chifa/services/db/models/appointment.dart';
 import 'package:chifa/services/db/models/arret_de_travail.dart';
+import 'package:chifa/services/db/models/certificat_aptitude_sport.dart';
 import 'package:chifa/services/db/models/coups_et_blessures.dart';
+import 'package:chifa/services/db/models/interpretation_ecg.dart';
 import 'package:chifa/services/db/models/bilan.dart';
 import 'package:chifa/services/db/models/bilan_type.dart';
 import 'package:chifa/services/db/models/lettre.dart';
@@ -2556,6 +2560,520 @@ class _MedicalRecordFormDialogForPatientState
     );
   }
 
+  void _showAptitudeSportDialog() {
+    final sportCtrl = TextEditingController(text: 'Toutes disciplines sportives');
+    String typePratique = 'Entraînement et Loisir';
+    final examenCtrl = TextEditingController(
+      text: 'Examen cardio-vasculaire et pleuro-pulmonaire normal. Absence de contre-indication clinique apparente.',
+    );
+    final remarquesCtrl = TextEditingController();
+
+    final commonSports = [
+      'Toutes disciplines sportives',
+      'Football',
+      'Natation',
+      'Course à pied / Athlétisme',
+      'Arts martiaux / Judo / Karaté',
+      'Basketball',
+      'Tennis',
+      'Cyclisme',
+      'Fitness / Musculation',
+    ];
+
+    final commonPratiques = [
+      'Entraînement et Loisir',
+      'Compétition',
+      'Pratique scolaire / EPS',
+    ];
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setStateDlg) {
+            return AlertDialog(
+              title: const Text('Certificat d\'Aptitude au Sport'),
+              content: SizedBox(
+                width: 520,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Établir un certificat d\'aptitude physique pour ${_currentPatient.fullName}',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: sportCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Discipline / Sport',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.sports),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: commonSports.map((s) {
+                          return ActionChip(
+                            label: Text(s, style: const TextStyle(fontSize: 12)),
+                            onPressed: () => setStateDlg(() => sportCtrl.text = s),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text('Type de pratique :', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 8,
+                        children: commonPratiques.map((p) {
+                          final isSelected = typePratique == p;
+                          return ChoiceChip(
+                            label: Text(p),
+                            selected: isSelected,
+                            onSelected: (selected) {
+                              if (selected) setStateDlg(() => typePratique = p);
+                            },
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: examenCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Constatations cliniques',
+                          border: OutlineInputBorder(),
+                        ),
+                        maxLines: 2,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: remarquesCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Remarques complémentaires (Optionnel)',
+                          border: OutlineInputBorder(),
+                        ),
+                        maxLines: 2,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Annuler'),
+                ),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.visibility),
+                  label: const Text('Aperçu'),
+                  onPressed: () {
+                    final pdfFuture = generateAptitudeSportPdf(
+                      patient: _currentPatient,
+                      sport: sportCtrl.text.trim().isEmpty ? 'Toutes disciplines sportives' : sportCtrl.text.trim(),
+                      typePratique: typePratique,
+                      examenClinique: examenCtrl.text.trim().isEmpty ? null : examenCtrl.text.trim(),
+                      remarques: remarquesCtrl.text.trim().isEmpty ? null : remarquesCtrl.text.trim(),
+                      dateCreation: DateTime.now(),
+                      weight: _weightController.text.trim().isNotEmpty ? _weightController.text.trim() : null,
+                      template: _selectedTemplate,
+                    );
+                    showPdfPreview(
+                      context: context,
+                      generatedPdfBytes: pdfFuture,
+                      title: 'Certificat d\'Aptitude au Sport - Preview',
+                    );
+                  },
+                ),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.save_alt),
+                  label: const Text('Enregistrer & Imprimer'),
+                  onPressed: () async {
+                    final cert = CertificatAptitudeSport(
+                      patientId: _currentPatient.patientId!,
+                      doctorId: int.tryParse(_doctorId ?? ''),
+                      sport: sportCtrl.text.trim().isEmpty ? 'Toutes disciplines sportives' : sportCtrl.text.trim(),
+                      typePratique: typePratique,
+                      examenClinique: examenCtrl.text.trim().isEmpty ? null : examenCtrl.text.trim(),
+                      remarques: remarquesCtrl.text.trim().isEmpty ? null : remarquesCtrl.text.trim(),
+                      createdAt: DateTime.now(),
+                    );
+                    await context.read<CertificateCubit>().createCertificatAptitudeSport(cert);
+                    final pdfFuture = generateAptitudeSportPdf(
+                      patient: _currentPatient,
+                      sport: cert.sport,
+                      typePratique: cert.typePratique,
+                      examenClinique: cert.examenClinique,
+                      remarques: cert.remarques,
+                      dateCreation: cert.createdAt,
+                      weight: _weightController.text.trim().isNotEmpty ? _weightController.text.trim() : null,
+                      template: _selectedTemplate,
+                    );
+                    Navigator.pop(ctx);
+                    if (!mounted) return;
+                    showPdfPreview(
+                      context: context,
+                      generatedPdfBytes: pdfFuture,
+                      title: 'Certificat d\'Aptitude au Sport - ${_currentPatient.fullName}',
+                    );
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showInterpretationEcgDialog() {
+    final motifCtrl = TextEditingController(text: 'Bilan systématique');
+    final rythmeCtrl = TextEditingController(text: 'Sinusal régulier');
+    final fcCtrl = TextEditingController(text: '75');
+    final axeCtrl = TextEditingController(text: 'Normal (~60°)');
+    final ondePCtrl = TextEditingController(text: 'Normale');
+    final espacePrCtrl = TextEditingController(text: 'Normal (120-200 ms)');
+    final complexeQrsCtrl = TextEditingController(text: 'Fin (< 100 ms)');
+    final segmentStCtrl = TextEditingController(text: 'Isoélectrique');
+    final ondeTCtrl = TextEditingController(text: 'Positive et normale');
+    final intervalleQtCtrl = TextEditingController(text: 'Normal');
+    final conclusionCtrl = TextEditingController(
+      text: 'Tracé ECG normal sans anomalie du rythme ni de la repolarisation.',
+    );
+    final remarquesCtrl = TextEditingController();
+
+    final motifs = [
+      'Bilan systématique',
+      'Bilan pré-opératoire',
+      'Douleur thoracique',
+      'Bilan HTA',
+      'Palpitations',
+      'Aptitude sportive',
+    ];
+
+    void applyPreset(String type, StateSetter setStateDlg) {
+      setStateDlg(() {
+        if (type == 'normal') {
+          rythmeCtrl.text = 'Sinusal régulier';
+          fcCtrl.text = '75';
+          axeCtrl.text = 'Normal (~60°)';
+          ondePCtrl.text = 'Normale';
+          espacePrCtrl.text = 'Normal (120-200 ms)';
+          complexeQrsCtrl.text = 'Fin (< 100 ms)';
+          segmentStCtrl.text = 'Isoélectrique';
+          ondeTCtrl.text = 'Positive et normale';
+          intervalleQtCtrl.text = 'Normal';
+          conclusionCtrl.text = 'Tracé ECG normal sans anomalie du rythme ni de la repolarisation.';
+        } else if (type == 'tachycardie') {
+          rythmeCtrl.text = 'Tachycardie sinusale';
+          fcCtrl.text = '110';
+          conclusionCtrl.text = 'Tachycardie sinusale régulière sans signe d\'ischémie myocardique aiguë ni trouble de la repolarisation.';
+        } else if (type == 'bradycardie') {
+          rythmeCtrl.text = 'Bradycardie sinusale';
+          fcCtrl.text = '52';
+          conclusionCtrl.text = 'Bradycardie sinusale régulière sans bloc auriculo-ventriculaire ni signe d\'ischémie.';
+        } else if (type == 'hta') {
+          rythmeCtrl.text = 'Sinusal régulier';
+          fcCtrl.text = '70';
+          conclusionCtrl.text = 'Tracé sinusal régulier. Absence de signe d\'hypertrophie ventriculaire gauche (indice de Sokolow normal) et absence de trouble de la repolarisation.';
+        }
+      });
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setStateDlg) {
+            return AlertDialog(
+              title: const Text('Compte-rendu d\'Interprétation ECG'),
+              content: SizedBox(
+                width: 580,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Interprétation électrocardiographique pour ${_currentPatient.fullName}',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          const Text('Modèles :', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          ActionChip(
+                            avatar: const Icon(Icons.check_circle_outline, size: 14, color: Colors.green),
+                            label: const Text('ECG Normal', style: TextStyle(fontSize: 12)),
+                            onPressed: () => applyPreset('normal', setStateDlg),
+                          ),
+                          ActionChip(
+                            avatar: const Icon(Icons.bolt, size: 14, color: Colors.orange),
+                            label: const Text('Tachycardie', style: TextStyle(fontSize: 12)),
+                            onPressed: () => applyPreset('tachycardie', setStateDlg),
+                          ),
+                          ActionChip(
+                            avatar: const Icon(Icons.arrow_downward, size: 14, color: Colors.blue),
+                            label: const Text('Bradycardie', style: TextStyle(fontSize: 12)),
+                            onPressed: () => applyPreset('bradycardie', setStateDlg),
+                          ),
+                          ActionChip(
+                            avatar: const Icon(Icons.favorite_border, size: 14, color: Colors.purple),
+                            label: const Text('Bilan HTA', style: TextStyle(fontSize: 12)),
+                            onPressed: () => applyPreset('hta', setStateDlg),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: motifCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Indication / Motif',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: motifs.map((m) {
+                          return ActionChip(
+                            label: Text(m, style: const TextStyle(fontSize: 11)),
+                            onPressed: () => setStateDlg(() => motifCtrl.text = m),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: TextField(
+                              controller: rythmeCtrl,
+                              decoration: const InputDecoration(
+                                labelText: 'Rythme',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            flex: 1,
+                            child: TextField(
+                              controller: fcCtrl,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'FC (bpm)',
+                                border: OutlineInputBorder(),
+                                suffixText: 'bpm',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: axeCtrl,
+                              decoration: const InputDecoration(
+                                labelText: 'Axe du QRS',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: ondePCtrl,
+                              decoration: const InputDecoration(
+                                labelText: 'Onde P',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: espacePrCtrl,
+                              decoration: const InputDecoration(
+                                labelText: 'Espace PR',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: complexeQrsCtrl,
+                              decoration: const InputDecoration(
+                                labelText: 'Complexe QRS',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: segmentStCtrl,
+                              decoration: const InputDecoration(
+                                labelText: 'Segment ST',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: ondeTCtrl,
+                              decoration: const InputDecoration(
+                                labelText: 'Onde T',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: intervalleQtCtrl,
+                              decoration: const InputDecoration(
+                                labelText: 'Intervalle QT',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: conclusionCtrl,
+                        decoration: InputDecoration(
+                          labelText: 'Conclusion ECG (Obligatoire)',
+                          border: const OutlineInputBorder(),
+                          filled: true,
+                          fillColor: Colors.red.withAlpha(15),
+                        ),
+                        maxLines: 2,
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: remarquesCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Remarques / Conduite à tenir (Optionnel)',
+                          border: OutlineInputBorder(),
+                        ),
+                        maxLines: 2,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Annuler'),
+                ),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.visibility),
+                  label: const Text('Aperçu'),
+                  onPressed: () {
+                    final ecg = InterpretationEcg(
+                      patientId: _currentPatient.patientId!,
+                      doctorId: int.tryParse(_doctorId ?? ''),
+                      motif: motifCtrl.text.trim().isEmpty ? null : motifCtrl.text.trim(),
+                      rythme: rythmeCtrl.text.trim().isEmpty ? 'Sinusal régulier' : rythmeCtrl.text.trim(),
+                      frequenceCardiaque: int.tryParse(fcCtrl.text.trim()) ?? 75,
+                      axeQrs: axeCtrl.text.trim().isEmpty ? 'Normal (~60°)' : axeCtrl.text.trim(),
+                      ondeP: ondePCtrl.text.trim().isEmpty ? 'Normale' : ondePCtrl.text.trim(),
+                      espacePr: espacePrCtrl.text.trim().isEmpty ? 'Normal (120-200 ms)' : espacePrCtrl.text.trim(),
+                      complexeQrs: complexeQrsCtrl.text.trim().isEmpty ? 'Fin (< 100 ms)' : complexeQrsCtrl.text.trim(),
+                      segmentSt: segmentStCtrl.text.trim().isEmpty ? 'Isoélectrique' : segmentStCtrl.text.trim(),
+                      ondeT: ondeTCtrl.text.trim().isEmpty ? 'Positive et normale' : ondeTCtrl.text.trim(),
+                      intervalleQt: intervalleQtCtrl.text.trim().isEmpty ? 'Normal' : intervalleQtCtrl.text.trim(),
+                      conclusion: conclusionCtrl.text.trim(),
+                      remarques: remarquesCtrl.text.trim().isEmpty ? null : remarquesCtrl.text.trim(),
+                      createdAt: DateTime.now(),
+                    );
+                    final pdfFuture = generateInterpretationEcgPdf(
+                      patient: _currentPatient,
+                      ecg: ecg,
+                      dateCreation: DateTime.now(),
+                      weight: _weightController.text.trim().isNotEmpty ? _weightController.text.trim() : null,
+                      template: _selectedTemplate,
+                    );
+                    showPdfPreview(
+                      context: context,
+                      generatedPdfBytes: pdfFuture,
+                      title: 'Compte-rendu ECG - Preview',
+                    );
+                  },
+                ),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.save_alt),
+                  label: const Text('Enregistrer & Imprimer'),
+                  onPressed: () async {
+                    if (conclusionCtrl.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Veuillez saisir une conclusion')),
+                      );
+                      return;
+                    }
+                    final ecg = InterpretationEcg(
+                      patientId: _currentPatient.patientId!,
+                      doctorId: int.tryParse(_doctorId ?? ''),
+                      motif: motifCtrl.text.trim().isEmpty ? null : motifCtrl.text.trim(),
+                      rythme: rythmeCtrl.text.trim().isEmpty ? 'Sinusal régulier' : rythmeCtrl.text.trim(),
+                      frequenceCardiaque: int.tryParse(fcCtrl.text.trim()) ?? 75,
+                      axeQrs: axeCtrl.text.trim().isEmpty ? 'Normal (~60°)' : axeCtrl.text.trim(),
+                      ondeP: ondePCtrl.text.trim().isEmpty ? 'Normale' : ondePCtrl.text.trim(),
+                      espacePr: espacePrCtrl.text.trim().isEmpty ? 'Normal (120-200 ms)' : espacePrCtrl.text.trim(),
+                      complexeQrs: complexeQrsCtrl.text.trim().isEmpty ? 'Fin (< 100 ms)' : complexeQrsCtrl.text.trim(),
+                      segmentSt: segmentStCtrl.text.trim().isEmpty ? 'Isoélectrique' : segmentStCtrl.text.trim(),
+                      ondeT: ondeTCtrl.text.trim().isEmpty ? 'Positive et normale' : ondeTCtrl.text.trim(),
+                      intervalleQt: intervalleQtCtrl.text.trim().isEmpty ? 'Normal' : intervalleQtCtrl.text.trim(),
+                      conclusion: conclusionCtrl.text.trim(),
+                      remarques: remarquesCtrl.text.trim().isEmpty ? null : remarquesCtrl.text.trim(),
+                      createdAt: DateTime.now(),
+                    );
+                    await context.read<CertificateCubit>().createInterpretationEcg(ecg);
+                    final pdfFuture = generateInterpretationEcgPdf(
+                      patient: _currentPatient,
+                      ecg: ecg,
+                      dateCreation: ecg.createdAt,
+                      weight: _weightController.text.trim().isNotEmpty ? _weightController.text.trim() : null,
+                      template: _selectedTemplate,
+                    );
+                    Navigator.pop(ctx);
+                    if (!mounted) return;
+                    showPdfPreview(
+                      context: context,
+                      generatedPdfBytes: pdfFuture,
+                      title: 'Compte-rendu ECG - ${_currentPatient.fullName}',
+                    );
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _submit() {
     final plainDetails = _detailsQuillController.document.toPlainText().trim();
     if (plainDetails.isEmpty) {
@@ -4556,6 +5074,18 @@ class _MedicalRecordFormDialogForPatientState
                                 color: Colors.deepOrange,
                                 label: 'Coups & Blessures',
                                 onPressed: _showCoupsEtBlessuresDialog,
+                              ),
+                              _certButton(
+                                icon: Icons.directions_run,
+                                color: Colors.teal,
+                                label: 'Aptitude Sport',
+                                onPressed: _showAptitudeSportDialog,
+                              ),
+                              _certButton(
+                                icon: Icons.monitor_heart,
+                                color: Colors.pink.shade700,
+                                label: 'Interprétation ECG',
+                                onPressed: _showInterpretationEcgDialog,
                               ),
                               _certButton(
                                 icon: Icons.bloodtype_outlined,
