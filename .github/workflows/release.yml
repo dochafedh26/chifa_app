@@ -98,9 +98,10 @@ jobs:
       - name: Prepare Release Assets
         run: |
           mkdir -p release-assets
-          cp android-release/app-release.apk release-assets/chifa-android.apk
-          cp android-release/app-release.aab release-assets/chifa-android.aab
-          cp windows-release/chifa-windows.zip release-assets/
+          find android-release -name "*.apk" -exec cp {} release-assets/chifa-android.apk \;
+          find android-release -name "*.aab" -exec cp {} release-assets/chifa-android.aab \;
+          find windows-release -name "*.zip" -exec cp {} release-assets/chifa-windows.zip \;
+          ls -la release-assets/
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
