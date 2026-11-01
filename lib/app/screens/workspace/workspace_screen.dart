@@ -1,5 +1,7 @@
 import 'package:chifa/app/cubits/workspace_cubit.dart';
 import 'package:chifa/app/theme/app_theme.dart';
+import 'package:chifa/app/widgets/notification_bell_widget.dart';
+import 'package:chifa/app/utils/responsive.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -46,7 +48,7 @@ class WorkspaceScreen extends StatelessWidget {
               ),
             );
           }
-          final isMobile = MediaQuery.of(context).size.width < 800;
+          final isMobile = context.isMobile;
 
           return Column(
             children: [
@@ -60,103 +62,111 @@ class WorkspaceScreen extends StatelessWidget {
                       bottom: BorderSide(color: AppTheme.divider, width: 1),
                     ),
                   ),
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: state.tabs.length,
-                    itemBuilder: (context, index) {
-                      final tab = state.tabs[index];
-                      final isActive = index == state.activeTabIndex;
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: state.tabs.length,
+                          itemBuilder: (context, index) {
+                            final tab = state.tabs[index];
+                            final isActive = index == state.activeTabIndex;
 
-                      return GestureDetector(
-                        onTap: () =>
-                            context.read<WorkspaceCubit>().switchTab(index),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          curve: Curves.easeOutCubic,
-                          padding: const EdgeInsets.symmetric(horizontal: 18),
-                          decoration: BoxDecoration(
-                            color: isActive
-                                ? AppTheme.bgLight
-                                : Colors.transparent,
-                            border: Border(
-                              bottom: BorderSide(
-                                color: isActive
-                                    ? AppTheme.primary
-                                    : Colors.transparent,
-                                width: 2.5,
-                              ),
-                              right: BorderSide(
-                                color: AppTheme.divider.withValues(alpha: 0.5),
-                                width: 1,
-                              ),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '${tab.title}${tab.isDirty ? ' •' : ''}',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: isActive
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
+                            return GestureDetector(
+                              onTap: () =>
+                                  context.read<WorkspaceCubit>().switchTab(index),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 180),
+                                curve: Curves.easeOutCubic,
+                                padding: const EdgeInsets.symmetric(horizontal: 18),
+                                decoration: BoxDecoration(
                                   color: isActive
-                                      ? AppTheme.primary
-                                      : AppTheme.textSecondary,
-                                  letterSpacing: -0.1,
+                                      ? AppTheme.bgLight
+                                      : Colors.transparent,
+                                  border: Border(
+                                    bottom: BorderSide(
+                                      color: isActive
+                                          ? AppTheme.primary
+                                          : Colors.transparent,
+                                      width: 2.5,
+                                    ),
+                                    right: BorderSide(
+                                      color: AppTheme.divider.withValues(alpha: 0.5),
+                                      width: 1,
+                                    ),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      '${tab.title}${tab.isDirty ? ' •' : ''}',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: isActive
+                                            ? FontWeight.w700
+                                            : FontWeight.w500,
+                                        color: isActive
+                                            ? AppTheme.primary
+                                            : AppTheme.textSecondary,
+                                        letterSpacing: -0.1,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    _CloseTabButton(
+                                      isActive: isActive,
+                                      onClose: () async {
+                                        if (tab.isDirty) {
+                                          final confirm = await showDialog<bool>(
+                                            context: context,
+                                            builder: (ctx) => AlertDialog(
+                                              title: const Text(
+                                                'Modifications non enregistrées',
+                                              ),
+                                              content: const Text(
+                                                'Êtes-vous sûr de vouloir fermer cet onglet ? Vos modifications seront perdues.',
+                                              ),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(ctx, false),
+                                                  child: const Text('Annuler'),
+                                                ),
+                                                ElevatedButton(
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: Colors.red,
+                                                  ),
+                                                  onPressed: () =>
+                                                      Navigator.pop(ctx, true),
+                                                  child: const Text(
+                                                    'Fermer',
+                                                    style: TextStyle(
+                                                      color: Colors.white,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                          if (confirm != true) return;
+                                        }
+                                        if (context.mounted) {
+                                          context.read<WorkspaceCubit>().closeTab(
+                                            tab.id,
+                                          );
+                                        }
+                                      },
+                                    ),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(width: 10),
-                              _CloseTabButton(
-                                isActive: isActive,
-                                onClose: () async {
-                                  if (tab.isDirty) {
-                                    final confirm = await showDialog<bool>(
-                                      context: context,
-                                      builder: (ctx) => AlertDialog(
-                                        title: const Text(
-                                          'Modifications non enregistrées',
-                                        ),
-                                        content: const Text(
-                                          'Êtes-vous sûr de vouloir fermer cet onglet ? Vos modifications seront perdues.',
-                                        ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () =>
-                                                Navigator.pop(ctx, false),
-                                            child: const Text('Annuler'),
-                                          ),
-                                          ElevatedButton(
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: Colors.red,
-                                            ),
-                                            onPressed: () =>
-                                                Navigator.pop(ctx, true),
-                                            child: const Text(
-                                              'Fermer',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                    if (confirm != true) return;
-                                  }
-                                  if (context.mounted) {
-                                    context.read<WorkspaceCubit>().closeTab(
-                                      tab.id,
-                                    );
-                                  }
-                                },
-                              ),
-                            ],
-                          ),
+                            );
+                          },
                         ),
-                      );
-                    },
+                      ),
+                      const NotificationBellWidget(),
+                      const SizedBox(width: 10),
+                    ],
                   ),
                 ),
 

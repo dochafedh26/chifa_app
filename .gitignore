@@ -73,3 +73,11 @@ InstallUtil.InstallLog
 
 
 
+
+# Build & Release output
+/deployment/
+/dist/
+*.zip
+
+*_OLD*
+

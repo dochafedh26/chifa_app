@@ -850,3 +850,6 @@ class _InfoRow extends StatelessWidget {
         ),
       );
 }
+
+
+typedef TcpTunnelSettingsScreen = SettingsScreen;

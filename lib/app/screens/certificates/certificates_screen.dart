@@ -1,21 +1,28 @@
+import 'package:chifa/services/pdf_generation_service.dart';
 import 'dart:typed_data';
 
 import 'package:chifa/app/cubits/auth_cubit.dart';
 import 'package:chifa/app/cubits/certificate_cubit.dart';
 import 'package:chifa/app/cubits/patient_cubit.dart';
+import 'package:chifa/app/printing/aptitude_sport.dart';
 import 'package:chifa/app/printing/arret_de_travail.dart';
 import 'package:chifa/app/printing/certificat_bonne_sante.dart';
 import 'package:chifa/app/printing/dispense_sport.dart';
+import 'package:chifa/app/printing/interpretation_ecg.dart';
 import 'package:chifa/app/printing/lettre_de_liaison.dart';
 import 'package:chifa/app/printing/maladie_chronique.dart';
 import 'package:chifa/app/printing/certificat_prenuptial.dart';
+import 'package:chifa/app/printing/coups_et_blessures.dart';
 import 'package:chifa/app/printing/preview.dart';
 import 'package:chifa/services/db/database_manager.dart';
 import 'package:chifa/services/db/models/arret_de_travail.dart';
 import 'package:chifa/services/db/models/bonne_sante.dart';
+import 'package:chifa/services/db/models/certificat_aptitude_sport.dart';
 import 'package:chifa/services/db/models/certificat_maladie_chronique.dart';
 import 'package:chifa/services/db/models/certificat_prenuptial.dart';
+import 'package:chifa/services/db/models/coups_et_blessures.dart';
 import 'package:chifa/services/db/models/dispense_sport.dart';
+import 'package:chifa/services/db/models/interpretation_ecg.dart';
 import 'package:chifa/services/db/models/lettre.dart';
 import 'package:chifa/services/db/models/patient.dart';
 import 'package:chifa/services/db/models/print_template.dart';
@@ -23,6 +30,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
+import 'package:chifa/app/utils/responsive.dart';
 
 /// Work Certificates Screen - Arret de travail and Lettres
 class CertificatesScreen extends StatefulWidget {
@@ -39,10 +47,13 @@ class _CertificatesScreenState extends State<CertificatesScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(length: 9, vsync: this);
     context.read<CertificateCubit>().loadArretsDeTravail();
     context.read<CertificateCubit>().loadLettres();
     context.read<CertificateCubit>().loadCertificatsPrenuptial();
+    context.read<CertificateCubit>().loadCertificatsCoupsEtBlessures();
+    context.read<CertificateCubit>().loadCertificatsAptitudeSport();
+    context.read<CertificateCubit>().loadInterpretationsEcg();
   }
 
   @override
@@ -53,14 +64,14 @@ class _CertificatesScreenState extends State<CertificatesScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 800;
+    final isMobile = context.isMobile;
 
     return Column(
       children: [
         // Tabs
         TabBar(
           controller: _tabController,
-          isScrollable: isMobile,
+          isScrollable: true,
           tabs: [
             Tab(
               icon: const Icon(Icons.verified_user),
@@ -80,11 +91,23 @@ class _CertificatesScreenState extends State<CertificatesScreen>
             ),
             Tab(
               icon: const Icon(Icons.fitness_center),
-              text: isMobile ? 'Sport' : 'Dispense Sport',
+              text: isMobile ? 'Dispense' : 'Dispense Sport',
+            ),
+            Tab(
+              icon: const Icon(Icons.directions_run),
+              text: isMobile ? 'Aptitude' : 'Aptitude Sport',
+            ),
+            Tab(
+              icon: const Icon(Icons.monitor_heart),
+              text: isMobile ? 'ECG' : 'Interprétation ECG',
             ),
             Tab(
               icon: const Icon(Icons.favorite),
               text: isMobile ? 'Prénuptial' : 'Certificat Prénuptial',
+            ),
+            Tab(
+              icon: const Icon(Icons.personal_injury),
+              text: isMobile ? 'Coups' : 'Coups et Blessures',
             ),
           ],
         ),
@@ -100,7 +123,10 @@ class _CertificatesScreenState extends State<CertificatesScreen>
               _MaladieChroniqueList(),
               _BonneSanteList(),
               _DispenseSportList(),
+              _AptitudeSportList(),
+              _InterpretationEcgList(),
               _PrenuptialList(),
+              _CoupsEtBlessuresList(),
             ],
           ),
         ),
@@ -297,7 +323,7 @@ class _MaladieChroniqueListState extends State<_MaladieChroniqueList> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 800;
+    final isMobile = context.isMobile;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -371,7 +397,9 @@ class _MaladieChroniqueListState extends State<_MaladieChroniqueList> {
                               ),
                             ],
                           ),
-                          child: ListView.separated(
+                          child: Material(
+                            color: Colors.transparent,
+                            child: ListView.separated(
                             shrinkWrap: true,
                             padding: EdgeInsets.zero,
                             itemCount: _patientResults.length,
@@ -390,7 +418,7 @@ class _MaladieChroniqueListState extends State<_MaladieChroniqueList> {
                                   ),
                                 ),
                                 subtitle: Text(
-                                  'ID: ${p.patientId} • ${p.age} ans',
+                                  'ID: ${p.patientId} • ${p.formattedAge}',
                                   style: const TextStyle(fontSize: 11),
                                 ),
                                 onTap: () => _selectPatient(p),
@@ -398,7 +426,7 @@ class _MaladieChroniqueListState extends State<_MaladieChroniqueList> {
                             },
                           ),
                         ),
-                    ],
+                  )],
                   ),
 
                   // Patient info badge
@@ -423,7 +451,7 @@ class _MaladieChroniqueListState extends State<_MaladieChroniqueList> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            '${_selectedPatient!.fullName}  •  ${_selectedPatient!.age} ans  •  ${_selectedPatient!.gender.name}',
+                            '${_selectedPatient!.fullName}  •  ${_selectedPatient!.formattedAge}  •  ${_selectedPatient!.gender.name}',
                             style: TextStyle(
                               fontSize: 13,
                               color: Colors.teal.shade800,
@@ -690,7 +718,7 @@ class _MaladieChroniqueCard extends StatelessWidget {
             ),
           ],
         ),
-        trailing: MediaQuery.of(context).size.width < 800
+        trailing: context.isMobile
             ? PopupMenuButton<String>(
                 icon: const Icon(Icons.more_vert),
                 onSelected: (value) {
@@ -799,7 +827,7 @@ class _MaladieChroniquePrintDialogState
   Future<void> _printPdf() async {
     if (_patient == null) return;
     final pdfBytes = await _generatePdfBytes();
-    await Printing.layoutPdf(onLayout: (format) async => pdfBytes);
+    await PdfGenerationService().printPdfBytes(pdfBytes, name: 'Ordonnance.pdf', context: context);
   }
 
   void _previewPdf() {
@@ -1133,7 +1161,7 @@ class _ArretDeTravailListState extends State<_ArretDeTravailList> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 800;
+    final isMobile = context.isMobile;
     final dateFormat = DateFormat('dd/MM/yyyy');
 
     return BlocListener<CertificateCubit, CertificateState>(
@@ -1196,10 +1224,9 @@ class _ArretDeTravailListState extends State<_ArretDeTravailList> {
                                               child: SizedBox(
                                                 width: 16,
                                                 height: 16,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                    ),
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                ),
                                               ),
                                             )
                                           : _selectedPatient != null
@@ -1211,17 +1238,14 @@ class _ArretDeTravailListState extends State<_ArretDeTravailList> {
                                               onPressed: () {
                                                 setState(() {
                                                   _selectedPatient = null;
-                                                  _patientSearchController
-                                                      .clear();
-                                                  _showPatientSuggestions =
-                                                      false;
+                                                  _patientSearchController.clear();
+                                                  _showPatientSuggestions = false;
                                                 });
                                               },
                                             )
                                           : null,
                                     ),
-                                    onChanged: (value) =>
-                                        _searchPatients(value),
+                                    onChanged: (value) => _searchPatients(value),
                                   ),
                                   if (_showPatientSuggestions &&
                                       _patientResults.isNotEmpty)
@@ -1246,38 +1270,41 @@ class _ArretDeTravailListState extends State<_ArretDeTravailList> {
                                           ),
                                         ],
                                       ),
-                                      child: ListView.separated(
-                                        shrinkWrap: true,
-                                        padding: EdgeInsets.zero,
-                                        itemCount: _patientResults.length,
-                                        separatorBuilder: (_, index) => Divider(
-                                          height: 1,
-                                          color: Colors.grey.shade200,
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        child: ListView.separated(
+                                          shrinkWrap: true,
+                                          padding: EdgeInsets.zero,
+                                          itemCount: _patientResults.length,
+                                          separatorBuilder: (_, index) => Divider(
+                                            height: 1,
+                                            color: Colors.grey.shade200,
+                                          ),
+                                          itemBuilder: (context, index) {
+                                            final p = _patientResults[index];
+                                            return ListTile(
+                                              dense: true,
+                                              leading: const Icon(
+                                                Icons.person,
+                                                size: 20,
+                                              ),
+                                              title: Text(
+                                                p.fullName,
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 13,
+                                                ),
+                                              ),
+                                              subtitle: Text(
+                                                'ID: ${p.patientId} • ${p.formattedAge}',
+                                                style: const TextStyle(
+                                                  fontSize: 11,
+                                                ),
+                                              ),
+                                              onTap: () => _selectPatient(p),
+                                            );
+                                          },
                                         ),
-                                        itemBuilder: (context, index) {
-                                          final p = _patientResults[index];
-                                          return ListTile(
-                                            dense: true,
-                                            leading: const Icon(
-                                              Icons.person,
-                                              size: 20,
-                                            ),
-                                            title: Text(
-                                              p.fullName,
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w600,
-                                                fontSize: 13,
-                                              ),
-                                            ),
-                                            subtitle: Text(
-                                              'ID: ${p.patientId} • ${p.age} ans',
-                                              style: const TextStyle(
-                                                fontSize: 11,
-                                              ),
-                                            ),
-                                            onTap: () => _selectPatient(p),
-                                          );
-                                        },
                                       ),
                                     ),
                                 ],
@@ -1297,7 +1324,6 @@ class _ArretDeTravailListState extends State<_ArretDeTravailList> {
                         : Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Patient search field
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment:
@@ -1319,10 +1345,9 @@ class _ArretDeTravailListState extends State<_ArretDeTravailList> {
                                                 child: SizedBox(
                                                   width: 16,
                                                   height: 16,
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                        strokeWidth: 2,
-                                                      ),
+                                                  child: CircularProgressIndicator(
+                                                    strokeWidth: 2,
+                                                  ),
                                                 ),
                                               )
                                             : _selectedPatient != null
@@ -1334,10 +1359,8 @@ class _ArretDeTravailListState extends State<_ArretDeTravailList> {
                                                 onPressed: () {
                                                   setState(() {
                                                     _selectedPatient = null;
-                                                    _patientSearchController
-                                                        .clear();
-                                                    _showPatientSuggestions =
-                                                        false;
+                                                    _patientSearchController.clear();
+                                                    _showPatientSuggestions = false;
                                                   });
                                                 },
                                               )
@@ -1346,7 +1369,6 @@ class _ArretDeTravailListState extends State<_ArretDeTravailList> {
                                       onChanged: (value) =>
                                           _searchPatients(value),
                                     ),
-                                    // Patient suggestions
                                     if (_showPatientSuggestions &&
                                         _patientResults.isNotEmpty)
                                       Container(
@@ -1358,9 +1380,7 @@ class _ArretDeTravailListState extends State<_ArretDeTravailList> {
                                           border: Border.all(
                                             color: Colors.grey.shade300,
                                           ),
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
+                                          borderRadius: BorderRadius.circular(8),
                                           color: Colors.white,
                                           boxShadow: [
                                             BoxShadow(
@@ -1372,46 +1392,48 @@ class _ArretDeTravailListState extends State<_ArretDeTravailList> {
                                             ),
                                           ],
                                         ),
-                                        child: ListView.separated(
-                                          shrinkWrap: true,
-                                          padding: EdgeInsets.zero,
-                                          itemCount: _patientResults.length,
-                                          separatorBuilder: (_, index) =>
-                                              Divider(
-                                                height: 1,
-                                                color: Colors.grey.shade200,
-                                              ),
-                                          itemBuilder: (context, index) {
-                                            final p = _patientResults[index];
-                                            return ListTile(
-                                              dense: true,
-                                              leading: const Icon(
-                                                Icons.person,
-                                                size: 20,
-                                              ),
-                                              title: Text(
-                                                p.fullName,
-                                                style: const TextStyle(
-                                                  fontWeight: FontWeight.w600,
-                                                  fontSize: 13,
+                                        child: Material(
+                                          color: Colors.transparent,
+                                          child: ListView.separated(
+                                            shrinkWrap: true,
+                                            padding: EdgeInsets.zero,
+                                            itemCount: _patientResults.length,
+                                            separatorBuilder: (_, index) =>
+                                                Divider(
+                                                  height: 1,
+                                                  color: Colors.grey.shade200,
                                                 ),
-                                              ),
-                                              subtitle: Text(
-                                                'ID: ${p.patientId} • ${p.age} ans',
-                                                style: const TextStyle(
-                                                  fontSize: 11,
+                                            itemBuilder: (context, index) {
+                                              final p = _patientResults[index];
+                                              return ListTile(
+                                                dense: true,
+                                                leading: const Icon(
+                                                  Icons.person,
+                                                  size: 20,
                                                 ),
-                                              ),
-                                              onTap: () => _selectPatient(p),
-                                            );
-                                          },
+                                                title: Text(
+                                                  p.fullName,
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 13,
+                                                  ),
+                                                ),
+                                                subtitle: Text(
+                                                  'ID: ${p.patientId} • ${p.formattedAge}',
+                                                  style: const TextStyle(
+                                                    fontSize: 11,
+                                                  ),
+                                                ),
+                                                onTap: () => _selectPatient(p),
+                                              );
+                                            },
+                                          ),
                                         ),
                                       ),
                                   ],
                                 ),
                               ),
                               const SizedBox(width: 16),
-                              // Doctor (read-only, auto-filled)
                               Expanded(
                                 child: TextFormField(
                                   readOnly: true,
@@ -1425,7 +1447,6 @@ class _ArretDeTravailListState extends State<_ArretDeTravailList> {
                               ),
                             ],
                           ),
-
                     // Patient info badge (shown when selected)
                     if (_selectedPatient != null) ...[
                       const SizedBox(height: 12),
@@ -1448,7 +1469,7 @@ class _ArretDeTravailListState extends State<_ArretDeTravailList> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              '${_selectedPatient!.fullName}  •  ${_selectedPatient!.age} ans  •  ${_selectedPatient!.gender.name}',
+                              '${_selectedPatient!.fullName}  •  ${_selectedPatient!.formattedAge}  •  ${_selectedPatient!.gender.name}',
                               style: TextStyle(
                                 fontSize: 13,
                                 color: Colors.blue.shade800,
@@ -1876,7 +1897,7 @@ class _ArretCard extends StatelessWidget {
             ),
           ],
         ),
-        trailing: MediaQuery.of(context).size.width < 800
+        trailing: context.isMobile
             ? PopupMenuButton<String>(
                 icon: const Icon(Icons.more_vert),
                 onSelected: (value) {
@@ -1985,7 +2006,7 @@ class _ArretPrintDialogState extends State<_ArretPrintDialog> {
   Future<void> _printPdf() async {
     if (_patient == null) return;
     final pdfBytes = await _generatePdfBytes();
-    await Printing.layoutPdf(onLayout: (format) async => pdfBytes);
+    await PdfGenerationService().printPdfBytes(pdfBytes, name: 'Ordonnance.pdf', context: context);
   }
 
   void _previewPdf() {
@@ -2271,7 +2292,7 @@ class _LettresListState extends State<_LettresList> {
 
   @override
   Widget build(BuildContext context) {
-    // final isMobile = MediaQuery.of(context).size.width < 800;
+    // final isMobile = context.isMobile;
     return BlocListener<CertificateCubit, CertificateState>(
       listener: (context, state) {
         setState(() => _isCreating = false);
@@ -2366,33 +2387,36 @@ class _LettresListState extends State<_LettresList> {
                                 ),
                               ],
                             ),
-                            child: ListView.separated(
-                              shrinkWrap: true,
-                              padding: EdgeInsets.zero,
-                              itemCount: _patientResults.length,
-                              separatorBuilder: (_, index) => Divider(
-                                height: 1,
-                                color: Colors.grey.shade200,
-                              ),
-                              itemBuilder: (context, index) {
-                                final p = _patientResults[index];
-                                return ListTile(
-                                  dense: true,
-                                  leading: const Icon(Icons.person, size: 20),
-                                  title: Text(
-                                    p.fullName,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: ListView.separated(
+                                shrinkWrap: true,
+                                padding: EdgeInsets.zero,
+                                itemCount: _patientResults.length,
+                                separatorBuilder: (_, index) => Divider(
+                                  height: 1,
+                                  color: Colors.grey.shade200,
+                                ),
+                                itemBuilder: (context, index) {
+                                  final p = _patientResults[index];
+                                  return ListTile(
+                                    dense: true,
+                                    leading: const Icon(Icons.person, size: 20),
+                                    title: Text(
+                                      p.fullName,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                      ),
                                     ),
-                                  ),
-                                  subtitle: Text(
-                                    'ID: ${p.patientId} • ${p.age} ans',
-                                    style: const TextStyle(fontSize: 11),
-                                  ),
-                                  onTap: () => _selectPatient(p),
-                                );
-                              },
+                                    subtitle: Text(
+                                      'ID: ${p.patientId} • ${p.formattedAge}',
+                                      style: const TextStyle(fontSize: 11),
+                                    ),
+                                    onTap: () => _selectPatient(p),
+                                  );
+                                },
+                              ),
                             ),
                           ),
                       ],
@@ -2420,7 +2444,7 @@ class _LettresListState extends State<_LettresList> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              '${_selectedPatient!.fullName}  •  ${_selectedPatient!.age} ans  •  ${_selectedPatient!.gender.name}',
+                              '${_selectedPatient!.fullName}  •  ${_selectedPatient!.formattedAge}  •  ${_selectedPatient!.gender.name}',
                               style: TextStyle(
                                 fontSize: 13,
                                 color: Colors.purple.shade800,
@@ -2645,7 +2669,7 @@ class _LettreCard extends StatelessWidget {
             ),
           ],
         ),
-        trailing: MediaQuery.of(context).size.width < 800
+        trailing: context.isMobile
             ? PopupMenuButton<String>(
                 icon: const Icon(Icons.more_vert),
                 onSelected: (value) {
@@ -2763,7 +2787,7 @@ class _LettrePrintDialogState extends State<_LettrePrintDialog> {
   Future<void> _printPdf() async {
     if (_patient == null) return;
     final pdfBytes = await _generatePdfBytes();
-    await Printing.layoutPdf(onLayout: (format) async => pdfBytes);
+    await PdfGenerationService().printPdfBytes(pdfBytes, name: 'Ordonnance.pdf', context: context);
   }
 
   void _previewPdf() {
@@ -3006,7 +3030,7 @@ class _BonneSanteListState extends State<_BonneSanteList> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 800;
+    final isMobile = context.isMobile;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -3072,35 +3096,38 @@ class _BonneSanteListState extends State<_BonneSanteList> {
                               ),
                             ],
                           ),
-                          child: ListView.separated(
-                            shrinkWrap: true,
-                            padding: EdgeInsets.zero,
-                            itemCount: _patientResults.length,
-                            separatorBuilder: (_, index) =>
-                                Divider(height: 1, color: Colors.grey.shade200),
-                            itemBuilder: (context, index) {
-                              final p = _patientResults[index];
-                              return ListTile(
-                                dense: true,
-                                leading: const Icon(Icons.person, size: 20),
-                                title: Text(
-                                  p.fullName,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: ListView.separated(
+                              shrinkWrap: true,
+                              padding: EdgeInsets.zero,
+                              itemCount: _patientResults.length,
+                              separatorBuilder: (_, index) =>
+                                  Divider(height: 1, color: Colors.grey.shade200),
+                              itemBuilder: (context, index) {
+                                final p = _patientResults[index];
+                                return ListTile(
+                                  dense: true,
+                                  leading: const Icon(Icons.person, size: 20),
+                                  title: Text(
+                                    p.fullName,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                    ),
                                   ),
-                                ),
-                                subtitle: Text(
-                                  'ID: ${p.patientId} • ${p.age} ans',
-                                  style: const TextStyle(fontSize: 11),
-                                ),
-                                onTap: () => _selectPatient(p),
-                              );
-                            },
+                                  subtitle: Text(
+                                    'ID: ${p.patientId} • ${p.formattedAge}',
+                                    style: const TextStyle(fontSize: 11),
+                                  ),
+                                  onTap: () => _selectPatient(p),
+                                );
+                              },
+                            ),
                           ),
                         ),
-                    ],
-                  ),
+                      ],
+                    ),
                   if (_selectedPatient != null) ...[
                     const SizedBox(height: 12),
                     Container(
@@ -3122,7 +3149,7 @@ class _BonneSanteListState extends State<_BonneSanteList> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            '${_selectedPatient!.fullName}  •  ${_selectedPatient!.age} ans  •  ${_selectedPatient!.gender.name}',
+                            '${_selectedPatient!.fullName}  •  ${_selectedPatient!.formattedAge}  •  ${_selectedPatient!.gender.name}',
                             style: TextStyle(
                               fontSize: 13,
                               color: Colors.green.shade800,
@@ -3331,7 +3358,7 @@ class _BonneSantePrintDialogState extends State<_BonneSantePrintDialog> {
   Future<void> _printPdf() async {
     if (_patient == null) return;
     final pdfBytes = await _generatePdfBytes();
-    await Printing.layoutPdf(onLayout: (format) async => pdfBytes);
+    await PdfGenerationService().printPdfBytes(pdfBytes, name: 'Ordonnance.pdf', context: context);
   }
 
   void _previewPdf() {
@@ -3521,7 +3548,7 @@ class _DispenseSportListState extends State<_DispenseSportList> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 800;
+    final isMobile = context.isMobile;
     if (_isCreating) {
       return Card(
         margin: const EdgeInsets.all(16),
@@ -3848,9 +3875,7 @@ class _DispenseSportPrintDialogState extends State<_DispenseSportPrintDialog> {
               ? null
               : () async {
                   final pdfBytes = await _generatePdfBytes();
-                  await Printing.layoutPdf(
-                    onLayout: (format) async => pdfBytes,
-                  );
+                  await PdfGenerationService().printPdfBytes(pdfBytes, name: 'Document.pdf', context: context);
                 },
           icon: const Icon(Icons.print),
           label: const Text('Imprimer'),
@@ -4294,9 +4319,7 @@ class _PrenuptialPrintDialogState extends State<_PrenuptialPrintDialog> {
               ? null
               : () async {
                   final pdfBytes = await _generatePdfBytes();
-                  await Printing.layoutPdf(
-                    onLayout: (format) async => pdfBytes,
-                  );
+                  await PdfGenerationService().printPdfBytes(pdfBytes, name: 'Document.pdf', context: context);
                 },
           icon: const Icon(Icons.print),
           label: const Text('Imprimer'),
@@ -4311,6 +4334,2064 @@ class _PrenuptialPrintDialogState extends State<_PrenuptialPrintDialog> {
       context: context,
       generatedPdfBytes: _generatePdfBytes(),
       title: 'Certificat Prénuptial - Preview',
+    );
+  }
+}
+
+// ==================== COUPS ET BLESSURES ====================
+
+class _CoupsEtBlessuresList extends StatefulWidget {
+  const _CoupsEtBlessuresList();
+
+  @override
+  State<_CoupsEtBlessuresList> createState() => _CoupsEtBlessuresListState();
+}
+
+class _CoupsEtBlessuresListState extends State<_CoupsEtBlessuresList> {
+  final _patientSearchController = TextEditingController();
+  List<Patient> _patientResults = [];
+  Patient? _selectedPatient;
+  bool _isSearchingPatient = false;
+  bool _showPatientSuggestions = false;
+
+  int? _doctorId;
+  DateTime _dateConsultation = DateTime.now();
+  final _ageController = TextEditingController();
+  DateTime? _dateFaits;
+  final _heureFaitsController = TextEditingController();
+  String _typeAccident = 'Coups et blessures volontaires';
+  final _autresAccidentController = TextEditingController();
+  final _signesSubjectifsController = TextEditingController();
+  final _examenCliniqueController = TextEditingController();
+  bool _necessiteTraitement = false;
+  final _arretJoursController = TextEditingController();
+  final _avisSpecialiseController = TextEditingController();
+  final _ittJoursController = TextEditingController();
+
+  final List<String> _typeOptions = [
+    'Coups et blessures volontaires',
+    'Coups et blessures involontaires',
+    'Accident de la circulation',
+    'Accident de la voie publique',
+    'Accident du travail',
+    'Violences sexuelles',
+    'Autres',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    final authCubit = context.read<AuthCubit>();
+    _doctorId = authCubit.currentUser?.employeeId;
+    context.read<CertificateCubit>().loadCertificatsCoupsEtBlessures();
+  }
+
+  @override
+  void dispose() {
+    _patientSearchController.dispose();
+    _ageController.dispose();
+    _heureFaitsController.dispose();
+    _autresAccidentController.dispose();
+    _signesSubjectifsController.dispose();
+    _examenCliniqueController.dispose();
+    _arretJoursController.dispose();
+    _avisSpecialiseController.dispose();
+    _ittJoursController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _searchPatients(String query) async {
+    if (query.trim().isEmpty) {
+      setState(() {
+        _patientResults = [];
+        _showPatientSuggestions = false;
+      });
+      return;
+    }
+    setState(() => _isSearchingPatient = true);
+    try {
+      final results = await DatabaseManager.instance.query(
+        '''SELECT * FROM patients 
+           WHERE first_name LIKE ? OR last_name LIKE ? OR patient_id = ?
+           LIMIT 10''',
+        ['%$query%', '%$query%', int.tryParse(query) ?? -1],
+      );
+      if (mounted) {
+        setState(() {
+          _patientResults = results.map((row) => Patient.fromMap(row)).toList();
+          _showPatientSuggestions = true;
+        });
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _isSearchingPatient = false);
+    }
+  }
+
+  void _selectPatient(Patient patient) {
+    setState(() {
+      _selectedPatient = patient;
+      _patientSearchController.text = patient.fullName;
+      _ageController.text = '${patient.age}';
+      _patientResults = [];
+      _showPatientSuggestions = false;
+    });
+  }
+
+  void _resetForm() {
+    setState(() {
+      _selectedPatient = null;
+      _patientSearchController.clear();
+      _dateConsultation = DateTime.now();
+      _ageController.clear();
+      _dateFaits = null;
+      _heureFaitsController.clear();
+      _typeAccident = 'Coups et blessures volontaires';
+      _autresAccidentController.clear();
+      _signesSubjectifsController.clear();
+      _examenCliniqueController.clear();
+      _necessiteTraitement = false;
+      _arretJoursController.clear();
+      _avisSpecialiseController.clear();
+      _ittJoursController.clear();
+    });
+  }
+
+  CertificatCoupsEtBlessures _buildCertificatFromForm() {
+    return CertificatCoupsEtBlessures(
+      patientId: _selectedPatient!.patientId!,
+      doctorId: _doctorId,
+      dateConsultation: _dateConsultation,
+      agePatient: int.tryParse(_ageController.text) ?? _selectedPatient!.age,
+      dateFaits: _dateFaits,
+      heureFaits: _heureFaitsController.text.trim().isEmpty ? null : _heureFaitsController.text.trim(),
+      typeAccident: _typeAccident,
+      autresAccident: _autresAccidentController.text.trim().isEmpty ? null : _autresAccidentController.text.trim(),
+      signesSubjectifs: _signesSubjectifsController.text.trim().isEmpty ? null : _signesSubjectifsController.text.trim(),
+      examenClinique: _examenCliniqueController.text.trim().isEmpty ? null : _examenCliniqueController.text.trim(),
+      necessiteTraitement: _necessiteTraitement,
+      arretDeTravailJours: int.tryParse(_arretJoursController.text),
+      avisSpecialise: _avisSpecialiseController.text.trim().isEmpty ? null : _avisSpecialiseController.text.trim(),
+      ittJours: int.tryParse(_ittJoursController.text),
+      createdAt: DateTime.now(),
+    );
+  }
+
+  void _printOnly() {
+    if (_selectedPatient == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Veuillez sélectionner un patient'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    _showPrintDialog(_buildCertificatFromForm());
+  }
+
+  Future<void> _createCertificat() async {
+    if (_selectedPatient == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Veuillez sélectionner un patient'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final cert = _buildCertificatFromForm();
+    await context.read<CertificateCubit>().createCertificatCoupsEtBlessures(cert);
+    _resetForm();
+    _showPrintDialog(cert);
+  }
+
+  void _showPrintDialog(CertificatCoupsEtBlessures cert) {
+    showDialog(
+      context: context,
+      builder: (_) => _CoupsEtBlessuresPrintDialog(certificat: cert),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dateFormat = DateFormat('dd/MM/yyyy');
+
+    return BlocConsumer<CertificateCubit, CertificateState>(
+      listener: (context, state) {
+        if (state is CertificateOperationSuccess) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.message),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else if (state is CertificateError) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.message),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      },
+      builder: (context, state) {
+        final certificats = context.read<CertificateCubit>().allCertificatsCoupsEtBlessures;
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.personal_injury, color: Theme.of(context).primaryColor),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Certificat Médical Initial de Constatation (Coups et Blessures)',
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Patient selector
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          TextField(
+                            controller: _patientSearchController,
+                            decoration: InputDecoration(
+                              labelText: 'Rechercher un patient *',
+                              prefixIcon: const Icon(Icons.person_search),
+                              suffixIcon: _isSearchingPatient
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : _selectedPatient != null
+                                      ? IconButton(
+                                          icon: const Icon(Icons.clear),
+                                          onPressed: _resetForm,
+                                        )
+                                      : null,
+                              border: const OutlineInputBorder(),
+                            ),
+                            onChanged: (val) {
+                              if (_selectedPatient != null) {
+                                setState(() => _selectedPatient = null);
+                              }
+                              _searchPatients(val);
+                            },
+                          ),
+                          if (_showPatientSuggestions && _patientResults.isNotEmpty)
+                            Container(
+                              constraints: const BoxConstraints(maxHeight: 180),
+                              margin: const EdgeInsets.only(top: 4),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).cardColor,
+                                border: Border.all(color: Colors.grey.shade300),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: ListView.builder(
+                                shrinkWrap: true,
+                                itemCount: _patientResults.length,
+                                itemBuilder: (context, i) {
+                                  final p = _patientResults[i];
+                                  return ListTile(
+                                    dense: true,
+                                    title: Text(p.fullName),
+                                    subtitle: Text('Âge: ${p.formattedAge} | Tél: ${p.phone ?? "-"}'),
+                                    onTap: () => _selectPatient(p),
+                                  );
+                                },
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Consultation date & Age
+                      Row(
+                        children: [
+                          Expanded(
+                            child: InkWell(
+                              onTap: () async {
+                                final d = await showDatePicker(
+                                  context: context,
+                                  initialDate: _dateConsultation,
+                                  firstDate: DateTime(2000),
+                                  lastDate: DateTime(2100),
+                                );
+                                if (d != null) {
+                                  final t = await showTimePicker(
+                                    context: context,
+                                    initialTime: TimeOfDay.fromDateTime(_dateConsultation),
+                                  );
+                                  setState(() {
+                                    _dateConsultation = DateTime(
+                                      d.year, d.month, d.day,
+                                      t?.hour ?? _dateConsultation.hour,
+                                      t?.minute ?? _dateConsultation.minute,
+                                    );
+                                  });
+                                }
+                              },
+                              child: InputDecorator(
+                                decoration: const InputDecoration(
+                                  labelText: 'Date et Heure de consultation',
+                                  border: OutlineInputBorder(),
+                                  prefixIcon: Icon(Icons.calendar_today),
+                                ),
+                                child: Text(
+                                  '${dateFormat.format(_dateConsultation)} à ${DateFormat('HH:mm').format(_dateConsultation)}',
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              controller: _ageController,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Âge du patient (ans)',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Date & Heure des faits
+                      Row(
+                        children: [
+                          Expanded(
+                            child: InkWell(
+                              onTap: () async {
+                                final d = await showDatePicker(
+                                  context: context,
+                                  initialDate: _dateFaits ?? DateTime.now(),
+                                  firstDate: DateTime(2000),
+                                  lastDate: DateTime(2100),
+                                );
+                                if (d != null) {
+                                  setState(() => _dateFaits = d);
+                                }
+                              },
+                              child: InputDecorator(
+                                decoration: InputDecoration(
+                                  labelText: 'Date des faits',
+                                  border: const OutlineInputBorder(),
+                                  prefixIcon: const Icon(Icons.event),
+                                  suffixIcon: _dateFaits != null
+                                      ? IconButton(
+                                          icon: const Icon(Icons.clear),
+                                          onPressed: () => setState(() => _dateFaits = null),
+                                        )
+                                      : null,
+                                ),
+                                child: Text(_dateFaits != null ? dateFormat.format(_dateFaits!) : 'Non précisée'),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              controller: _heureFaitsController,
+                              decoration: const InputDecoration(
+                                labelText: 'Heure des faits (ex: 14:30)',
+                                border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.access_time),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Type d'accident
+                      DropdownButtonFormField<String>(
+                        value: _typeAccident,
+                        decoration: const InputDecoration(
+                          labelText: 'Type de faits / accident',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: _typeOptions.map((opt) {
+                          return DropdownMenuItem(value: opt, child: Text(opt));
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) setState(() => _typeAccident = val);
+                        },
+                      ),
+                      if (_typeAccident == 'Autres') ...[
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _autresAccidentController,
+                          decoration: const InputDecoration(
+                            labelText: 'Préciser le type (Autres)',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+
+                      // Signes subjectifs
+                      TextField(
+                        controller: _signesSubjectifsController,
+                        maxLines: 2,
+                        decoration: const InputDecoration(
+                          labelText: 'Signes subjectifs',
+                          border: OutlineInputBorder(),
+                          hintText: 'Déclarations du patient...',
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Examen clinique
+                      TextField(
+                        controller: _examenCliniqueController,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                          labelText: 'Examen clinique',
+                          border: OutlineInputBorder(),
+                          hintText: 'Constatations médicales, lésions, ecchymoses...',
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Conséquences / Prise en charge
+                      Text('Décisions / État de santé nécessite :', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      CheckboxListTile(
+                        title: const Text('Nécessite un traitement'),
+                        value: _necessiteTraitement,
+                        onChanged: (v) => setState(() => _necessiteTraitement = v ?? false),
+                        controlAffinity: ListTileControlAffinity.leading,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _arretJoursController,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Arrêt de travail (Jours)',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              controller: _ittJoursController,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Incapacité Temp. Totale ITT (Jours)',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _avisSpecialiseController,
+                        decoration: const InputDecoration(
+                          labelText: 'Avis spécialisé (ex: Orthopédie, ORL...)',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Action buttons
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: _printOnly,
+                            icon: const Icon(Icons.print_outlined),
+                            label: const Text('Imprimer sans enregistrer'),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton.icon(
+                            onPressed: _createCertificat,
+                            icon: const Icon(Icons.save),
+                            label: const Text('Enregistrer et Imprimer'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // List of created certificates
+              Text(
+                'Historique des certificats coups et blessures',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              certificats.isEmpty
+                  ? const Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Center(child: Text('Aucun certificat enregistré')),
+                      ),
+                    )
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: certificats.length,
+                      itemBuilder: (context, index) {
+                        final cert = certificats[index];
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            leading: const CircleAvatar(child: Icon(Icons.personal_injury)),
+                            title: Text('${cert.typeAccident} — ID Patient #${cert.patientId}'),
+                            subtitle: Text(
+                              'Date: ${dateFormat.format(cert.dateConsultation)} | ITT: ${cert.ittJours ?? 0}j | Arrêt: ${cert.arretDeTravailJours ?? 0}j',
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.print, color: Colors.blue),
+                                  onPressed: () => _showPrintDialog(cert),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete, color: Colors.red),
+                                  onPressed: () {
+                                    if (cert.id != null) {
+                                      context.read<CertificateCubit>().deleteCertificatCoupsEtBlessures(cert.id!);
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _CoupsEtBlessuresPrintDialog extends StatefulWidget {
+  final CertificatCoupsEtBlessures certificat;
+
+  const _CoupsEtBlessuresPrintDialog({required this.certificat});
+
+  @override
+  State<_CoupsEtBlessuresPrintDialog> createState() => _CoupsEtBlessuresPrintDialogState();
+}
+
+class _CoupsEtBlessuresPrintDialogState extends State<_CoupsEtBlessuresPrintDialog> {
+  PrintTemplate _selectedTemplate = PrintTemplate.chifa;
+  Patient? _patient;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPatient();
+  }
+
+  Future<void> _loadPatient() async {
+    setState(() => _isLoading = true);
+    await context.read<PatientCubit>().loadPatientById(widget.certificat.patientId);
+    if (!mounted) return;
+    final state = context.read<PatientCubit>().state;
+    if (state.selectedPatient != null) {
+      setState(() {
+        _patient = state.selectedPatient;
+        _isLoading = false;
+      });
+    } else {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<Uint8List> _generatePdfBytes() {
+    return generateCoupsEtBlessuresPdf(
+      patient: _patient!,
+      cert: widget.certificat,
+      template: _selectedTemplate,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Aperçu du Certificat Coups et Blessures'),
+      content: _isLoading
+          ? const SizedBox(
+              height: 100,
+              child: Center(child: CircularProgressIndicator()),
+            )
+          : _patient == null
+              ? const Text('Erreur: Patient non trouvé')
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Patient: ${_patient!.fullName}'),
+                    const SizedBox(height: 8),
+                    Text('Type: ${widget.certificat.typeAccident}'),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Select Template:',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    const SizedBox(height: 8),
+                    Center(
+                      child: SegmentedButton<PrintTemplate>(
+                        segments: const [
+                          ButtonSegment<PrintTemplate>(
+                            value: PrintTemplate.chifa,
+                            label: Text('CHIFA'),
+                            icon: Icon(Icons.description_outlined, size: 14),
+                          ),
+                          ButtonSegment<PrintTemplate>(
+                            value: PrintTemplate.eph,
+                            label: Text('EPH'),
+                            icon: Icon(Icons.local_hospital_outlined, size: 14),
+                          ),
+                        ],
+                        selected: {_selectedTemplate},
+                        onSelectionChanged: (newSelection) {
+                          setState(() {
+                            _selectedTemplate = newSelection.first;
+                          });
+                        },
+                        showSelectedIcon: false,
+                        style: SegmentedButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          selectedBackgroundColor: Colors.blue.shade700,
+                          selectedForegroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Fermer'),
+        ),
+        OutlinedButton.icon(
+          onPressed: _isLoading || _patient == null ? null : _previewPdf,
+          icon: const Icon(Icons.visibility),
+          label: const Text('Preview'),
+        ),
+        ElevatedButton.icon(
+          onPressed: _isLoading || _patient == null
+              ? null
+              : () async {
+                  final pdfBytes = await _generatePdfBytes();
+                  await PdfGenerationService().printPdfBytes(pdfBytes, name: 'Document.pdf', context: context);
+                },
+          icon: const Icon(Icons.print),
+          label: const Text('Imprimer'),
+        ),
+      ],
+    );
+  }
+
+  void _previewPdf() {
+    if (_patient == null) return;
+    showPdfPreview(
+      context: context,
+      generatedPdfBytes: _generatePdfBytes(),
+      title: 'Certificat Coups et Blessures - Preview',
+    );
+  }
+}
+
+
+
+// ==================== CERTIFICAT APTITUDE AU SPORT ====================
+
+class _AptitudeSportList extends StatefulWidget {
+  const _AptitudeSportList();
+
+  @override
+  State<_AptitudeSportList> createState() => _AptitudeSportListState();
+}
+
+class _AptitudeSportListState extends State<_AptitudeSportList> {
+  final _patientSearchController = TextEditingController();
+  List<Patient> _patientResults = [];
+  Patient? _selectedPatient;
+  bool _isSearchingPatient = false;
+  bool _showPatientSuggestions = false;
+
+  int? _doctorId;
+  final _sportController = TextEditingController(text: 'Toutes disciplines sportives');
+  final _typePratiqueController = TextEditingController(text: 'Entraînement et Loisir');
+  final _examenCliniqueController = TextEditingController(
+    text: 'Examen cardio-vasculaire et pleuro-pulmonaire normal. Absence de contre-indication clinique apparente.',
+  );
+  final _remarquesController = TextEditingController();
+
+  bool _isCreating = false;
+  int? _editingCertId;
+
+  final List<String> _commonSports = [
+    'Toutes disciplines sportives',
+    'Football',
+    'Natation',
+    'Course à pied / Athlétisme',
+    'Arts martiaux / Judo / Karaté',
+    'Basketball',
+    'Handball',
+    'Tennis',
+    'Cyclisme',
+    'Fitness / Musculation',
+  ];
+
+  final List<String> _commonPratiques = [
+    'Entraînement et Loisir',
+    'Compétition',
+    'Pratique scolaire / EPS',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    final authCubit = context.read<AuthCubit>();
+    _doctorId = authCubit.currentUser?.employeeId;
+    context.read<CertificateCubit>().loadCertificatsAptitudeSport();
+  }
+
+  @override
+  void dispose() {
+    _patientSearchController.dispose();
+    _sportController.dispose();
+    _typePratiqueController.dispose();
+    _examenCliniqueController.dispose();
+    _remarquesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _searchPatients(String query) async {
+    if (query.trim().isEmpty) {
+      setState(() {
+        _patientResults = [];
+        _showPatientSuggestions = false;
+      });
+      return;
+    }
+    setState(() => _isSearchingPatient = true);
+    try {
+      final results = await DatabaseManager.instance.query(
+        '''SELECT * FROM patients 
+           WHERE first_name LIKE ? OR last_name LIKE ? OR patient_id = ?
+           LIMIT 10''',
+        ['%$query%', '%$query%', int.tryParse(query) ?? -1],
+      );
+      if (mounted) {
+        setState(() {
+          _patientResults = results.map((row) => Patient.fromMap(row)).toList();
+          _showPatientSuggestions = true;
+          _isSearchingPatient = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isSearchingPatient = false);
+    }
+  }
+
+  Future<void> _saveCertificat() async {
+    if (_selectedPatient == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Veuillez sélectionner un patient')),
+      );
+      return;
+    }
+
+    final cert = CertificatAptitudeSport(
+      id: _editingCertId,
+      patientId: _selectedPatient!.patientId!,
+      doctorId: _doctorId,
+      sport: _sportController.text.trim().isEmpty
+          ? 'Toutes disciplines sportives'
+          : _sportController.text.trim(),
+      typePratique: _typePratiqueController.text.trim().isEmpty
+          ? 'Entraînement et Loisir'
+          : _typePratiqueController.text.trim(),
+      examenClinique: _examenCliniqueController.text.trim().isEmpty
+          ? null
+          : _examenCliniqueController.text.trim(),
+      remarques: _remarquesController.text.trim().isEmpty
+          ? null
+          : _remarquesController.text.trim(),
+      createdAt: DateTime.now(),
+    );
+
+    await context.read<CertificateCubit>().createCertificatAptitudeSport(cert);
+
+    setState(() {
+      _isCreating = false;
+      _editingCertId = null;
+      _selectedPatient = null;
+      _patientSearchController.clear();
+      _sportController.text = 'Toutes disciplines sportives';
+      _typePratiqueController.text = 'Entraînement et Loisir';
+      _examenCliniqueController.text =
+          'Examen cardio-vasculaire et pleuro-pulmonaire normal. Absence de contre-indication clinique apparente.';
+      _remarquesController.clear();
+    });
+  }
+
+  void _deleteCertificat(int id) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirmer la suppression'),
+        content: const Text('Voulez-vous vraiment supprimer ce certificat d\'aptitude ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Supprimer', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true && mounted) {
+      context.read<CertificateCubit>().deleteCertificatAptitudeSport(id);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isMobile = context.isMobile;
+
+    if (_isCreating) {
+      return Card(
+        margin: const EdgeInsets.all(16),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _editingCertId == null
+                    ? 'Nouveau Certificat d\'Aptitude au Sport'
+                    : 'Modifier le Certificat d\'Aptitude',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 16),
+
+              // Patient Search
+              TextField(
+                controller: _patientSearchController,
+                decoration: InputDecoration(
+                  labelText: 'Rechercher un patient',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _isSearchingPatient
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : null,
+                ),
+                onChanged: _searchPatients,
+              ),
+              if (_showPatientSuggestions && _patientResults.isNotEmpty)
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: _patientResults.length,
+                    itemBuilder: (ctx, index) {
+                      final p = _patientResults[index];
+                      return ListTile(
+                        title: Text(p.fullName),
+                        onTap: () {
+                          setState(() {
+                            _selectedPatient = p;
+                            _patientSearchController.text = p.fullName;
+                            _showPatientSuggestions = false;
+                          });
+                        },
+                      );
+                    },
+                  ),
+                ),
+              if (_selectedPatient != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'Patient sélectionné : ${_selectedPatient!.fullName}',
+                    style: const TextStyle(
+                      color: Colors.green,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 16),
+
+              // Discipline sportive
+              TextField(
+                controller: _sportController,
+                decoration: const InputDecoration(
+                  labelText: 'Discipline / Sport',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.sports),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: _commonSports.map((s) {
+                  return ActionChip(
+                    label: Text(s, style: const TextStyle(fontSize: 12)),
+                    onPressed: () => setState(() => _sportController.text = s),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+
+              // Type de pratique
+              const Text('Type de pratique :', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: _commonPratiques.map((p) {
+                  final isSelected = _typePratiqueController.text == p;
+                  return ChoiceChip(
+                    label: Text(p),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      if (selected) setState(() => _typePratiqueController.text = p);
+                    },
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+
+              // Examen clinique
+              TextField(
+                controller: _examenCliniqueController,
+                decoration: const InputDecoration(
+                  labelText: 'Constatations cliniques',
+                  border: OutlineInputBorder(),
+                  helperText: 'Ex: Examen cardio-vasculaire et pleuro-pulmonaire normal',
+                ),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 16),
+
+              // Remarques éventuelles
+              TextField(
+                controller: _remarquesController,
+                decoration: const InputDecoration(
+                  labelText: 'Remarques complémentaires (Optionnel)',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 24),
+
+              isMobile
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: _saveCertificat,
+                          icon: const Icon(Icons.check),
+                          label: const Text('Enregistrer le Certificat'),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: () => setState(() => _isCreating = false),
+                          child: const Text('Annuler'),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => setState(() => _isCreating = false),
+                          child: const Text('Annuler'),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          onPressed: _saveCertificat,
+                          icon: const Icon(Icons.check),
+                          label: const Text('Enregistrer le Certificat'),
+                        ),
+                      ],
+                    ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              ElevatedButton.icon(
+                onPressed: () => setState(() => _isCreating = true),
+                icon: const Icon(Icons.add),
+                label: const Text('Nouveau Certificat d\'Aptitude'),
+              ),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                tooltip: 'Actualiser',
+                onPressed: () =>
+                    context.read<CertificateCubit>().loadCertificatsAptitudeSport(),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: BlocBuilder<CertificateCubit, CertificateState>(
+            builder: (context, state) {
+              final cubit = context.read<CertificateCubit>();
+              final items = state is CertificatsAptitudeSportLoaded
+                  ? state.certificats
+                  : cubit.allCertificatsAptitudeSport;
+
+              if (state is CertificateLoading && items.isEmpty) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (items.isEmpty) {
+                return const Center(
+                  child: Text('Aucun certificat d\'aptitude au sport enregistré'),
+                );
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: items.length,
+                itemBuilder: (ctx, index) {
+                  final cert = items[index];
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.all(16),
+                      leading: CircleAvatar(
+                        backgroundColor: Colors.teal.shade50,
+                        child: Icon(
+                          Icons.directions_run,
+                          color: Colors.teal.shade700,
+                        ),
+                      ),
+                      title: Text(
+                        'Aptitude au Sport : ${cert.sport}',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 6),
+                          _PatientNameWidget(patientId: cert.patientId),
+                          const SizedBox(height: 4),
+                          Text('Pratique : ${cert.typePratique}'),
+                          if (cert.examenClinique != null && cert.examenClinique!.isNotEmpty)
+                            Text(
+                              'Examen : ${cert.examenClinique}',
+                              style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                            ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Créé le : ${DateFormat('dd/MM/yyyy HH:mm').format(cert.createdAt)}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.print, color: Colors.blue),
+                            tooltip: 'Imprimer / Aperçu',
+                            onPressed: () {
+                              showDialog(
+                                context: context,
+                                builder: (context) =>
+                                    _AptitudeSportPrintDialog(certificat: cert),
+                              );
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: Colors.red,
+                            ),
+                            tooltip: 'Supprimer',
+                            onPressed: () => _deleteCertificat(cert.id!),
+                          ),
+                        ],
+                      ),
+                      isThreeLine: true,
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AptitudeSportPrintDialog extends StatefulWidget {
+  final CertificatAptitudeSport certificat;
+
+  const _AptitudeSportPrintDialog({required this.certificat});
+
+  @override
+  State<_AptitudeSportPrintDialog> createState() => _AptitudeSportPrintDialogState();
+}
+
+class _AptitudeSportPrintDialogState extends State<_AptitudeSportPrintDialog> {
+  PrintTemplate _selectedTemplate = PrintTemplate.chifa;
+  Patient? _patient;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPatient();
+  }
+
+  Future<void> _loadPatient() async {
+    setState(() => _isLoading = true);
+    await context.read<PatientCubit>().loadPatientById(widget.certificat.patientId);
+    if (!mounted) return;
+    final state = context.read<PatientCubit>().state;
+    if (state.selectedPatient != null) {
+      setState(() {
+        _patient = state.selectedPatient;
+        _isLoading = false;
+      });
+    } else {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<Uint8List> _generatePdfBytes() {
+    return generateAptitudeSportPdf(
+      patient: _patient!,
+      sport: widget.certificat.sport,
+      typePratique: widget.certificat.typePratique,
+      examenClinique: widget.certificat.examenClinique,
+      remarques: widget.certificat.remarques,
+      dateCreation: widget.certificat.createdAt,
+      template: _selectedTemplate,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Aperçu du Certificat d\'Aptitude au Sport'),
+      content: _isLoading
+          ? const SizedBox(
+              height: 100,
+              child: Center(child: CircularProgressIndicator()),
+            )
+          : _patient == null
+              ? const Text('Erreur : Patient non trouvé')
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Patient : ${_patient!.fullName}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    Text('Sport : ${widget.certificat.sport} (${widget.certificat.typePratique})'),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Sélectionnez le modèle d\'ordonnance / en-tête :',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    const SizedBox(height: 8),
+                    Center(
+                      child: SegmentedButton<PrintTemplate>(
+                        segments: const [
+                          ButtonSegment<PrintTemplate>(
+                            value: PrintTemplate.chifa,
+                            label: Text('CHIFA'),
+                            icon: Icon(Icons.description_outlined, size: 14),
+                          ),
+                          ButtonSegment<PrintTemplate>(
+                            value: PrintTemplate.eph,
+                            label: Text('EPH'),
+                            icon: Icon(Icons.local_hospital_outlined, size: 14),
+                          ),
+                        ],
+                        selected: {_selectedTemplate},
+                        onSelectionChanged: (newSelection) {
+                          setState(() {
+                            _selectedTemplate = newSelection.first;
+                          });
+                        },
+                        showSelectedIcon: false,
+                        style: SegmentedButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          selectedBackgroundColor: Colors.teal.shade700,
+                          selectedForegroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Fermer'),
+        ),
+        OutlinedButton.icon(
+          onPressed: _isLoading || _patient == null ? null : _previewPdf,
+          icon: const Icon(Icons.visibility),
+          label: const Text('Aperçu'),
+        ),
+        ElevatedButton.icon(
+          onPressed: _isLoading || _patient == null
+              ? null
+              : () async {
+                  final pdfBytes = await _generatePdfBytes();
+                  if (context.mounted) {
+                    await PdfGenerationService().printPdfBytes(
+                      pdfBytes,
+                      name: 'Certificat_Aptitude_${_patient?.lastName ?? "Patient"}.pdf',
+                      context: context,
+                    );
+                  }
+                },
+          icon: const Icon(Icons.print),
+          label: const Text('Imprimer'),
+        ),
+      ],
+    );
+  }
+
+  void _previewPdf() {
+    if (_patient == null) return;
+    showPdfPreview(
+      context: context,
+      generatedPdfBytes: _generatePdfBytes(),
+      title: 'Aptitude au Sport - ${_patient!.fullName}',
+    );
+  }
+}
+
+// ==================== INTERPRÉTATION ECG ====================
+
+class _InterpretationEcgList extends StatefulWidget {
+  const _InterpretationEcgList();
+
+  @override
+  State<_InterpretationEcgList> createState() => _InterpretationEcgListState();
+}
+
+class _InterpretationEcgListState extends State<_InterpretationEcgList> {
+  final _patientSearchController = TextEditingController();
+  List<Patient> _patientResults = [];
+  Patient? _selectedPatient;
+  bool _isSearchingPatient = false;
+  bool _showPatientSuggestions = false;
+
+  int? _doctorId;
+  final _motifController = TextEditingController(text: 'Bilan systématique');
+  final _rythmeController = TextEditingController(text: 'Sinusal régulier');
+  final _fcController = TextEditingController(text: '75');
+  final _axeController = TextEditingController(text: 'Normal (~60°)');
+  final _ondePController = TextEditingController(text: 'Normale');
+  final _espacePrController = TextEditingController(text: 'Normal (120-200 ms)');
+  final _qrsController = TextEditingController(text: 'Fin (< 100 ms)');
+  final _segmentStController = TextEditingController(text: 'Isoélectrique');
+  final _ondeTController = TextEditingController(text: 'Positive et normale');
+  final _intervalleQtController = TextEditingController(text: 'Normal');
+  final _conclusionController = TextEditingController(
+    text: 'Tracé ECG normal sans anomalie du rythme ni de la repolarisation.',
+  );
+  final _remarquesController = TextEditingController();
+
+  bool _isCreating = false;
+  int? _editingEcgId;
+
+  final List<String> _motifs = [
+    'Bilan systématique',
+    'Bilan pré-opératoire',
+    'Douleur thoracique',
+    'Bilan HTA',
+    'Palpitations',
+    'Aptitude sportive',
+    'Suivi cardiologique',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    final authCubit = context.read<AuthCubit>();
+    _doctorId = authCubit.currentUser?.employeeId;
+    context.read<CertificateCubit>().loadInterpretationsEcg();
+  }
+
+  @override
+  void dispose() {
+    _patientSearchController.dispose();
+    _motifController.dispose();
+    _rythmeController.dispose();
+    _fcController.dispose();
+    _axeController.dispose();
+    _ondePController.dispose();
+    _espacePrController.dispose();
+    _qrsController.dispose();
+    _segmentStController.dispose();
+    _ondeTController.dispose();
+    _intervalleQtController.dispose();
+    _conclusionController.dispose();
+    _remarquesController.dispose();
+    super.dispose();
+  }
+
+  void _applyPreset(String type) {
+    setState(() {
+      if (type == 'normal') {
+        _rythmeController.text = 'Sinusal régulier';
+        _fcController.text = '75';
+        _axeController.text = 'Normal (~60°)';
+        _ondePController.text = 'Normale';
+        _espacePrController.text = 'Normal (120-200 ms)';
+        _qrsController.text = 'Fin (< 100 ms)';
+        _segmentStController.text = 'Isoélectrique';
+        _ondeTController.text = 'Positive et normale';
+        _intervalleQtController.text = 'Normal';
+        _conclusionController.text =
+            'Tracé ECG normal sans anomalie du rythme ni de la repolarisation.';
+      } else if (type == 'tachycardie') {
+        _rythmeController.text = 'Tachycardie sinusale';
+        _fcController.text = '110';
+        _conclusionController.text =
+            'Tachycardie sinusale régulière sans signe d\'ischémie myocardique aiguë ni trouble de la repolarisation.';
+      } else if (type == 'bradycardie') {
+        _rythmeController.text = 'Bradycardie sinusale';
+        _fcController.text = '52';
+        _conclusionController.text =
+            'Bradycardie sinusale régulière sans bloc auriculo-ventriculaire ni signe d\'ischémie.';
+      } else if (type == 'hta') {
+        _rythmeController.text = 'Sinusal régulier';
+        _fcController.text = '70';
+        _conclusionController.text =
+            'Tracé sinusal régulier. Absence de signe d\'hypertrophie ventriculaire gauche (indice de Sokolow normal) et absence de trouble de la repolarisation.';
+      }
+    });
+  }
+
+  Future<void> _searchPatients(String query) async {
+    if (query.trim().isEmpty) {
+      setState(() {
+        _patientResults = [];
+        _showPatientSuggestions = false;
+      });
+      return;
+    }
+    setState(() => _isSearchingPatient = true);
+    try {
+      final results = await DatabaseManager.instance.query(
+        '''SELECT * FROM patients 
+           WHERE first_name LIKE ? OR last_name LIKE ? OR patient_id = ?
+           LIMIT 10''',
+        ['%$query%', '%$query%', int.tryParse(query) ?? -1],
+      );
+      if (mounted) {
+        setState(() {
+          _patientResults = results.map((row) => Patient.fromMap(row)).toList();
+          _showPatientSuggestions = true;
+          _isSearchingPatient = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isSearchingPatient = false);
+    }
+  }
+
+  Future<void> _saveEcg() async {
+    if (_selectedPatient == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Veuillez sélectionner un patient')),
+      );
+      return;
+    }
+
+    if (_conclusionController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Veuillez renseigner la conclusion ECG')),
+      );
+      return;
+    }
+
+    final ecg = InterpretationEcg(
+      id: _editingEcgId,
+      patientId: _selectedPatient!.patientId!,
+      doctorId: _doctorId,
+      motif: _motifController.text.trim().isEmpty ? null : _motifController.text.trim(),
+      rythme: _rythmeController.text.trim().isEmpty ? 'Sinusal régulier' : _rythmeController.text.trim(),
+      frequenceCardiaque: int.tryParse(_fcController.text.trim()) ?? 75,
+      axeQrs: _axeController.text.trim().isEmpty ? 'Normal (~60°)' : _axeController.text.trim(),
+      ondeP: _ondePController.text.trim().isEmpty ? 'Normale' : _ondePController.text.trim(),
+      espacePr: _espacePrController.text.trim().isEmpty ? 'Normal (120-200 ms)' : _espacePrController.text.trim(),
+      complexeQrs: _qrsController.text.trim().isEmpty ? 'Fin (< 100 ms)' : _qrsController.text.trim(),
+      segmentSt: _segmentStController.text.trim().isEmpty ? 'Isoélectrique' : _segmentStController.text.trim(),
+      ondeT: _ondeTController.text.trim().isEmpty ? 'Positive et normale' : _ondeTController.text.trim(),
+      intervalleQt: _intervalleQtController.text.trim().isEmpty ? 'Normal' : _intervalleQtController.text.trim(),
+      conclusion: _conclusionController.text.trim(),
+      remarques: _remarquesController.text.trim().isEmpty ? null : _remarquesController.text.trim(),
+      createdAt: DateTime.now(),
+    );
+
+    await context.read<CertificateCubit>().createInterpretationEcg(ecg);
+
+    setState(() {
+      _isCreating = false;
+      _editingEcgId = null;
+      _selectedPatient = null;
+      _patientSearchController.clear();
+      _applyPreset('normal');
+      _remarquesController.clear();
+    });
+  }
+
+  void _deleteEcg(int id) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirmer la suppression'),
+        content: const Text('Voulez-vous vraiment supprimer ce compte-rendu ECG ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Supprimer', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true && mounted) {
+      context.read<CertificateCubit>().deleteInterpretationEcg(id);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isMobile = context.isMobile;
+
+    if (_isCreating) {
+      return Card(
+        margin: const EdgeInsets.all(16),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _editingEcgId == null
+                        ? 'Nouvelle Interprétation ECG'
+                        : 'Modifier l\'Interprétation ECG',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Presets rapides
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  const Text('Modèles rapides :', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ActionChip(
+                    avatar: const Icon(Icons.check_circle_outline, size: 16, color: Colors.green),
+                    label: const Text('ECG Normal'),
+                    onPressed: () => _applyPreset('normal'),
+                  ),
+                  ActionChip(
+                    avatar: const Icon(Icons.bolt, size: 16, color: Colors.orange),
+                    label: const Text('Tachycardie Sinusale'),
+                    onPressed: () => _applyPreset('tachycardie'),
+                  ),
+                  ActionChip(
+                    avatar: const Icon(Icons.arrow_downward, size: 16, color: Colors.blue),
+                    label: const Text('Bradycardie Sinusale'),
+                    onPressed: () => _applyPreset('bradycardie'),
+                  ),
+                  ActionChip(
+                    avatar: const Icon(Icons.favorite_border, size: 16, color: Colors.purple),
+                    label: const Text('Bilan HTA'),
+                    onPressed: () => _applyPreset('hta'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Patient Search
+              TextField(
+                controller: _patientSearchController,
+                decoration: InputDecoration(
+                  labelText: 'Rechercher un patient',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _isSearchingPatient
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : null,
+                ),
+                onChanged: _searchPatients,
+              ),
+              if (_showPatientSuggestions && _patientResults.isNotEmpty)
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: _patientResults.length,
+                    itemBuilder: (ctx, index) {
+                      final p = _patientResults[index];
+                      return ListTile(
+                        title: Text(p.fullName),
+                        onTap: () {
+                          setState(() {
+                            _selectedPatient = p;
+                            _patientSearchController.text = p.fullName;
+                            _showPatientSuggestions = false;
+                          });
+                        },
+                      );
+                    },
+                  ),
+                ),
+              if (_selectedPatient != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'Patient sélectionné : ${_selectedPatient!.fullName}',
+                    style: const TextStyle(
+                      color: Colors.green,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 16),
+
+              // Motif
+              TextField(
+                controller: _motifController,
+                decoration: const InputDecoration(
+                  labelText: 'Indication / Motif de l\'examen',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.help_outline),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: _motifs.map((m) {
+                  return ActionChip(
+                    label: Text(m, style: const TextStyle(fontSize: 12)),
+                    onPressed: () => setState(() => _motifController.text = m),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+
+              // Rythme & Fréquence
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: TextField(
+                      controller: _rythmeController,
+                      decoration: const InputDecoration(
+                        labelText: 'Rythme cardiaque',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.graphic_eq),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 1,
+                    child: TextField(
+                      controller: _fcController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'FC (bpm)',
+                        border: OutlineInputBorder(),
+                        suffixText: 'bpm',
+                        prefixIcon: Icon(Icons.speed),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Paramètres ECG détaillés en grille/lignes
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _axeController,
+                      decoration: const InputDecoration(
+                        labelText: 'Axe du QRS',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _ondePController,
+                      decoration: const InputDecoration(
+                        labelText: 'Onde P',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _espacePrController,
+                      decoration: const InputDecoration(
+                        labelText: 'Espace PR',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _qrsController,
+                      decoration: const InputDecoration(
+                        labelText: 'Complexe QRS',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _segmentStController,
+                      decoration: const InputDecoration(
+                        labelText: 'Segment ST',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _ondeTController,
+                      decoration: const InputDecoration(
+                        labelText: 'Onde T',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _intervalleQtController,
+                      decoration: const InputDecoration(
+                        labelText: 'Intervalle QT / QTc',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Conclusion (en évidence)
+              TextField(
+                controller: _conclusionController,
+                decoration: InputDecoration(
+                  labelText: 'Conclusion ECG (Obligatoire)',
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.assignment_turned_in, color: Colors.blue),
+                  filled: true,
+                  fillColor: Colors.blue.withAlpha(15),
+                ),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 16),
+
+              // Remarques éventuelles
+              TextField(
+                controller: _remarquesController,
+                decoration: const InputDecoration(
+                  labelText: 'Remarques / Conduite à tenir (Optionnel)',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 24),
+
+              isMobile
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: _saveEcg,
+                          icon: const Icon(Icons.check),
+                          label: const Text('Enregistrer le Compte-rendu ECG'),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: () => setState(() => _isCreating = false),
+                          child: const Text('Annuler'),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => setState(() => _isCreating = false),
+                          child: const Text('Annuler'),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          onPressed: _saveEcg,
+                          icon: const Icon(Icons.check),
+                          label: const Text('Enregistrer le Compte-rendu ECG'),
+                        ),
+                      ],
+                    ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              ElevatedButton.icon(
+                onPressed: () => setState(() => _isCreating = true),
+                icon: const Icon(Icons.add),
+                label: const Text('Nouveau Compte-rendu ECG'),
+              ),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                tooltip: 'Actualiser',
+                onPressed: () =>
+                    context.read<CertificateCubit>().loadInterpretationsEcg(),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: BlocBuilder<CertificateCubit, CertificateState>(
+            builder: (context, state) {
+              final cubit = context.read<CertificateCubit>();
+              final items = state is InterpretationsEcgLoaded
+                  ? state.interpretations
+                  : cubit.allInterpretationsEcg;
+
+              if (state is CertificateLoading && items.isEmpty) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (items.isEmpty) {
+                return const Center(
+                  child: Text('Aucun compte-rendu ECG enregistré'),
+                );
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: items.length,
+                itemBuilder: (ctx, index) {
+                  final ecg = items[index];
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.all(16),
+                      leading: CircleAvatar(
+                        backgroundColor: Colors.red.shade50,
+                        child: Icon(
+                          Icons.monitor_heart,
+                          color: Colors.red.shade700,
+                        ),
+                      ),
+                      title: Text(
+                        'ECG : ${ecg.rythme} (${ecg.frequenceCardiaque} bpm)',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 6),
+                          _PatientNameWidget(patientId: ecg.patientId),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Conclusion : ${ecg.conclusion}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          if (ecg.motif != null && ecg.motif!.isNotEmpty)
+                            Text(
+                              'Motif : ${ecg.motif}',
+                              style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                            ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Créé le : ${DateFormat('dd/MM/yyyy HH:mm').format(ecg.createdAt)}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.print, color: Colors.blue),
+                            tooltip: 'Imprimer / Aperçu',
+                            onPressed: () {
+                              showDialog(
+                                context: context,
+                                builder: (context) =>
+                                    _InterpretationEcgPrintDialog(ecg: ecg),
+                              );
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: Colors.red,
+                            ),
+                            tooltip: 'Supprimer',
+                            onPressed: () => _deleteEcg(ecg.id!),
+                          ),
+                        ],
+                      ),
+                      isThreeLine: true,
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _InterpretationEcgPrintDialog extends StatefulWidget {
+  final InterpretationEcg ecg;
+
+  const _InterpretationEcgPrintDialog({required this.ecg});
+
+  @override
+  State<_InterpretationEcgPrintDialog> createState() =>
+      _InterpretationEcgPrintDialogState();
+}
+
+class _InterpretationEcgPrintDialogState extends State<_InterpretationEcgPrintDialog> {
+  PrintTemplate _selectedTemplate = PrintTemplate.chifa;
+  Patient? _patient;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPatient();
+  }
+
+  Future<void> _loadPatient() async {
+    setState(() => _isLoading = true);
+    await context.read<PatientCubit>().loadPatientById(widget.ecg.patientId);
+    if (!mounted) return;
+    final state = context.read<PatientCubit>().state;
+    if (state.selectedPatient != null) {
+      setState(() {
+        _patient = state.selectedPatient;
+        _isLoading = false;
+      });
+    } else {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<Uint8List> _generatePdfBytes() {
+    return generateInterpretationEcgPdf(
+      patient: _patient!,
+      ecg: widget.ecg,
+      dateCreation: widget.ecg.createdAt,
+      template: _selectedTemplate,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Aperçu du Compte-rendu ECG'),
+      content: _isLoading
+          ? const SizedBox(
+              height: 100,
+              child: Center(child: CircularProgressIndicator()),
+            )
+          : _patient == null
+              ? const Text('Erreur : Patient non trouvé')
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Patient : ${_patient!.fullName}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    Text('Rythme : ${widget.ecg.rythme} (${widget.ecg.frequenceCardiaque} bpm)'),
+                    const SizedBox(height: 6),
+                    Text('Conclusion : ${widget.ecg.conclusion}'),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Sélectionnez le modèle d\'ordonnance / en-tête :',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    const SizedBox(height: 8),
+                    Center(
+                      child: SegmentedButton<PrintTemplate>(
+                        segments: const [
+                          ButtonSegment<PrintTemplate>(
+                            value: PrintTemplate.chifa,
+                            label: Text('CHIFA'),
+                            icon: Icon(Icons.description_outlined, size: 14),
+                          ),
+                          ButtonSegment<PrintTemplate>(
+                            value: PrintTemplate.eph,
+                            label: Text('EPH'),
+                            icon: Icon(Icons.local_hospital_outlined, size: 14),
+                          ),
+                        ],
+                        selected: {_selectedTemplate},
+                        onSelectionChanged: (newSelection) {
+                          setState(() {
+                            _selectedTemplate = newSelection.first;
+                          });
+                        },
+                        showSelectedIcon: false,
+                        style: SegmentedButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          selectedBackgroundColor: Colors.red.shade700,
+                          selectedForegroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Fermer'),
+        ),
+        OutlinedButton.icon(
+          onPressed: _isLoading || _patient == null ? null : _previewPdf,
+          icon: const Icon(Icons.visibility),
+          label: const Text('Aperçu'),
+        ),
+        ElevatedButton.icon(
+          onPressed: _isLoading || _patient == null
+              ? null
+              : () async {
+                  final pdfBytes = await _generatePdfBytes();
+                  if (context.mounted) {
+                    await PdfGenerationService().printPdfBytes(
+                      pdfBytes,
+                      name: 'CompteRendu_ECG_${_patient?.lastName ?? "Patient"}.pdf',
+                      context: context,
+                    );
+                  }
+                },
+          icon: const Icon(Icons.print),
+          label: const Text('Imprimer'),
+        ),
+      ],
+    );
+  }
+
+  void _previewPdf() {
+    if (_patient == null) return;
+    showPdfPreview(
+      context: context,
+      generatedPdfBytes: _generatePdfBytes(),
+      title: 'Compte-rendu ECG - ${_patient!.fullName}',
     );
   }
 }

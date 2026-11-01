@@ -245,3 +245,6 @@ class _ToolbarBtn extends StatelessWidget {
         ),
       );
 }
+
+
+typedef TcpTunnelLogsScreen = LogsScreen;

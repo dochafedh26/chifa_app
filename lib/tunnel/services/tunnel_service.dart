@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -13,14 +14,26 @@ import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:path/path.dart' as path;
+import 'package:pdf/pdf.dart';
+import 'package:printing/printing.dart';
 
 import '../models/log_entry.dart';
 import '../models/tunnel_config.dart';
 import 'background_tunnel_handler.dart';
 
+/// Connection state of the tunnel service.
 enum TunnelConnectionState { disconnected, connecting, connected, error }
 
+/// Core service that manages:
+///  1. A WebSocket connection to the relay server
+///  2. Local TCP servers (one per enabled tunnel) listening on localPort
+///  3. Bridging local TCP sockets ↔ relay WebSocket channels
 class TunnelService extends ChangeNotifier {
+  static TunnelService? _instance;
+  static TunnelService? get instance => _instance;
+
+  // ── State ──────────────────────────────────────────────────────────────────
   TunnelConnectionState _state = TunnelConnectionState.disconnected;
   TunnelConnectionState get state => _state;
 
@@ -29,23 +42,34 @@ class TunnelService extends ChangeNotifier {
 
   bool get isConnected => _state == TunnelConnectionState.connected;
 
+  // ── Tunnels ────────────────────────────────────────────────────────────────
   final List<TunnelConfig> _tunnels = [];
   List<TunnelConfig> get tunnels => List.unmodifiable(_tunnels);
 
+  /// Active local TCP servers: tunnelId → ServerSocket
   final Map<String, ServerSocket> _servers = {};
+
+  /// Active forwarding channels: channelId → local Socket
   final Map<String, Socket> _localSockets = {};
+
+  /// Pending channels waiting for relay 'opened' confirmation
   final Set<String> _pendingChannels = {};
 
+  // ── File Explorer State ────────────────────────────────────────────────────
   final Map<String, Completer<List<Map<String, dynamic>>>> _fileListCompleters = {};
   final Map<String, _ActiveFileDownload> _activeDownloads = {};
   final Map<String, Completer<void>> _activeUploadCompleters = {};
   final Map<String, Completer<bool>> _fileActionCompleters = {};
 
+  // ── Device/Printer Explorer State ──────────────────────────────────────────
   final Map<String, Completer<Map<String, dynamic>>> _deviceListCompleters = {};
   final Map<String, Completer<void>> _printJobCompleters = {};
+  final Map<String, void Function(double progress, int currentPage, int totalPages, String status)> _printProgressCallbacks = {};
 
+  // ── Terminal Shell State ────────────────────────────────────────────────────
   final Map<String, Completer<Map<String, dynamic>>> _terminalCommandCompleters = {};
 
+  // ── USB Control State ───────────────────────────────────────────────────────
   final Map<String, Completer<bool>> _usbEjectCompleters = {};
   final Map<String, Completer<bool>> _usbShareCompleters = {};
   final Map<String, Completer<bool>> _usbUnshareCompleters = {};
@@ -56,7 +80,10 @@ class TunnelService extends ChangeNotifier {
   final Map<String, Completer<List<Map<String, dynamic>>>> _rdpSessionsCompleters = {};
   final Map<String, Completer<bool>> _rdpWrapperStatusCompleters = {};
   final Map<String, Completer<bool>> _rdpWrapperInstallCompleters = {};
+  final Map<String, Completer<Map<String, dynamic>>> _networkScanCompleters = {};
 
+
+  // ── USBIP State ────────────────────────────────────────────────────────────
   bool _usbipdMissing = false;
   bool get usbipdMissing => _usbipdMissing;
 
@@ -70,6 +97,7 @@ class TunnelService extends ChangeNotifier {
   String? getAttachedPort(String busId) => _attachedDevices[busId];
   bool isTemporarilyAttached(String busId) => _temporarilyAttached[busId] == true;
 
+  // ── Stats ──────────────────────────────────────────────────────────────────
   int _bytesIn = 0;
   int _bytesOut = 0;
   int get bytesIn => _bytesIn;
@@ -83,14 +111,17 @@ class TunnelService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── Logs ───────────────────────────────────────────────────────────────────
   final List<LogEntry> _logs = [];
   List<LogEntry> get logs => List.unmodifiable(_logs);
 
+  // ── WebSocket ──────────────────────────────────────────────────────────────
   WebSocketChannel? _ws;
   StreamSubscription? _wsSub;
   bool _peerConnected = false;
   bool get peerConnected => _peerConnected;
 
+  // ── Auto-reconnect ─────────────────────────────────────────────────────────
   String? _lastRelayUrl;
   String? _lastToken;
   bool _autoReconnect = true;
@@ -99,10 +130,35 @@ class TunnelService extends ChangeNotifier {
 
   static const _uuid = Uuid();
 
+  // ── Constructor ────────────────────────────────────────────────────────────
   TunnelService() {
-    if (Platform.isAndroid) {
+    _instance = this;
+    if (!kIsWeb && Platform.isAndroid) {
+      _initForegroundTask();
       FlutterForegroundTask.addTaskDataCallback(_onReceiveTaskData);
     }
+  }
+
+  void _initForegroundTask() {
+    FlutterForegroundTask.init(
+      androidNotificationOptions: AndroidNotificationOptions(
+        channelId: 'foreground_service',
+        channelName: 'Foreground Service Notification',
+        channelDescription: 'This notification appears when the foreground service is running.',
+        channelImportance: NotificationChannelImportance.LOW,
+        priority: NotificationPriority.LOW,
+      ),
+      iosNotificationOptions: const IOSNotificationOptions(
+        showNotification: true,
+        playSound: false,
+      ),
+      foregroundTaskOptions: ForegroundTaskOptions(
+        eventAction: ForegroundTaskEventAction.repeat(5000),
+        autoRunOnBoot: false,
+        allowWakeLock: true,
+        allowWifiLock: true,
+      ),
+    );
   }
 
   void _onReceiveTaskData(Object data) {
@@ -151,8 +207,11 @@ class TunnelService extends ChangeNotifier {
     }
   }
 
+  // ── Wire protocol constants ────────────────────────────────────────────────
   static const int _dataFrameType = 0x01;
   static const int _headerLength = 37;
+
+  // ── Public API ─────────────────────────────────────────────────────────────
 
   void setTunnels(List<TunnelConfig> tunnels) {
     _tunnels
@@ -177,6 +236,7 @@ class TunnelService extends ChangeNotifier {
     final idx = _tunnels.indexWhere((t) => t.id == config.id);
     if (idx == -1) return;
 
+    // Stop old listener if running
     if (!Platform.isAndroid) {
       _stopTunnelListener(config.id);
     }
@@ -200,7 +260,9 @@ class TunnelService extends ChangeNotifier {
     _syncTunnelsToTask();
   }
 
+  /// Connect to the relay server and start all enabled tunnel listeners.
   Future<void> connect(String relayUrl, String token) async {
+    if (kIsWeb) return;
     if (_state == TunnelConnectionState.connecting ||
         _state == TunnelConnectionState.connected) {
       return;
@@ -210,9 +272,14 @@ class TunnelService extends ChangeNotifier {
     _lastRelayUrl = relayUrl.trim();
     _lastToken = token;
 
-    final clientId = await _getClientId('chifa');
+    final clientId = await _getClientId('medinfect');
 
     if (Platform.isAndroid) {
+      final hasPermission = await FlutterForegroundTask.checkNotificationPermission();
+      if (hasPermission != NotificationPermission.granted) {
+        await FlutterForegroundTask.requestNotificationPermission();
+      }
+
       final started = await FlutterForegroundTask.startService(
         notificationTitle: 'TCP Tunnel Active',
         notificationText: 'Tunnel is connected and running',
@@ -251,6 +318,7 @@ class TunnelService extends ChangeNotifier {
         pingInterval: const Duration(seconds: 20),
       );
 
+      // Send auth
       _send(jsonEncode({
         'type': 'auth',
         'token': token,
@@ -271,6 +339,7 @@ class TunnelService extends ChangeNotifier {
         },
         cancelOnError: true,
       );
+
     } catch (e) {
       _log(LogLevel.error, 'Failed to connect: $e');
       _setState(TunnelConnectionState.error, error: e.toString());
@@ -283,24 +352,28 @@ class TunnelService extends ChangeNotifier {
     if (clientId == null) {
       String deviceName = 'unknown';
       try {
-        final deviceInfo = DeviceInfoPlugin();
-        if (Platform.isAndroid) {
-          final androidInfo = await deviceInfo.androidInfo;
-          deviceName = '${androidInfo.brand}_${androidInfo.model}';
-        } else if (Platform.isWindows) {
-          final windowsInfo = await deviceInfo.windowsInfo;
-          deviceName = windowsInfo.computerName;
-        } else if (Platform.isMacOS) {
-          final macInfo = await deviceInfo.macOsInfo;
-          deviceName = macInfo.computerName;
-        } else if (Platform.isLinux) {
-          final linuxInfo = await deviceInfo.linuxInfo;
-          deviceName = linuxInfo.name;
+        if (kIsWeb) {
+          deviceName = 'web_client';
         } else {
-          deviceName = Platform.localHostname;
+          final deviceInfo = DeviceInfoPlugin();
+          if (Platform.isAndroid) {
+            final androidInfo = await deviceInfo.androidInfo;
+            deviceName = '${androidInfo.brand}_${androidInfo.model}';
+          } else if (Platform.isWindows) {
+            final windowsInfo = await deviceInfo.windowsInfo;
+            deviceName = windowsInfo.computerName;
+          } else if (Platform.isMacOS) {
+            final macInfo = await deviceInfo.macOsInfo;
+            deviceName = macInfo.computerName;
+          } else if (Platform.isLinux) {
+            final linuxInfo = await deviceInfo.linuxInfo;
+            deviceName = linuxInfo.name;
+          } else {
+            deviceName = Platform.localHostname;
+          }
         }
       } catch (e) {
-        deviceName = Platform.localHostname;
+        deviceName = kIsWeb ? 'web_client' : (Platform.localHostname);
       }
       deviceName = deviceName.replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '_');
       final shortUuid = const Uuid().v4().substring(0, 8);
@@ -310,9 +383,10 @@ class TunnelService extends ChangeNotifier {
     return clientId;
   }
 
+  /// Disconnect from the relay and stop all tunnel listeners.
   Future<void> disconnect() async {
     _log(LogLevel.info, 'Disconnecting...');
-    _lastRelayUrl = null;
+    _lastRelayUrl = null; // Clear credentials to suppress auto-reconnect
     _lastToken = null;
     if (Platform.isAndroid) {
       FlutterForegroundTask.sendDataToTask({'action': 'disconnect'});
@@ -324,6 +398,8 @@ class TunnelService extends ChangeNotifier {
     }
     _log(LogLevel.info, 'Disconnected');
   }
+
+  // ── Message handling ───────────────────────────────────────────────────────
 
   void _handleMessage(dynamic data) {
     if (data is String) {
@@ -348,15 +424,17 @@ class TunnelService extends ChangeNotifier {
     switch (type) {
       case 'auth_ok':
         _log(LogLevel.success, 'Authenticated with relay ✓');
+        if (msg.containsKey('peerConnected') || msg.containsKey('peer_online')) {
+          _peerConnected = (msg['peerConnected'] ?? msg['peer_online']) == true;
+        }
         _setState(TunnelConnectionState.connected);
         _startAllTunnelListeners();
         if (Platform.isAndroid) {
-          FlutterForegroundTask.startService(
+          FlutterForegroundTask.updateService(
             notificationTitle: 'TCP Tunnel Active',
             notificationText: 'Tunnel is connected and running',
-            serviceTypes: [ForegroundServiceTypes.dataSync],
           ).then((_) {}).catchError((e) {
-            _log(LogLevel.warning, 'Failed to start foreground service: $e');
+            _log(LogLevel.warning, 'Failed to update foreground service: $e');
           });
         }
         _keepAliveTimer?.cancel();
@@ -435,6 +513,18 @@ class TunnelService extends ChangeNotifier {
             });
           }
         }
+
+      case 'file_upload_chunk':
+        // Handle file upload chunk sent from peer to this agent
+        _handleIncomingFileUploadChunk(msg);
+
+      case 'print_job_request':
+        // Handle remote print request sent from peer to this agent
+        _handleIncomingPrintJobRequest(msg);
+
+      case 'device_list_request':
+        // Handle device list request sent from peer to this agent
+        _handleIncomingDeviceListRequest(msg);
 
       case 'file_upload_response':
         final requestId = msg['requestId'] as String;
@@ -542,10 +632,43 @@ class TunnelService extends ChangeNotifier {
           }
         }
 
+      case 'network_scan_response':
+        final requestId = msg['requestId'] as String;
+        final success = msg['success'] as bool;
+        final error = msg['error'] as String?;
+        final completer = _networkScanCompleters.remove(requestId);
+        if (completer != null) {
+          if (success) {
+            completer.complete({
+              'agentIp': msg['agentIp'] ?? '',
+              'agentHostname': msg['agentHostname'] ?? '',
+              'gateway': msg['gateway'] ?? '',
+              'subnet': msg['subnet'] ?? '',
+              'interfaceName': msg['interfaceName'] ?? '',
+              'scanDurationMs': msg['scanDurationMs'] ?? 0,
+              'machines': List<Map<String, dynamic>>.from(msg['machines'] as List? ?? []),
+            });
+          } else {
+            completer.completeError(Exception(error ?? 'Network scan failed'));
+          }
+        }
+
+      case 'print_job_progress':
+        final requestId = msg['requestId'] as String;
+        final progress = (msg['progress'] as num?)?.toDouble() ?? 0.0;
+        final currentPage = msg['currentPage'] as int? ?? 0;
+        final totalPages = msg['totalPages'] as int? ?? 0;
+        final status = msg['status'] as String? ?? '';
+        final callback = _printProgressCallbacks[requestId];
+        if (callback != null) {
+          callback(progress, currentPage, totalPages, status);
+        }
+
       case 'print_job_response':
         final requestId = msg['requestId'] as String;
         final success = msg['success'] as bool;
         final error = msg['error'] as String?;
+        _printProgressCallbacks.remove(requestId);
         final completer = _printJobCompleters.remove(requestId);
         if (completer != null) {
           if (success) {
@@ -669,6 +792,7 @@ class TunnelService extends ChangeNotifier {
             rdpCompleter.completeError(Exception(rdpError ?? 'Failed to configure RDP'));
           }
         }
+
     }
   }
 
@@ -683,6 +807,8 @@ class TunnelService extends ChangeNotifier {
     }
   }
 
+  // ── Tunnel listeners ───────────────────────────────────────────────────────
+
   void _startAllTunnelListeners() {
     if (Platform.isAndroid) return;
     for (final tunnel in _tunnels.where((t) => t.enabled)) {
@@ -693,7 +819,7 @@ class TunnelService extends ChangeNotifier {
   Future<void> _startTunnelListener(TunnelConfig config) async {
     if (_servers.containsKey(config.id)) return;
     try {
-      final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, config.localPort);
+      final server = await ServerSocket.bind(InternetAddress.anyIPv4, config.localPort, shared: true);
       _servers[config.id] = server;
       _log(LogLevel.info,
           'Listening on localhost:${config.localPort} → ${config.remoteHost}:${config.remotePort} [${config.name}]');
@@ -703,6 +829,7 @@ class TunnelService extends ChangeNotifier {
         _localSockets[channelId] = socket;
         _log(LogLevel.debug, 'New local connection on ${config.name}, channelId=$channelId');
 
+        // Ask relay to open a channel to the work resource
         _send(jsonEncode({
           'type': 'open',
           'channelId': channelId,
@@ -711,6 +838,7 @@ class TunnelService extends ChangeNotifier {
         }));
         _pendingChannels.add(channelId);
 
+        // Forward local TCP data → relay
         socket.listen(
           (Uint8List data) {
             _sendDataFrame(channelId, data);
@@ -749,6 +877,8 @@ class TunnelService extends ChangeNotifier {
     }
   }
 
+  // ── Wire encoding ──────────────────────────────────────────────────────────
+
   void _send(String text) {
     if (Platform.isAndroid) {
       FlutterForegroundTask.sendDataToTask({
@@ -773,6 +903,8 @@ class TunnelService extends ChangeNotifier {
     } catch (_) {}
   }
 
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
   void _setState(TunnelConnectionState state, {String? error}) {
     _state = state;
     _errorMessage = error;
@@ -784,6 +916,7 @@ class TunnelService extends ChangeNotifier {
     _setState(TunnelConnectionState.disconnected);
     _peerConnected = false;
 
+    // Auto-reconnect after 5 seconds if we have stored credentials
     if (_autoReconnect && _lastRelayUrl != null && _lastToken != null) {
       _log(LogLevel.info, 'Auto-reconnecting in 5 seconds...');
       Future.delayed(const Duration(seconds: 5), () {
@@ -813,8 +946,10 @@ class TunnelService extends ChangeNotifier {
       s.destroy();
     }
     _localSockets.clear();
-    _pendingChannels.clear();    _peerConnected = false;
+    _pendingChannels.clear();
+    _peerConnected = false;
 
+    // Clean up file explorer state
     for (final download in _activeDownloads.values) {
       download.sink.close().catchError((_) => null);
       download.completer.completeError(Exception('Disconnected'));
@@ -833,6 +968,7 @@ class TunnelService extends ChangeNotifier {
     }
     _fileActionCompleters.clear();
 
+    // Clean up device explorer state
     for (final completer in _deviceListCompleters.values) {
       completer.completeError(Exception('Disconnected'));
     }
@@ -846,6 +982,7 @@ class TunnelService extends ChangeNotifier {
     }
     _terminalCommandCompleters.clear();
 
+    // Clean up USB control completers
     for (final completer in _usbEjectCompleters.values) {
       completer.completeError(Exception('Disconnected'));
     }
@@ -886,6 +1023,10 @@ class TunnelService extends ChangeNotifier {
       completer.completeError(Exception('Disconnected'));
     }
     _rdpWrapperInstallCompleters.clear();
+    for (final completer in _networkScanCompleters.values) {
+      completer.completeError(Exception('Disconnected'));
+    }
+    _networkScanCompleters.clear();
 
     _keepAliveTimer?.cancel();
     _keepAliveTimer = null;
@@ -901,7 +1042,7 @@ class TunnelService extends ChangeNotifier {
 
   void _log(LogLevel level, String message) {
     _logs.add(LogEntry(timestamp: DateTime.now(), level: level, message: message));
-    if (_logs.length > 500) _logs.removeAt(0);
+    if (_logs.length > 500) _logs.removeAt(0); // cap log size
     notifyListeners();
   }
 
@@ -909,6 +1050,8 @@ class TunnelService extends ChangeNotifier {
     _logs.clear();
     notifyListeners();
   }
+
+  // ── Remote File Operations ──────────────────────────────────────────────────
 
   Future<List<Map<String, dynamic>>> fetchRemoteFiles(String path) async {
     if (!isConnected) throw Exception('Not connected to relay');
@@ -991,17 +1134,30 @@ class TunnelService extends ChangeNotifier {
     }
   }
 
-  Future<void> uploadLocalFile(String localPath, String remoteDestPath, {Function(double)? onProgress}) async {
+  Future<void> uploadLocalFile(
+    String? localPath,
+    String remoteDestPath, {
+    Function(double)? onProgress,
+    Uint8List? localBytes,
+  }) async {
     if (!isConnected) throw Exception('Not connected to relay');
-    final file = File(localPath);
-    if (!file.existsSync()) throw Exception('Local file does not exist');
+
+    final Uint8List bytes;
+    if (localBytes != null) {
+      bytes = localBytes;
+    } else if (localPath != null) {
+      final file = File(localPath);
+      if (!file.existsSync()) throw Exception('Local file does not exist');
+      bytes = await file.readAsBytes();
+    } else {
+      throw Exception('Either localPath or localBytes must be provided');
+    }
 
     final requestId = _uuid.v4();
     final completer = Completer<void>();
     _activeUploadCompleters[requestId] = completer;
 
-    final fileLength = await file.length();
-    final openFile = await file.open();
+    final fileLength = bytes.length;
 
     try {
       const chunkSize = 64 * 1024;
@@ -1011,7 +1167,59 @@ class TunnelService extends ChangeNotifier {
       while (bytesSent < fileLength) {
         final remaining = fileLength - bytesSent;
         final toRead = remaining < chunkSize ? remaining : chunkSize;
-        final chunk = await openFile.read(toRead);
+        final chunk = bytes.sublist(bytesSent, bytesSent + toRead);
+        bytesSent += toRead;
+
+        final isLast = bytesSent >= fileLength;
+        final base64Data = base64Encode(chunk);
+
+        _send(jsonEncode({
+          'type': 'file_upload_chunk',
+          'requestId': requestId,
+          'path': remoteDestPath,
+          'chunkIndex': chunkIndex++,
+          'data': base64Data,
+          'isLast': isLast,
+        }));
+
+        if (onProgress != null && fileLength > 0) {
+          onProgress(bytesSent / fileLength);
+        }
+
+        await Future.delayed(const Duration(milliseconds: 5));
+      }
+
+      await completer.future.timeout(
+        const Duration(seconds: 45),
+        onTimeout: () => throw TimeoutException('File upload to distant machine timed out'),
+      );
+    } catch (e) {
+      rethrow;
+    } finally {
+      _activeUploadCompleters.remove(requestId);
+    }
+  }
+
+  // ── Remote Device Operations ────────────────────────────────────────────────
+
+  Future<void> uploadBytes(Uint8List bytes, String remoteDestPath, {Function(double)? onProgress}) async {
+    if (!isConnected) throw Exception('Not connected to relay');
+
+    final requestId = _uuid.v4();
+    final completer = Completer<void>();
+    _activeUploadCompleters[requestId] = completer;
+
+    final fileLength = bytes.length;
+
+    try {
+      const chunkSize = 64 * 1024;
+      int bytesSent = 0;
+      int chunkIndex = 0;
+
+      while (bytesSent < fileLength) {
+        final remaining = fileLength - bytesSent;
+        final toRead = remaining < chunkSize ? remaining : chunkSize;
+        final chunk = bytes.sublist(bytesSent, bytesSent + toRead);
         bytesSent += toRead;
 
         final isLast = bytesSent >= fileLength;
@@ -1037,11 +1245,11 @@ class TunnelService extends ChangeNotifier {
     } catch (e) {
       rethrow;
     } finally {
-      await openFile.close();
       _activeUploadCompleters.remove(requestId);
     }
   }
 
+  
   Future<Map<String, dynamic>> fetchRemoteDevices() async {
     if (!isConnected) throw Exception('Not connected to relay');
     final requestId = _uuid.v4();
@@ -1053,14 +1261,27 @@ class TunnelService extends ChangeNotifier {
       'requestId': requestId,
     }));
 
-    return completer.future;
+    return completer.future.timeout(
+      const Duration(seconds: 30),
+      onTimeout: () => throw TimeoutException('Failed to fetch remote devices: timed out'),
+    );
   }
 
-  Future<void> triggerRemotePrint(String remoteFilePath, String printerName, {bool deleteAfter = false}) async {
+  Future<void> triggerRemotePrint(
+    String remoteFilePath,
+    String printerName, {
+    bool deleteAfter = false,
+    String pageSize = 'A4',
+    String orientation = 'portrait',
+    void Function(double progress, int currentPage, int totalPages, String status)? onProgress,
+  }) async {
     if (!isConnected) throw Exception('Not connected to relay');
     final requestId = _uuid.v4();
     final completer = Completer<void>();
     _printJobCompleters[requestId] = completer;
+    if (onProgress != null) {
+      _printProgressCallbacks[requestId] = onProgress;
+    }
 
     _send(jsonEncode({
       'type': 'print_job_request',
@@ -1068,10 +1289,17 @@ class TunnelService extends ChangeNotifier {
       'filePath': remoteFilePath,
       'printerName': printerName,
       'deleteAfter': deleteAfter,
+      'pageSize': pageSize,
+      'orientation': orientation,
     }));
 
-    return completer.future;
+    return completer.future.timeout(
+      const Duration(minutes: 2),
+      onTimeout: () => throw TimeoutException('Remote print command on target machine timed out'),
+    );
   }
+
+  // ── Remote Terminal Operations ──────────────────────────────────────────────
 
   Future<Map<String, dynamic>> executeRemoteCommand(String command, String cwd) async {
     if (!isConnected) throw Exception('Not connected to relay');
@@ -1129,6 +1357,8 @@ class TunnelService extends ChangeNotifier {
     return completer.future;
   }
 
+  // ── Remote USBIP Bind / Unbind ─────────────────────────────────────────────
+
   Future<bool> bindRemoteUsbDevice(String busId) async {
     if (!isConnected) throw Exception('Not connected to relay');
     final requestId = _uuid.v4();
@@ -1155,6 +1385,7 @@ class TunnelService extends ChangeNotifier {
     return completer.future;
   }
 
+  /// Send install request to the remote agent to install USBIP tools.
   Future<bool> installRemoteUsbip() async {
     if (!isConnected) throw Exception('Not connected to relay');
     final requestId = _uuid.v4();
@@ -1215,14 +1446,30 @@ class TunnelService extends ChangeNotifier {
     return completer.future;
   }
 
+  /// Scan and discover all machines on the local network (LAN) where the remote agent is installed.
+  Future<Map<String, dynamic>> scanRemoteNetwork({bool deepScan = false}) async {
+    if (!isConnected) throw Exception('Not connected to relay');
+    final requestId = _uuid.v4();
+    final completer = Completer<Map<String, dynamic>>();
+    _networkScanCompleters[requestId] = completer;
+    _send(jsonEncode({
+      'type': 'network_scan_request',
+      'requestId': requestId,
+      'deepScan': deepScan,
+    }));
+    return completer.future.timeout(const Duration(seconds: 50), onTimeout: () {
+      _networkScanCompleters.remove(requestId);
+      throw Exception('Network scan timed out. Please try again.');
+    });
+  }
+
   Future<void> launchRdp(String host, int port, [BuildContext? context]) async {
-    if (Platform.isWindows) {
-      final rdpContent = '''
+            final rdpContent = '''
 full address:s:$host:$port
-username:s:
 prompt for credentials:i:1
 enablecredsspsupport:i:1
 authentication level:i:0
+negotiate security layer:i:1
 screen mode id:i:2
 use multimon:i:0
 session bpp:i:32
@@ -1245,33 +1492,146 @@ disable cursor setting:i:0
 bitmapcachepersistenable:i:1
 ''';
 
+    if (Platform.isWindows) {
       final tempDir = await getTemporaryDirectory();
       final rdpFile = File('${tempDir.path}${Platform.pathSeparator}tunnel_rdp_session.rdp');
       await rdpFile.writeAsString(rdpContent);
       await Process.run('mstsc.exe', [rdpFile.path]);
-    } else if (Platform.isAndroid || Platform.isIOS) {
-      final uri = Uri.parse('rdp://full%20address=s:$host:$port&prompt%20for%20credentials=i:1');
-      final bool isAppInstalled = await canLaunchUrl(uri);
-      
-      if (isAppInstalled) {
-        try {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-        } catch (e) {
-          if (context != null && context.mounted) {
-            _showRdpInstallPrompt(context);
-          } else {
-            throw Exception('Microsoft Remote Desktop client is not installed or could not be launched.');
+    } else if (Platform.isLinux) {
+      // Check if xfreerdp or remmina is installed
+      String? clientExe;
+      if ((await Process.run('which', ['xfreerdp'])).exitCode == 0) {
+        clientExe = 'xfreerdp';
+      } else if ((await Process.run('which', ['remmina'])).exitCode == 0) {
+        clientExe = 'remmina';
+      }
+
+      if (clientExe == null) {
+        // Try installing freerdp2-x11 automatically via pkexec / apt-get
+        final installResult = await Process.run('pkexec', ['apt-get', 'install', '-y', 'freerdp2-x11']);
+        if (installResult.exitCode == 0 && (await Process.run('which', ['xfreerdp'])).exitCode == 0) {
+          clientExe = 'xfreerdp';
+        } else {
+          // Fallback to apt-get direct
+          final aptResult = await Process.run('apt-get', ['install', '-y', 'freerdp2-x11']);
+          if (aptResult.exitCode == 0 && (await Process.run('which', ['xfreerdp'])).exitCode == 0) {
+            clientExe = 'xfreerdp';
           }
         }
+      }
+
+      if (clientExe == 'xfreerdp') {
+        // Bypass NLA & password checks for direct 1-click logon
+        await Process.start('xfreerdp', [
+          '/v:$host:$port',
+          '-sec-nla',
+          '/cert-ignore',
+          '/dynamic-resolution',
+          '/u:',
+          '/p:',
+        ]);
+      } else if (clientExe == 'remmina') {
+        final tempDir = await getTemporaryDirectory();
+        final rdpFile = File('${tempDir.path}${Platform.pathSeparator}tunnel_rdp_session.rdp');
+        await rdpFile.writeAsString('''
+[remmina]
+server=$host:$port
+protocol=RDP
+''');
+        await Process.start('remmina', ['-c', rdpFile.path]);
       } else {
+        // Fallback: try opening .rdp with default system handler (e.g. Remmina / KRDC / etc.)
+        final tempDir = await getTemporaryDirectory();
+        final rdpFile = File('${tempDir.path}${Platform.pathSeparator}tunnel_rdp_session.rdp');
+        await rdpFile.writeAsString(rdpContent);
+        final xdgResult = await Process.run('xdg-open', [rdpFile.path]);
+        if (xdgResult.exitCode != 0) {
+          throw Exception('Could not find or install an RDP client (freerdp2-x11 / remmina). Please install freerdp2-x11 or remmina manually.');
+        }
+      }
+    } else if (Platform.isAndroid || Platform.isIOS) {
+      // Double-encode spaces (%2520) so Android OS Intent Uri passes %20 to Windows App
+      final urlStringsToTry = [
+        'rdp://full%2520address=s:$host:$port&prompt%2520for%2520credentials=i:1',
+        'rdp://full%2520address=s:$host:$port',
+        'ms-rdp://full%2520address=s:$host:$port',
+        'rdp://$host:$port',
+        'ms-rdp://$host:$port',
+      ];
+
+      bool launched = false;
+      for (final urlStr in urlStringsToTry) {
+        try {
+          final success = await launchUrlString(urlStr, mode: LaunchMode.externalApplication);
+          if (success) {
+            launched = true;
+            break;
+          }
+        } catch (e) {
+          debugPrint('[TunnelService] RDP launchUrlString failed for $urlStr: $e');
+        }
+      }
+
+      if (!launched) {
+        try {
+          final tempDir = await getTemporaryDirectory();
+          final rdpFile = File('${tempDir.path}${Platform.pathSeparator}tunnel_rdp_session.rdp');
+          await rdpFile.writeAsString(rdpContent);
+          final fileUri = Uri.file(rdpFile.path);
+          launched = await launchUrl(fileUri, mode: LaunchMode.externalApplication);
+        } catch (e) {
+          debugPrint('[TunnelService] .rdp file launch fallback failed: $e');
+        }
+      }
+
+      if (!launched) {
         if (context != null && context.mounted) {
           _showRdpInstallPrompt(context);
         } else {
-          throw Exception('Microsoft Remote Desktop client is not installed.');
+          throw Exception('Windows App (Remote Desktop) n\'a pas pu être lancé.');
         }
       }
     } else {
       throw Exception('RDP launch is not supported on this platform');
+    }
+  }
+
+  Future<void> launchRdpWithFallbackToken({
+    required String relayUrl,
+    required String rdpToken,
+    required int port,
+    BuildContext? context,
+  }) async {
+    try {
+      final fallbackService = TunnelService();
+      final rdpTunnel = TunnelConfig(
+        id: 'rdp-fallback',
+        profileId: 'default',
+        name: 'RDP Safety Fallback',
+        localPort: port,
+        remoteHost: '127.0.0.1',
+        remotePort: 3389,
+        enabled: true,
+      );
+      fallbackService.setTunnels([rdpTunnel]);
+      fallbackService.connect(relayUrl, rdpToken);
+
+      int ticks = 0;
+      while (!fallbackService.isConnected && ticks < 25) {
+        await Future.delayed(const Duration(milliseconds: 200));
+        ticks++;
+      }
+
+      await fallbackService.launchRdp('127.0.0.1', port, context);
+    } catch (e) {
+      if (context != null && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Impossible de se connecter à l\'agent RDP de secours: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
     }
   }
 
@@ -1280,9 +1640,9 @@ bitmapcachepersistenable:i:1
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF0F1629),
-        title: const Text('Microsoft Remote Desktop requis', style: TextStyle(color: Colors.white)),
+        title: const Text('Windows App (Remote Desktop) requise', style: TextStyle(color: Colors.white)),
         content: const Text(
-          'L\'application Microsoft Remote Desktop est nécessaire pour se connecter en RDP.\n\nSouhaitez-vous l\'installer maintenant ?',
+          'L\'application Windows App (anciennement Microsoft Remote Desktop) est nécessaire pour se connecter en RDP.\n\nSouhaitez-vous l\'installer maintenant depuis le Store ?',
           style: TextStyle(color: Colors.white70),
         ),
         actions: [
@@ -1294,15 +1654,15 @@ bitmapcachepersistenable:i:1
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00BFA5)),
             onPressed: () async {
               Navigator.pop(ctx);
-              final Uri playStoreUri = Uri.parse(
+              final Uri storeUri = Uri.parse(
                 Platform.isAndroid
                     ? 'https://play.google.com/store/apps/details?id=com.microsoft.rdc.android'
-                    : 'https://apps.apple.com/app/microsoft-remote-desktop/id714420560',
+                    : 'https://apps.apple.com/app/windows-app/id714420560',
               );
               try {
-                await launchUrl(playStoreUri, mode: LaunchMode.externalApplication);
+                await launchUrl(storeUri, mode: LaunchMode.externalApplication);
               } catch (_) {
-                await launchUrl(playStoreUri);
+                await launchUrl(storeUri);
               }
             },
             child: const Text('Installer'),
@@ -1312,6 +1672,9 @@ bitmapcachepersistenable:i:1
     );
   }
 
+  // ── Local Client USBIP Commands ────────────────────────────────────────────
+
+  /// Find the usbip executable — check PATH first, then default install locations.
   static Future<String> findLocalUsbipExecutable() async {
     if (!Platform.isWindows) return 'usbip';
     try {
@@ -1331,6 +1694,7 @@ bitmapcachepersistenable:i:1
     return '';
   }
 
+  /// Check if usbip client is installed on the local machine.
   Future<bool> isLocalUsbipInstalled() async {
     if (Platform.isLinux) {
       try {
@@ -1344,6 +1708,7 @@ bitmapcachepersistenable:i:1
     return exe.isNotEmpty;
   }
 
+  /// Install usbip client on the local machine (Windows via bundled assets, Linux via apt).
   Future<bool> installLocalUsbip() async {
     if (Platform.isWindows) {
       try {
@@ -1358,6 +1723,7 @@ bitmapcachepersistenable:i:1
         ]);
         return result.exitCode == 0;
       } catch (e) {
+        // Fallback to winget if asset loading or running fails
         final result = await Process.run('powershell', [
           '-Command',
           "Start-Process powershell -ArgumentList '-Command winget install OUST.Usbipd-Win --silent --accept-source-agreements --accept-package-agreements' -Verb RunAs"
@@ -1427,6 +1793,7 @@ bitmapcachepersistenable:i:1
               currentPort = match.group(1);
             }
           } else if (line.contains('127.0.0.1') && currentPort != null) {
+            // e.g. "127.0.0.1 (1-1)" or "127.0.0.1 :3240 => remote (2-1)"
             final match = RegExp(r'\(([^)]+)\)').firstMatch(line);
             if (match != null) {
               final busId = match.group(1)!;
@@ -1493,6 +1860,157 @@ bitmapcachepersistenable:i:1
     final timer = _autoDetachTimers[busId];
     if (timer == null) return null;
     return null;
+  }
+
+  // ── Incoming Agent Request Handlers (Peer -> Agent) ───────────────────────
+
+  final Map<String, List<int>> _incomingUploadBuffers = {};
+
+  Future<void> _handleIncomingFileUploadChunk(Map<String, dynamic> msg) async {
+    final requestId = msg['requestId'] as String;
+    final pathParam = msg['path'] as String;
+    final base64Data = msg['data'] as String;
+    final isLast = msg['isLast'] as bool? ?? false;
+
+    try {
+      final chunkBytes = base64Decode(base64Data);
+      final buffer = _incomingUploadBuffers.putIfAbsent(requestId, () => <int>[]);
+      buffer.addAll(chunkBytes);
+
+      if (isLast) {
+        final fileBytes = Uint8List.fromList(_incomingUploadBuffers.remove(requestId) ?? []);
+        
+        String savePath = pathParam;
+        if (!path.isAbsolute(savePath)) {
+          savePath = path.join(Directory.systemTemp.path, pathParam);
+        }
+
+        final targetFile = File(savePath);
+        await targetFile.parent.create(recursive: true);
+        await targetFile.writeAsBytes(fileBytes);
+
+        _log(LogLevel.info, 'Received uploaded file from peer: $savePath (${fileBytes.length} bytes)');
+
+        _send(jsonEncode({
+          'type': 'file_upload_response',
+          'requestId': requestId,
+          'success': true,
+          'filePath': savePath,
+        }));
+      }
+    } catch (e) {
+      _incomingUploadBuffers.remove(requestId);
+      _log(LogLevel.error, 'Failed to process incoming upload chunk: $e');
+      _send(jsonEncode({
+        'type': 'file_upload_response',
+        'requestId': requestId,
+        'success': false,
+        'error': e.toString(),
+      }));
+    }
+  }
+
+  Future<void> _handleIncomingPrintJobRequest(Map<String, dynamic> msg) async {
+    final requestId = msg['requestId'] as String;
+    final filePathParam = msg['filePath'] as String;
+    final printerName = msg['printerName'] as String;
+    final deleteAfter = msg['deleteAfter'] as bool? ?? false;
+
+    try {
+      String fullPath = filePathParam;
+      if (!path.isAbsolute(fullPath)) {
+        fullPath = path.join(Directory.systemTemp.path, filePathParam);
+      }
+
+      final file = File(fullPath);
+      if (!await file.exists()) {
+        throw Exception('Fichier PDF introuvable sur l\'agent distant: $fullPath');
+      }
+
+      _log(LogLevel.info, 'Received remote print request for printer "$printerName", file: $fullPath');
+
+      final pdfBytes = await file.readAsBytes();
+
+      bool printSuccess = false;
+      try {
+        printSuccess = await Printing.directPrintPdf(
+          printer: Printer(url: printerName, name: printerName),
+          onLayout: (PdfPageFormat format) async => pdfBytes,
+        );
+      } catch (e) {
+        _log(LogLevel.warning, 'directPrintPdf failed, trying PowerShell fallback: $e');
+      }
+
+      if (!printSuccess && Platform.isWindows) {
+        final result = await Process.run('powershell', [
+          '-Command',
+          'Start-Process -FilePath "${fullPath.replaceAll('"', '\\"')}" -Verb PrintTo -ArgumentList \'"${printerName.replaceAll('"', '\\"')}"\' -Wait'
+        ]);
+        if (result.exitCode == 0) {
+          printSuccess = true;
+        } else {
+          throw Exception('PowerShell PrintTo failed: ${result.stderr}');
+        }
+      }
+
+      if (deleteAfter && await file.exists()) {
+        try {
+          await file.delete();
+        } catch (_) {}
+      }
+
+      _send(jsonEncode({
+        'type': 'print_job_response',
+        'requestId': requestId,
+        'success': true,
+      }));
+      _log(LogLevel.success, 'Remote print job executed successfully on "$printerName"');
+    } catch (e) {
+      _log(LogLevel.error, 'Remote print job failed: $e');
+      _send(jsonEncode({
+        'type': 'print_job_response',
+        'requestId': requestId,
+        'success': false,
+        'error': e.toString(),
+      }));
+    }
+  }
+
+  Future<void> _handleIncomingDeviceListRequest(Map<String, dynamic> msg) async {
+    final requestId = msg['requestId'] as String;
+    try {
+      final printersList = <Map<String, dynamic>>[];
+      try {
+        final printers = await Printing.listPrinters();
+        for (final p in printers) {
+          printersList.add({
+            'name': p.name,
+            'model': p.model,
+            'isDefault': p.isDefault,
+            'isAvailable': p.isAvailable,
+          });
+        }
+      } catch (e) {
+        _log(LogLevel.warning, 'Failed to query local printers: $e');
+      }
+
+      _send(jsonEncode({
+        'type': 'device_list_response',
+        'requestId': requestId,
+        'success': true,
+        'usbDevices': [],
+        'printers': printersList,
+        'comPorts': [],
+        'usbipdMissing': false,
+      }));
+    } catch (e) {
+      _send(jsonEncode({
+        'type': 'device_list_response',
+        'requestId': requestId,
+        'success': false,
+        'error': e.toString(),
+      }));
+    }
   }
 
   @override

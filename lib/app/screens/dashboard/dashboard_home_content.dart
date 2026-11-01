@@ -1,7 +1,9 @@
-import 'dart:math' as math;
+﻿import 'dart:math' as math;
 
 import 'package:chifa/app/cubits/auth_cubit.dart';
 import 'package:chifa/app/cubits/dashboard_cubit.dart';
+import 'package:chifa/app/utils/responsive.dart';
+import 'package:chifa/app/utils/role_permissions.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -97,7 +99,7 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
             slivers: [
               SliverPadding(
                 padding: EdgeInsets.all(
-                  MediaQuery.of(context).size.width < 600 ? 12 : 24,
+                  context.isMobile ? 12 : 24,
                 ),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
@@ -148,11 +150,11 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
                                 ),
                                 padding: EdgeInsets.symmetric(
                                   horizontal:
-                                      MediaQuery.of(context).size.width < 600
+                                      context.isMobile
                                       ? 8
                                       : 12,
                                   vertical:
-                                      MediaQuery.of(context).size.width < 600
+                                      context.isMobile
                                       ? 8
                                       : 12,
                                 ),
@@ -176,38 +178,43 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
                     const SizedBox(height: 16),
 
                     // Charts Row
-                    if (MediaQuery.of(context).size.width > 900)
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(child: _buildRevenueChart(statistics)),
-                          const SizedBox(width: 24),
-                          Expanded(child: _buildAppointmentsChart(statistics)),
-                        ],
-                      )
-                    else if (MediaQuery.of(context).size.width > 600)
-                      Column(
-                        children: [
-                          _buildRevenueChart(statistics),
-                          const SizedBox(height: 24),
-                          _buildAppointmentsChart(statistics),
-                        ],
-                      )
-                    else
-                      Column(
-                        children: [
-                          // On small mobile, maybe make charts a bit shorter
-                          SizedBox(
-                            height: 250,
-                            child: _buildRevenueChart(statistics),
-                          ),
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            height: 250,
-                            child: _buildAppointmentsChart(statistics),
-                          ),
-                        ],
-                      ),
+                    Builder(
+                      builder: (context) {
+                        final canViewFinancial = RolePermissions.canViewFinancialData(
+                          context.read<AuthCubit>().currentRole,
+                        );
+
+                        if (canViewFinancial) {
+                          if (!context.isMobile) {
+                            return Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(child: _buildRevenueChart(statistics)),
+                                const SizedBox(width: 24),
+                                Expanded(child: _buildAppointmentsChart(statistics)),
+                              ],
+                            );
+                          } else {
+                            return Column(
+                              children: [
+                                SizedBox(
+                                  height: 250,
+                                  child: _buildRevenueChart(statistics),
+                                ),
+                                const SizedBox(height: 16),
+                                SizedBox(
+                                  height: 250,
+                                  child: _buildAppointmentsChart(statistics),
+                                ),
+                              ],
+                            );
+                          }
+                        }
+
+                        // Non-financial users (e.g. Nurse) only see appointments activity
+                        return _buildAppointmentsChart(statistics);
+                      },
+                    ),
                     const SizedBox(height: 24),
 
                     // Status Breakdown Header
@@ -215,7 +222,7 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
                     const SizedBox(height: 16),
 
                     // Status Cards
-                    if (MediaQuery.of(context).size.width > 900) ...[
+                    if (!context.isMobile) ...[
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -244,7 +251,7 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
   Widget _buildWelcomeHeader() {
     final authCubit = context.read<AuthCubit>();
     final user = authCubit.currentUser;
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = context.isMobile;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -278,13 +285,22 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Welcome, Dr. ${user?.fullName ?? 'Unknown'}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Builder(
+                      builder: (context) {
+                        final isDoctor = authCubit.isDoctor;
+                        final isNurse = authCubit.isNurse;
+                        final String greetingRole = isDoctor
+                            ? 'Dr. '
+                            : (isNurse ? 'Infirmier(ère) ' : '');
+                        return Text(
+                          'Bienvenue, $greetingRole${user?.fullName ?? 'Utilisateur'}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        );
+                      },
                     ),
                     if (user?.specialization != null)
                       Text(
@@ -352,7 +368,7 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
   }
 
   Widget _buildSectionHeader(String title) {
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = context.isMobile;
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       child: Row(
@@ -383,43 +399,42 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
   }
 
   Widget _buildStatsGrid(DashboardStatistics statistics) {
-    final width = MediaQuery.of(context).size.width;
+    final isMobile = context.isMobile;
+    final isLandscape = context.isPhoneLandscape;
     int crossAxisCount = 4;
-    if (width < 600) {
+    if (isMobile && !isLandscape) {
       crossAxisCount = 1;
-    } else if (width < 1200) {
+    } else if (isMobile || MediaQuery.of(context).size.width < 1200) {
       crossAxisCount = 2;
     }
 
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: crossAxisCount,
-      crossAxisSpacing: width < 600 ? 12 : 20,
-      mainAxisSpacing: width < 600 ? 12 : 20,
-      childAspectRatio: width < 400 ? 1.8 : (width < 600 ? 2.2 : 1.1),
-      children: [
-        _StatCard(
-          title: 'Total Patients',
-          value: statistics.totalPatients.toString(),
-          icon: Icons.people,
-          color: Colors.blue,
-          onTap: () => _navigateToSection('patients'),
-        ),
-        _StatCard(
-          title: 'Total Appointments',
-          value: statistics.totalAppointments.toString(),
-          icon: Icons.calendar_today,
-          color: Colors.green,
-          onTap: () => _navigateToSection('appointments'),
-        ),
-        _StatCard(
-          title: 'Medical Records',
-          value: statistics.totalMedicalRecords.toString(),
-          icon: Icons.description,
-          color: Colors.purple,
-          onTap: () => _navigateToSection('medical_records'),
-        ),
+    final role = context.read<AuthCubit>().currentRole;
+    final canViewFinancial = RolePermissions.canViewFinancialData(role);
+    final canViewCertifs = RolePermissions.canIssueCertificates(role);
+
+    final cards = <Widget>[
+      _StatCard(
+        title: 'Total Patients',
+        value: statistics.totalPatients.toString(),
+        icon: Icons.people,
+        color: Colors.blue,
+        onTap: () => _navigateToSection('patients'),
+      ),
+      _StatCard(
+        title: 'Total Appointments',
+        value: statistics.totalAppointments.toString(),
+        icon: Icons.calendar_today,
+        color: Colors.green,
+        onTap: () => _navigateToSection('appointments'),
+      ),
+      _StatCard(
+        title: 'Medical Records',
+        value: statistics.totalMedicalRecords.toString(),
+        icon: Icons.description,
+        color: Colors.purple,
+        onTap: () => _navigateToSection('medical_records'),
+      ),
+      if (canViewFinancial)
         _StatCard(
           title: 'Total Revenue',
           value: '${statistics.totalRevenue.toStringAsFixed(2)} DA',
@@ -427,6 +442,7 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
           color: Colors.teal,
           onTap: () => _navigateToSection('revenue'),
         ),
+      if (canViewCertifs)
         _StatCard(
           title: 'Certificates',
           value: statistics.totalCertificates.toString(),
@@ -434,28 +450,40 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
           color: Colors.orange,
           onTap: () => _navigateToSection('certificates'),
         ),
-        _StatCard(
-          title: 'Lab Orders',
-          value: statistics.totalLabOrders.toString(),
-          icon: Icons.biotech,
-          color: Colors.red,
-          onTap: () => _navigateToSection('lab_orders'),
-        ),
-        _StatCard(
-          title: "Today's Appts",
-          value: statistics.todayAppointments.toString(),
-          icon: Icons.event_available,
-          color: Colors.indigo,
-          onTap: () => _navigateToSection('today_appointments'),
-        ),
-        _StatCard(
-          title: 'Low Stock Items',
-          value: statistics.lowStockItems.toString(),
-          icon: Icons.warning,
-          color: statistics.lowStockItems > 0 ? Colors.red : Colors.green,
-          onTap: () => _navigateToSection('inventory'),
-        ),
-      ],
+      _StatCard(
+        title: 'Lab Orders',
+        value: statistics.totalLabOrders.toString(),
+        icon: Icons.biotech,
+        color: Colors.red,
+        onTap: () => _navigateToSection('lab_orders'),
+      ),
+      _StatCard(
+        title: "Today's Appts",
+        value: statistics.todayAppointments.toString(),
+        icon: Icons.event_available,
+        color: Colors.indigo,
+        onTap: () => _navigateToSection('today_appointments'),
+      ),
+      _StatCard(
+        title: 'Low Stock Items',
+        value: statistics.lowStockItems.toString(),
+        icon: Icons.warning,
+        color: statistics.lowStockItems > 0 ? Colors.red : Colors.green,
+        onTap: () => _navigateToSection('inventory'),
+      ),
+    ];
+
+    // childAspectRatio: landscape phone → wide cards, portrait phone → shorter, desktop → square-ish
+    final double aspectRatio = isLandscape ? 2.4 : (isMobile ? 2.2 : 1.1);
+
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: crossAxisCount,
+      crossAxisSpacing: isMobile ? 12 : 20,
+      mainAxisSpacing: isMobile ? 12 : 20,
+      childAspectRatio: aspectRatio,
+      children: cards,
     );
   }
 
@@ -1082,7 +1110,7 @@ class _StatCard extends StatelessWidget {
                 ),
                 Padding(
                   padding: EdgeInsets.all(
-                    MediaQuery.of(context).size.width < 600 ? 16.0 : 24.0,
+                    context.isMobile ? 16.0 : 24.0,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1100,7 +1128,7 @@ class _StatCard extends StatelessWidget {
                             child: Icon(
                               icon,
                               color: color,
-                              size: MediaQuery.of(context).size.width < 600
+                              size: context.isMobile
                                   ? 22
                                   : 28,
                             ),
@@ -1145,7 +1173,7 @@ class _StatCard extends StatelessWidget {
                       Text(
                         value,
                         style:
-                            (MediaQuery.of(context).size.width < 600
+                            (context.isMobile
                                     ? Theme.of(context).textTheme.titleLarge
                                     : Theme.of(
                                         context,

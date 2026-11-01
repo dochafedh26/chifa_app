@@ -398,6 +398,30 @@ class SettingsCubit extends Cubit<SettingsState> {
     );
   }
 
+  /// Approve user
+  Future<void> approveUser(int id) async {
+    final result = await _authRepository.approveEmployee(id);
+    result.fold(
+      (failure) => emit(SettingsError(failure.message)),
+      (success) {
+        emit(const SettingsOperationSuccess('Utilisateur approuvé avec succès'));
+        loadUsers();
+      },
+    );
+  }
+
+  /// Toggle user active status
+  Future<void> toggleUserActive(int id, bool isActive) async {
+    final result = await _authRepository.toggleActive(id, isActive);
+    result.fold(
+      (failure) => emit(SettingsError(failure.message)),
+      (success) {
+        emit(SettingsOperationSuccess(isActive ? 'Utilisateur activé' : 'Utilisateur désactivé'));
+        loadUsers();
+      },
+    );
+  }
+
   /// Load settings
   Future<void> loadSettings() async {
     emit(SettingsLoaded(_settings));

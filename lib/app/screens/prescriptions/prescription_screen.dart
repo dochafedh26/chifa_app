@@ -1,3 +1,4 @@
+import 'package:chifa/services/pdf_generation_service.dart';
 import 'package:chifa/app/cubits/auth_cubit.dart';
 import 'package:chifa/app/cubits/medical_record_cubit.dart';
 import 'package:chifa/app/cubits/patient_cubit.dart';
@@ -12,6 +13,7 @@ import 'package:chifa/services/db/repositories/medical_record_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:chifa/app/utils/responsive.dart';
 import 'package:printing/printing.dart';
 
 class PrescriptionScreen extends StatefulWidget {
@@ -130,7 +132,7 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
   Future<void> _printBlankOrdonnance() async {
     final pdfBytes = await generateEmptyOrdonnancePdf();
     if (!mounted) return;
-    await Printing.layoutPdf(onLayout: (format) async => pdfBytes);
+    await PdfGenerationService().printPdfBytes(pdfBytes, name: 'Ordonnance.pdf', context: context);
   }
 
   Future<void> _savePrescription() async {
@@ -237,7 +239,7 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 800;
+    final isMobile = context.isMobile;
 
     return MultiBlocListener(
       listeners: [
@@ -337,33 +339,36 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
                                 ),
                               ],
                             ),
-                            child: ListView.separated(
-                              shrinkWrap: true,
-                              padding: EdgeInsets.zero,
-                              itemCount: results.length,
-                              separatorBuilder: (_, index) => Divider(
-                                height: 1,
-                                color: Colors.grey.shade200,
-                              ),
-                              itemBuilder: (context, index) {
-                                final p = results[index];
-                                return ListTile(
-                                  dense: true,
-                                  leading: const Icon(Icons.person, size: 20),
-                                  title: Text(
-                                    p.fullName,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: ListView.separated(
+                                shrinkWrap: true,
+                                padding: EdgeInsets.zero,
+                                itemCount: results.length,
+                                separatorBuilder: (_, index) => Divider(
+                                  height: 1,
+                                  color: Colors.grey.shade200,
+                                ),
+                                itemBuilder: (context, index) {
+                                  final p = results[index];
+                                  return ListTile(
+                                    dense: true,
+                                    leading: const Icon(Icons.person, size: 20),
+                                    title: Text(
+                                      p.fullName,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                      ),
                                     ),
-                                  ),
-                                  subtitle: Text(
-                                    'ID: ${p.patientId} • ${p.age} ans',
-                                    style: const TextStyle(fontSize: 11),
-                                  ),
-                                  onTap: () => _selectPatient(p),
-                                );
-                              },
+                                    subtitle: Text(
+                                      'ID: ${p.patientId} • ${p.formattedAge}',
+                                      style: const TextStyle(fontSize: 11),
+                                    ),
+                                    onTap: () => _selectPatient(p),
+                                  );
+                                },
+                              ),
                             ),
                           );
                         },
@@ -389,7 +394,7 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              '${_selectedPatient!.fullName}  •  ${_selectedPatient!.age} ans  •  ${_selectedPatient!.gender.name}',
+                              '${_selectedPatient!.fullName}  •  ${_selectedPatient!.formattedAge}  •  ${_selectedPatient!.gender.name}',
                               style: TextStyle(
                                 fontSize: 13,
                                 color: Colors.blue.shade800,

@@ -1,4 +1,4 @@
-import "package:chifa/services/db/utils/db_utils.dart";
+﻿import "package:chifa/services/db/utils/db_utils.dart";
 import "package:equatable/equatable.dart";
 
 class PaymentService extends Equatable {
@@ -8,6 +8,7 @@ class PaymentService extends Equatable {
   final String serviceName;
   final double servicePrice;
   final double doctorCommission;
+  final String serviceType; // 'act' or 'soin'
 
   const PaymentService({
     this.id,
@@ -16,6 +17,7 @@ class PaymentService extends Equatable {
     required this.serviceName,
     required this.servicePrice,
     required this.doctorCommission,
+    this.serviceType = 'act',
   });
 
   Map<String, dynamic> toMap() {
@@ -26,6 +28,7 @@ class PaymentService extends Equatable {
       'service_name': serviceName,
       'service_price': servicePrice,
       'doctor_commission': doctorCommission,
+      'service_type': serviceType,
     };
   }
 
@@ -37,6 +40,9 @@ class PaymentService extends Equatable {
       serviceName: DbUtils.toStringValue(map['service_name']),
       servicePrice: DbUtils.toDouble(map['service_price']),
       doctorCommission: DbUtils.toDouble(map['doctor_commission']),
+      serviceType: DbUtils.toStringValue(map['service_type']).isNotEmpty
+          ? DbUtils.toStringValue(map['service_type'])
+          : 'act',
     );
   }
 
@@ -47,6 +53,7 @@ class PaymentService extends Equatable {
     String? serviceName,
     double? servicePrice,
     double? doctorCommission,
+    String? serviceType,
   }) {
     return PaymentService(
       id: id ?? this.id,
@@ -55,6 +62,7 @@ class PaymentService extends Equatable {
       serviceName: serviceName ?? this.serviceName,
       servicePrice: servicePrice ?? this.servicePrice,
       doctorCommission: doctorCommission ?? this.doctorCommission,
+      serviceType: serviceType ?? this.serviceType,
     );
   }
 
@@ -66,5 +74,6 @@ class PaymentService extends Equatable {
     serviceName,
     servicePrice,
     doctorCommission,
+    serviceType,
   ];
 }

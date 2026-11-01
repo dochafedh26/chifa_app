@@ -4,6 +4,8 @@ import "package:chifa/services/db/repositories/base_repository.dart";
 import "package:chifa/services/db/models/models.dart";
 import "package:chifa/services/db/database.dart";
 import "package:dartz/dartz.dart";
+import "package:flutter/foundation.dart";
+import "package:chifa/services/db/local_sqlite_service.dart";
 
 class AuthRepository {
   final DatabaseService _db = DatabaseService();
@@ -25,31 +27,102 @@ class AuthRepository {
     }
   }
 
-  /// Login with email and password
+  /// Login with email and password (Hybrid Online / Offline SQLite)
   Future<Either<Failure, Employee>> login(String email, String password) async {
+    final cleanEmail = email.trim();
+
+    // 1. Try Primary Database (MySQL / Cloud)
     try {
       final results = await _db.query(
-        'SELECT * FROM employees WHERE email = ? AND is_deleted = 0',
-        [email],
+        'SELECT * FROM employees WHERE (LOWER(email) = ? OR phone = ?) AND is_deleted = 0',
+        [cleanEmail.toLowerCase(), cleanEmail],
       );
 
-      if (results.isEmpty) {
-        return Left(NotFoundFailure('Employee not found'));
+      if (results.isNotEmpty) {
+        final employee = Employee.fromMap(results.first);
+
+        // Verify password
+        final isValid = _verifyPassword(password, employee.password);
+        if (!isValid) {
+          return Left(ValidationFailure('Mot de passe incorrect'));
+        }
+
+        // Check active approval status
+        if (!employee.isActive) {
+          return Left(ValidationFailure(
+            "Votre compte a été créé avec succès mais il est en attente de validation par l'administrateur de l'établissement.",
+          ));
+        }
+
+        // Cache employee into local SQLite for offline access
+        try {
+          await LocalSqliteService.instance.cacheEmployee(
+            employeeId: employee.employeeId ?? 0,
+            uuid: results.first['uuid']?.toString() ?? '',
+            firstName: employee.firstName,
+            lastName: employee.lastName,
+            role: employee.role.name,
+            specialization: employee.specialization,
+            email: employee.email,
+            phone: employee.phone,
+            passwordHash: employee.password,
+            accessLevel: employee.accessLevel.name,
+            isActive: 1,
+          );
+        } catch (e) {
+          debugPrint('[AuthRepository] Notice caching employee to SQLite: $e');
+        }
+
+        return Right(employee);
       }
-
-      final employee = Employee.fromMap(results.first);
-
-      // Verify password using bcrypt (passwords are stored as bcrypt hashes in DB)
-      final isValid = _verifyPassword(password, employee.password);
-
-      if (!isValid) {
-        return Left(ValidationFailure('Invalid password'));
-      }
-
-      return Right(employee);
     } catch (e) {
-      return Left(DatabaseFailure('Login failed: ${e.toString()}'));
+      debugPrint('[AuthRepository] Remote DB error, falling back to local SQLite: $e');
     }
+
+    // 2. Offline Fallback via Local SQLite
+    try {
+      final cachedRow = await LocalSqliteService.instance.getCachedEmployee(cleanEmail);
+      if (cachedRow != null) {
+        final storedHash = cachedRow['password_hash']?.toString() ?? '';
+        final isValid = _verifyPassword(password, storedHash);
+
+        if (!isValid) {
+          return Left(ValidationFailure('Mot de passe incorrect'));
+        }
+
+        final isActive = cachedRow['is_active'] == 1 || cachedRow['is_active'] == true;
+        if (!isActive) {
+          return Left(ValidationFailure(
+            "Votre compte est en attente de validation par l'administrateur.",
+          ));
+        }
+
+        final employee = Employee(
+          employeeId: cachedRow['employee_id'] as int?,
+          firstName: cachedRow['first_name']?.toString() ?? '',
+          lastName: cachedRow['last_name']?.toString() ?? '',
+          role: EmployeeRole.values.firstWhere(
+            (r) => r.name.toLowerCase() == cachedRow['role']?.toString().toLowerCase(),
+            orElse: () => EmployeeRole.doctor,
+          ),
+          specialization: cachedRow['specialization']?.toString(),
+          email: cachedRow['email']?.toString() ?? cleanEmail,
+          phone: cachedRow['phone']?.toString(),
+          password: storedHash,
+          accessLevel: AccessLevel.values.firstWhere(
+            (a) => a.name.toLowerCase() == cachedRow['access_level']?.toString().toLowerCase(),
+            orElse: () => AccessLevel.doctor,
+          ),
+          isActive: true,
+        );
+
+        return Right(employee);
+      }
+    } catch (e) {
+      debugPrint('[AuthRepository] SQLite offline auth error: $e');
+    }
+
+    return Left(NotFoundFailure('Utilisateur introuvable ou mot de passe incorrect'));
   }
 
   /// Get employee by ID
@@ -208,6 +281,77 @@ class AuthRepository {
       return Left(
         DatabaseFailure('Failed to get employees by role: ${e.toString()}'),
       );
+    }
+  }
+
+  /// Approve pending employee account (Admin only)
+  Future<Either<Failure, bool>> approveEmployee(int id) async {
+    try {
+      final result = await _db.execute(
+        'UPDATE employees SET is_active = 1, needs_sync = 1 WHERE employee_id = ?',
+        [id],
+      );
+
+      // Also update local SQLite cache if present
+      try {
+        await LocalSqliteService.instance.execute(
+          'UPDATE cached_employees SET is_active = 1 WHERE employee_id = ?',
+          [id],
+        );
+      } catch (_) {}
+
+      return Right(result > 0);
+    } catch (e) {
+      return Left(DatabaseFailure("Échec de l'approbation du compte : ${e.toString()}"));
+    }
+  }
+
+  /// Toggle active state of employee account (Admin only)
+  Future<Either<Failure, bool>> toggleActive(int id, bool isActive) async {
+    try {
+      final status = isActive ? 1 : 0;
+      final result = await _db.execute(
+        'UPDATE employees SET is_active = ?, needs_sync = 1 WHERE employee_id = ?',
+        [status, id],
+      );
+
+      try {
+        await LocalSqliteService.instance.execute(
+          'UPDATE cached_employees SET is_active = ? WHERE employee_id = ?',
+          [status, id],
+        );
+      } catch (_) {}
+
+      return Right(result > 0);
+    } catch (e) {
+      return Left(DatabaseFailure("Échec de la modification du statut : ${e.toString()}"));
+    }
+  }
+
+  /// Public registration for doctors/nurses (creates account in pending state: is_active = 0)
+  Future<Either<Failure, int>> registerPendingEmployee(Employee employee) async {
+    try {
+      final uuid = SyncManager().generateUuid();
+      final hashedPassword = _hashPassword(employee.password);
+      final id = await _db.insert(
+        '''INSERT INTO employees (uuid, first_name, last_name, role, specialization, email, phone, password, access_level, patient_id, is_active, needs_sync)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1)''',
+        [
+          uuid,
+          employee.firstName,
+          employee.lastName,
+          employee.role.name,
+          employee.specialization,
+          employee.email,
+          employee.phone,
+          hashedPassword,
+          employee.accessLevel.name,
+          employee.patientId,
+        ],
+      );
+      return Right(id);
+    } catch (e) {
+      return Left(DatabaseFailure("Échec de l'inscription : ${e.toString()}"));
     }
   }
 }

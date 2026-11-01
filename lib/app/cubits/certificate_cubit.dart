@@ -1,6 +1,5 @@
 import "package:chifa/services/db/repositories/repositories.dart";
 import "package:chifa/services/db/models/models.dart";
-import "package:dartz/dartz.dart";
 import "package:equatable/equatable.dart";
 import "package:flutter_bloc/flutter_bloc.dart";
 
@@ -241,6 +240,27 @@ class CertificatsPrenuptialLoaded extends CertificateState {
   List<Object?> get props => [certificats];
 }
 
+class CertificatsCoupsEtBlessuresLoaded extends CertificateState {
+  final List<CertificatCoupsEtBlessures> certificats;
+  const CertificatsCoupsEtBlessuresLoaded(this.certificats);
+  @override
+  List<Object?> get props => [certificats];
+}
+
+class CertificatsAptitudeSportLoaded extends CertificateState {
+  final List<CertificatAptitudeSport> certificats;
+  const CertificatsAptitudeSportLoaded(this.certificats);
+  @override
+  List<Object?> get props => [certificats];
+}
+
+class InterpretationsEcgLoaded extends CertificateState {
+  final List<InterpretationEcg> interpretations;
+  const InterpretationsEcgLoaded(this.interpretations);
+  @override
+  List<Object?> get props => [interpretations];
+}
+
 class CertificateError extends CertificateState {
   final String message;
 
@@ -267,11 +287,17 @@ class CertificateCubit extends Cubit<CertificateState> {
   final CertificatBonneSanteRepository _bonneSanteRepository;
   final CertificatDispenseSportRepository _dispenseSportRepository;
   final CertificatPrenuptialRepository _prenuptialRepository;
+  final CertificatCoupsEtBlessuresRepository _coupsEtBlessuresRepository;
+  final CertificatAptitudeSportRepository _aptitudeSportRepository;
+  final InterpretationEcgRepository _interpretationEcgRepository;
 
   List<CertificatMaladieChronique> allCertificatsMaladieChronique = [];
   List<CertificatBonneSante> allCertificatsBonneSante = [];
   List<CertificatDispenseSport> allCertificatsDispenseSport = [];
   List<CertificatPrenuptial> allCertificatsPrenuptial = [];
+  List<CertificatCoupsEtBlessures> allCertificatsCoupsEtBlessures = [];
+  List<CertificatAptitudeSport> allCertificatsAptitudeSport = [];
+  List<InterpretationEcg> allInterpretationsEcg = [];
 
   List<ArretDeTravail> _allArrets = [];
   List<Lettre> _allLettres = [];
@@ -286,6 +312,9 @@ class CertificateCubit extends Cubit<CertificateState> {
     this._bonneSanteRepository,
     this._dispenseSportRepository,
     this._prenuptialRepository,
+    this._coupsEtBlessuresRepository,
+    this._aptitudeSportRepository,
+    this._interpretationEcgRepository,
   ) : super(CertificateInitial());
 
   // ==================== ARRET DE TRAVAIL ====================
@@ -711,6 +740,99 @@ class CertificateCubit extends Cubit<CertificateState> {
       (success) {
         emit(const CertificateOperationSuccess('Prenuptial certificate deleted'));
         loadCertificatsPrenuptial();
+      },
+    );
+  }
+
+  // ==================== COUPS ET BLESSURES ====================
+
+  Future<void> loadCertificatsCoupsEtBlessures() async {
+    emit(CertificateLoading());
+    final certs = await _coupsEtBlessuresRepository.getAll();
+    allCertificatsCoupsEtBlessures = certs;
+    emit(CertificatsCoupsEtBlessuresLoaded(certs));
+  }
+
+  Future<void> createCertificatCoupsEtBlessures(CertificatCoupsEtBlessures cert) async {
+    final result = await _coupsEtBlessuresRepository.create(cert);
+    result.fold(
+      (failure) => emit(CertificateError(failure.message)),
+      (id) {
+        emit(const CertificateOperationSuccess('Certificat coups et blessures créé'));
+        loadCertificatsCoupsEtBlessures();
+      },
+    );
+  }
+
+  Future<void> deleteCertificatCoupsEtBlessures(int id) async {
+    final result = await _coupsEtBlessuresRepository.delete(id);
+    result.fold(
+      (failure) => emit(CertificateError(failure.message)),
+      (success) {
+        emit(const CertificateOperationSuccess('Certificat coups et blessures supprimé'));
+        loadCertificatsCoupsEtBlessures();
+      },
+    );
+  }
+
+  // ==================== APTITUDE AU SPORT ====================
+
+  Future<void> loadCertificatsAptitudeSport() async {
+    emit(CertificateLoading());
+    final certs = await _aptitudeSportRepository.getAll();
+    allCertificatsAptitudeSport = certs;
+    emit(CertificatsAptitudeSportLoaded(certs));
+  }
+
+  Future<void> createCertificatAptitudeSport(CertificatAptitudeSport cert) async {
+    final result = await _aptitudeSportRepository.create(cert);
+    result.fold(
+      (failure) => emit(CertificateError(failure.message)),
+      (id) {
+        emit(const CertificateOperationSuccess('Certificat d\'aptitude au sport créé'));
+        loadCertificatsAptitudeSport();
+      },
+    );
+  }
+
+  Future<void> deleteCertificatAptitudeSport(int id) async {
+    final result = await _aptitudeSportRepository.delete(id);
+    result.fold(
+      (failure) => emit(CertificateError(failure.message)),
+      (success) {
+        emit(const CertificateOperationSuccess('Certificat d\'aptitude au sport supprimé'));
+        loadCertificatsAptitudeSport();
+      },
+    );
+  }
+
+  // ==================== INTERPRETATION ECG ====================
+
+  Future<void> loadInterpretationsEcg() async {
+    emit(CertificateLoading());
+    final ecgs = await _interpretationEcgRepository.getAll();
+    allInterpretationsEcg = ecgs;
+    emit(InterpretationsEcgLoaded(ecgs));
+  }
+
+  Future<void> createInterpretationEcg(InterpretationEcg ecg) async {
+    final result = await _interpretationEcgRepository.create(ecg);
+    result.fold(
+      (failure) => emit(CertificateError(failure.message)),
+      (id) {
+        emit(const CertificateOperationSuccess('Compte-rendu ECG enregistré'));
+        loadInterpretationsEcg();
+      },
+    );
+  }
+
+  Future<void> deleteInterpretationEcg(int id) async {
+    final result = await _interpretationEcgRepository.delete(id);
+    result.fold(
+      (failure) => emit(CertificateError(failure.message)),
+      (success) {
+        emit(const CertificateOperationSuccess('Compte-rendu ECG supprimé'));
+        loadInterpretationsEcg();
       },
     );
   }

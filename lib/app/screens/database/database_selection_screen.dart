@@ -58,57 +58,59 @@ class _DatabaseSelectionScreenState extends State<DatabaseSelectionScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Database Connection')),
       body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.computer, size: 100, color: Colors.blue),
-              const SizedBox(height: 32),
-              const Text(
-                'Select Database Type',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'xampp', label: Text('XAMPP (Local)')),
-                  ButtonSegment(value: 'octenium', label: Text('Octenium')),
-                ],
-                selected: {_selectedDatabaseType},
-                onSelectionChanged: (Set<String> newSelection) {
-                  setState(() {
-                    _selectedDatabaseType = newSelection.first;
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Checkbox(
-                    value: _rememberChoice,
-                    onChanged: (value) {
-                      setState(() {
-                        _rememberChoice = value ?? false;
-                      });
-                    },
-                  ),
-                  const Text('Remember my choice'),
-                ],
-              ),
-              const SizedBox(height: 32),
-              if (_isLoading) ...[
-                const CircularProgressIndicator(),
-                const SizedBox(height: 16),
-                const Text('Establishing connection to database'),
-              ] else ...[
-                ElevatedButton(
-                  onPressed: _initializeDatabaseConnection,
-                  child: const Text('Connect to Database'),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.computer, size: 100, color: Colors.blue),
+                const SizedBox(height: 32),
+                const Text(
+                  'Select Database Type',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
+                const SizedBox(height: 16),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'xampp', label: Text('XAMPP (Local)')),
+                    ButtonSegment(value: 'octenium', label: Text('Octenium')),
+                  ],
+                  selected: {_selectedDatabaseType},
+                  onSelectionChanged: (Set<String> newSelection) {
+                    setState(() {
+                      _selectedDatabaseType = newSelection.first;
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Checkbox(
+                      value: _rememberChoice,
+                      onChanged: (value) {
+                        setState(() {
+                          _rememberChoice = value ?? false;
+                        });
+                      },
+                    ),
+                    const Text('Remember my choice'),
+                  ],
+                ),
+                const SizedBox(height: 32),
+                if (_isLoading) ...[
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  const Text('Establishing connection to database'),
+                ] else ...[
+                  ElevatedButton(
+                    onPressed: _initializeDatabaseConnection,
+                    child: const Text('Connect to Database'),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),

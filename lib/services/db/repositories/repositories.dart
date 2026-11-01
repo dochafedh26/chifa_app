@@ -18,3 +18,6 @@ export 'certificat_maladie_chronique_repository.dart';
 export 'certificat_prenuptial_repository.dart';
 export 'certificat_bonne_sante_repository.dart';
 export 'certificat_dispense_sport_repository.dart';
+export 'certificat_coups_et_blessures_repository.dart';
+export 'certificat_aptitude_sport_repository.dart';
+export 'interpretation_ecg_repository.dart';

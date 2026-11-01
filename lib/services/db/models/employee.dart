@@ -14,6 +14,7 @@ class Employee extends Equatable {
   final String password;
   final AccessLevel accessLevel;
   final int? patientId;
+  final bool isActive;
   final DateTime? workSchedule;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -29,6 +30,7 @@ class Employee extends Equatable {
     required this.password,
     required this.accessLevel,
     this.patientId,
+    this.isActive = true,
     this.workSchedule,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -49,6 +51,7 @@ class Employee extends Equatable {
       'password': password,
       'access_level': accessLevel.name,
       'patient_id': patientId,
+      'is_active': isActive ? 1 : 0,
       'work_schedule': workSchedule?.toIso8601String(),
     };
   }
@@ -71,6 +74,10 @@ class Employee extends Equatable {
         orElse: () => AccessLevel.nurse,
       ),
       patientId: map['patient_id'] as int?,
+      isActive: map['is_active'] == null ||
+          map['is_active'] == 1 ||
+          map['is_active'] == true ||
+          map['is_active'] == '1',
       workSchedule: map['work_schedule'] != null
           ? (map['work_schedule'] is DateTime
               ? map['work_schedule'] as DateTime
@@ -96,6 +103,7 @@ class Employee extends Equatable {
     String? password,
     AccessLevel? accessLevel,
     int? patientId,
+    bool? isActive,
     DateTime? workSchedule,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -111,6 +119,7 @@ class Employee extends Equatable {
       password: password ?? this.password,
       accessLevel: accessLevel ?? this.accessLevel,
       patientId: patientId ?? this.patientId,
+      isActive: isActive ?? this.isActive,
       workSchedule: workSchedule ?? this.workSchedule,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -129,6 +138,7 @@ class Employee extends Equatable {
         password,
         accessLevel,
         patientId,
+        isActive,
         workSchedule,
         createdAt,
         updatedAt,

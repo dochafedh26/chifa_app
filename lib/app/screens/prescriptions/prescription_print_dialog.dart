@@ -108,7 +108,7 @@ class _PrescriptionPrintDialogState extends State<PrescriptionPrintDialog> {
     );
 
     // Generate PDF and print it
-    await Printing.layoutPdf(onLayout: (format) async => doc.save());
+    await pdfService.printDocument(doc, name: 'Ordonnance.pdf', context: context);
   }
 
   @override
@@ -136,7 +136,8 @@ class _PrescriptionPrintDialogState extends State<PrescriptionPrintDialog> {
               )
             : _patient == null
             ? const Center(child: Text('Patient not found'))
-            : Column(
+            : SingleChildScrollView(
+                child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -145,7 +146,7 @@ class _PrescriptionPrintDialogState extends State<PrescriptionPrintDialog> {
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-                  Text('Age: ${_patient!.age} ans'),
+                  Text('Age: ${_patient!.formattedAge}'),
                   const SizedBox(height: 16),
                   const Divider(),
                   const SizedBox(height: 16),
@@ -164,6 +165,7 @@ class _PrescriptionPrintDialogState extends State<PrescriptionPrintDialog> {
                   ),
                 ],
               ),
+            ),
       ),
       actions: [
         TextButton(

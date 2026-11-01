@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:chifa/app/widgets/xampp_connection_dialog.dart';
 import 'package:chifa/services/db/database_manager.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
@@ -42,6 +44,11 @@ class SyncManager {
   static const int _maxRetries = 3;
   static const int _retryDelayMs = 1000;
 
+  /// Dynamic source ID: Web clients write as 'cloud_server', desktop writes as 'local_server'
+  static String get currentSourceId => kIsWeb ? 'cloud_server' : 'local_server';
+
+  Timer? _periodicTimer;
+
   final ValueNotifier<SyncProgress> syncProgress = ValueNotifier(
     SyncProgress(isSyncing: false),
   );
@@ -54,6 +61,25 @@ class SyncManager {
 
   factory SyncManager() {
     return _instance;
+  }
+
+  /// Start automatic background sync cycle (Desktop / Hybrid mode)
+  void startPeriodicSync({Duration interval = const Duration(seconds: 15)}) {
+    if (kIsWeb) return; // Web connects directly via API
+    _periodicTimer?.cancel();
+    _periodicTimer = Timer.periodic(interval, (_) {
+      if (!syncProgress.value.isSyncing) {
+        trySync();
+      }
+    });
+    // Trigger initial background sync
+    trySync();
+  }
+
+  /// Stop background sync cycle
+  void stopPeriodicSync() {
+    _periodicTimer?.cancel();
+    _periodicTimer = null;
   }
 
   void _log(String level, String message, [Map<String, dynamic>? data]) {
@@ -76,7 +102,7 @@ class SyncManager {
         errorStr.contains('connect econnrefused');
   }
 
-  void _handleXamppConnectionError(BuildContext context, dynamic error) {
+  void handleXamppConnectionError(BuildContext context, dynamic error) {
     if (_isXamppConnectionError(error)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         XamppConnectionDialog.show(
@@ -190,12 +216,12 @@ class SyncManager {
         );
       }
 
-      final remoteChanges = await _remoteDb!.query(
-        'SELECT * FROM `$tableName` WHERE updated_at > ? AND (source_id IS NULL OR source_id != "local_server")',
+      final remoteChangesRaw = await _remoteDb!.query(
+        'SELECT * FROM `$tableName` WHERE updated_at > ?',
         [lastPull],
       );
 
-      if (remoteChanges.isNotEmpty) {
+      if (remoteChangesRaw.isNotEmpty) {
         final localUuidRows = await _localDb.query(
           'SELECT uuid FROM `$tableName`',
         );
@@ -204,23 +230,35 @@ class SyncManager {
             .where((u) => u != null)
             .toSet();
 
-        for (final row in remoteChanges) {
-          final uuid = row['uuid'];
-          if (uuid != null && localUuidSet.contains(uuid)) {
-            conflictCount++;
-            _logWarn('Conflict detected for $tableName uuid=$uuid');
+        // Pull if row was created outside local server, OR if local database doesn't have it yet!
+        final remoteChanges = remoteChangesRaw.where((row) {
+          final source = row['source_id']?.toString();
+          final uuid = row['uuid']?.toString();
+          if (source == 'local_server' && uuid != null && localUuidSet.contains(uuid)) {
+            return false;
           }
+          return true;
+        }).toList();
+
+        if (remoteChanges.isNotEmpty) {
+          for (final row in remoteChanges) {
+            final uuid = row['uuid'];
+            if (uuid != null && localUuidSet.contains(uuid)) {
+              conflictCount++;
+              _logWarn('Conflict detected for $tableName uuid=$uuid');
+            }
+          }
+
+          _logInfo(
+            'Pulling ${remoteChanges.length} remote changes for $tableName ($conflictCount conflicts)',
+          );
+
+          await _withRetry(
+            () => _pullBatchToLocal(tableName, remoteChanges),
+            'pull $tableName',
+          );
+          pulledCount = remoteChanges.length;
         }
-
-        _logInfo(
-          'Pulling ${remoteChanges.length} remote changes for $tableName ($conflictCount conflicts)',
-        );
-
-        await _withRetry(
-          () => _pullBatchToLocal(tableName, remoteChanges),
-          'pull $tableName',
-        );
-        pulledCount = remoteChanges.length;
 
         final now = DateTime.now()
             .toIso8601String()
@@ -306,6 +344,29 @@ class SyncManager {
         data['source_id'] = 'cloud_server';
         data['needs_sync'] = 0;
 
+        // Clean & sanitize NOT NULL columns to prevent MySQL error 1048
+        if (tableName == 'patients') {
+          if (data['date_of_birth'] == null) {
+            data['date_of_birth'] = '1970-01-01';
+          }
+        } else if (tableName == 'medicalrecords') {
+          if (data['record_date'] == null) {
+            data['record_date'] = DateTime.now()
+                .toIso8601String()
+                .replaceAll('T', ' ')
+                .split('.')
+                .first;
+          }
+        } else if (tableName == 'appointments') {
+          if (data['appointment_date'] == null) {
+            data['appointment_date'] = DateTime.now()
+                .toIso8601String()
+                .replaceAll('T', ' ')
+                .split('.')
+                .first;
+          }
+        }
+
         final keys = data.keys.map((k) => '`$k`').join(', ');
 
         // Use named parameters for mysql_client
@@ -366,6 +427,8 @@ class SyncManager {
       'bilan_type',
       'invoices',
       'payments',
+      'payment_services',
+      'services',
       'expenses',
       'employees',
       'hospitalizations',
@@ -376,6 +439,8 @@ class SyncManager {
       'arret_de_travail',
       'certificat_bonne_sante',
       'certificat_dispense_sport',
+      'certificat_aptitude_sport',
+      'interpretation_ecg',
       'certificat_maladie_chronique',
       'certificat_prenuptial',
       'ordonnance_type',
@@ -538,10 +603,27 @@ class SyncManager {
         ? lastSyncResult.first['last_pull_at'].toString()
         : '1970-01-01 00:00:00';
 
-    final remoteChanges = await _remoteDb!.query(
-      'SELECT * FROM `$tableName` WHERE updated_at > ? AND (source_id IS NULL OR source_id != "local_server")',
+    final remoteChangesRaw = await _remoteDb!.query(
+      'SELECT * FROM `$tableName` WHERE updated_at > ?',
       [lastPull],
     );
+
+    final localUuidRows = await _localDb.query(
+      'SELECT uuid FROM `$tableName`',
+    );
+    final localUuidSet = localUuidRows
+        .map((r) => r['uuid'])
+        .where((u) => u != null)
+        .toSet();
+
+    final remoteChanges = remoteChangesRaw.where((row) {
+      final source = row['source_id']?.toString();
+      final uuid = row['uuid']?.toString();
+      if (source == 'local_server' && uuid != null && localUuidSet.contains(uuid)) {
+        return false;
+      }
+      return true;
+    }).toList();
 
     for (final row in remoteChanges) {
       final Map<String, dynamic> data = Map.from(row);

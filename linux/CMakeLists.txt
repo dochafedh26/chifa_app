@@ -1,20 +1,20 @@
 # Project-level configuration.
 cmake_minimum_required(VERSION 3.13)
 
+# Project-level configuration.
+cmake_minimum_required(VERSION 3.13)
+
 # Add library search path for libstdc++
 set(CMAKE_LIBRARY_PATH "/usr/lib/x86_64-linux-gnu" "/home/doc-hafedh/my_libs2" ${CMAKE_LIBRARY_PATH})
 set(CMAKE_EXE_LINKER_FLAGS "-L/usr/lib/x86_64-linux-gnu -L/home/doc-hafedh/my_libs2")
 set(CMAKE_SHARED_LINKER_FLAGS "-L/usr/lib/x86_64-linux-gnu -L/home/doc-hafedh/my_libs2")
 list(INSERT CMAKE_LIBRARY_PATH 0 "/home/doc-hafedh/my_libs2")
 
-set(CMAKE_C_COMPILER "/usr/bin/gcc")
-set(CMAKE_CXX_COMPILER "/usr/bin/g++")
+set(CMAKE_C_COMPILER "/usr/bin/gcc" CACHE FILEPATH "C compiler")
+set(CMAKE_CXX_COMPILER "/usr/bin/g++" CACHE FILEPATH "C++ compiler")
 set(CMAKE_CXX_FLAGS "-I/usr/include/c++/12 -I/usr/include/c++/12/x86_64-linux-gnu -I/usr/include/x86_64-linux-gnu/c++/12/bits -Wno-sign-compare")
 
 project(runner LANGUAGES CXX)
-
-# The name of the executable created for the application. Change this to change
-# the on-disk name of your application.
 set(BINARY_NAME "chifa")
 # The unique GTK application identifier for this application. See:
 # https://wiki.gnome.org/HowDoI/ChooseApplicationID

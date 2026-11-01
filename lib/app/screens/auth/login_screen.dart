@@ -1,6 +1,10 @@
 import 'package:chifa/app/cubits/auth_cubit.dart';
+import 'package:chifa/app/screens/auth/signup_dialog.dart';
 import 'package:chifa/app/screens/database/database_selection_screen.dart';
 import 'package:chifa/app/theme/app_theme.dart';
+import 'package:chifa/app/utils/responsive.dart';
+import 'package:chifa/presentation/features/activation/activation_screen.dart';
+import 'package:chifa/services/activation/activation_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,11 +22,24 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _rememberMe = false;
+  bool _isActivated = true;
+  bool _checkingActivation = true;
 
   @override
   void initState() {
     super.initState();
-    _loadSavedCredentials();
+    _checkActivationAndCredentials();
+  }
+
+  Future<void> _checkActivationAndCredentials() async {
+    final activated = await ActivationService.instance.isActivated();
+    if (mounted) {
+      setState(() {
+        _isActivated = activated;
+        _checkingActivation = false;
+      });
+    }
+    await _loadSavedCredentials();
   }
 
   Future<void> _loadSavedCredentials() async {
@@ -68,6 +85,23 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = context.isMobile;
+    if (_checkingActivation) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!_isActivated) {
+      return ActivationScreen(
+        onActivated: () {
+          setState(() {
+            _isActivated = true;
+          });
+        },
+      );
+    }
+
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
@@ -223,7 +257,52 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
 
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 14),
+                          isMobile ?
+                          Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                "Nouveau praticien ?",
+                                style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                              ),
+                              TextButton(
+                                onPressed: () {
+                                  showDialog(
+                                    context: context,
+                                    builder: (context) => const SignupDialog(),
+                                  );
+                                },
+                                child: const Text(
+                                  "Créer un compte",
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                ),
+                              ),
+                            ],
+                          )
+                          : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                "Nouveau praticien ?",
+                                style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                              ),
+                              TextButton(
+                                onPressed: () {
+                                  showDialog(
+                                    context: context,
+                                    builder: (context) => const SignupDialog(),
+                                  );
+                                },
+                                child: const Text(
+                                  "Créer un compte",
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 8),
                           TextButton.icon(
                             onPressed: () {
                               Navigator.of(context).pushReplacement(

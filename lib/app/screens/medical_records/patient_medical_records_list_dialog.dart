@@ -1,5 +1,7 @@
+import 'package:chifa/app/cubits/auth_cubit.dart';
 import 'package:chifa/app/cubits/medical_record_cubit.dart';
 import 'package:chifa/app/cubits/workspace_cubit.dart';
+import 'package:chifa/app/utils/role_permissions.dart';
 import 'package:chifa/app/printing/ordonnance.dart';
 import 'package:chifa/app/printing/preview.dart';
 import 'package:chifa/app/printing/soins_medicaux.dart';
@@ -13,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:chifa/app/widgets/rich_text_viewer.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:chifa/app/utils/responsive.dart';
 
 class PatientMedicalRecordsListDialog extends StatefulWidget {
   final Patient patient;
@@ -79,7 +82,7 @@ class _PatientMedicalRecordsListDialogState
         width: MediaQuery.of(context).size.width * 0.95,
         constraints: const BoxConstraints(maxWidth: 650, maxHeight: 750),
         padding: EdgeInsets.all(
-          MediaQuery.of(context).size.width < 600 ? 16 : 24,
+          context.isMobile ? 16 : 24,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -87,26 +90,27 @@ class _PatientMedicalRecordsListDialogState
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  MediaQuery.of(context).size.width < 600
-                      ? _formatPatientNameForSmallScreen(
-                          widget.patient.fullName,
-                        )
-                      : 'Records: ${widget.patient.fullName}',
-                  style: Theme.of(context).textTheme.titleMedium,
+                Flexible(
+                  child: Text(
+                    context.isMobile
+                        ? 'Records: ${widget.patient.firstName}'
+                        : 'Records: ${widget.patient.fullName}',
+                    style: Theme.of(context).textTheme.titleMedium,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                const Spacer(),
+                const SizedBox(width: 8),
                 SegmentedButton<PrintTemplate>(
-                  segments: const [
+                  segments: [
                     ButtonSegment<PrintTemplate>(
                       value: PrintTemplate.chifa,
-                      label: Text('CHIFA'),
-                      icon: Icon(Icons.description_outlined, size: 14),
+                      label: context.isMobile ? null : const Text('CHIFA'),
+                      icon: const Icon(Icons.description_outlined, size: 14),
                     ),
                     ButtonSegment<PrintTemplate>(
                       value: PrintTemplate.eph,
-                      label: Text('EPH'),
-                      icon: Icon(Icons.local_hospital_outlined, size: 14),
+                      label: context.isMobile ? null : const Text('EPH'),
+                      icon: const Icon(Icons.local_hospital_outlined, size: 14),
                     ),
                   ],
                   selected: {_selectedTemplate},
@@ -415,8 +419,9 @@ class _PatientMedicalRecordsListDialogState
                           return;
                         }
                         bool includeDate = true;
+                        final ctx = context;
                         await showDialog(
-                          context: context,
+                          context: ctx,
                           builder: (ctx) => StatefulBuilder(
                             builder: (ctx, setDialogState) => AlertDialog(
                               title: const Text('Options d\'impression'),
@@ -444,8 +449,9 @@ class _PatientMedicalRecordsListDialogState
                             ),
                           ),
                         );
-                        if (!context.mounted) return;
+                        if (!mounted) return;
                         showPdfPreview(
+                          // ignore: use_build_context_synchronously
                           context: context,
                           generatedPdfBytes: generateOrdonnancePdf(
                             patient: widget.patient,
@@ -489,72 +495,79 @@ class _PatientMedicalRecordsListDialogState
                         );
                       },
                     ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.edit,
-                        size: 20,
-                        color: Colors.blue,
-                      ),
-                      onPressed: () {
-                        final tabId = 'edit_record_${record.id}';
-                        context.read<WorkspaceCubit>().openTab(
-                          WorkspaceTab(
-                            id: tabId,
-                            title: 'Edit: ${widget.patient.fullName}',
-                            content: BlocProvider(
-                              create: (context) => MedicalRecordCubit(
-                                context.read<MedicalRecordRepository>(),
-                              ),
-                              child: MedicalRecordFormDialogForPatient(
-                                patient: widget.patient,
-                                recordToEdit: record,
-                                tabId: tabId,
-                              ),
-                            ),
-                          ),
-                        );
-                        Navigator.pop(context); // Close the history list dialog
-                      },
-                    ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.delete,
-                        size: 20,
-                        color: Colors.red,
-                      ),
-                      onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('Delete Record'),
-                            content: const Text(
-                              'Are you sure you want to delete this record?',
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx),
-                                child: const Text('Cancel'),
-                              ),
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red,
+                    if (RolePermissions.canEditMedicalRecord(
+                      context.read<AuthCubit>().currentRole,
+                    ))
+                      IconButton(
+                        icon: const Icon(
+                          Icons.edit,
+                          size: 20,
+                          color: Colors.blue,
+                        ),
+                        tooltip: 'Modifier le dossier médical',
+                        onPressed: () {
+                          final tabId = 'edit_record_${record.id}';
+                          context.read<WorkspaceCubit>().openTab(
+                            WorkspaceTab(
+                              id: tabId,
+                              title: 'Edit: ${widget.patient.fullName}',
+                              content: BlocProvider(
+                                create: (context) => MedicalRecordCubit(
+                                  context.read<MedicalRecordRepository>(),
                                 ),
-                                onPressed: () {
-                                  Navigator.pop(ctx);
-                                  context
-                                      .read<MedicalRecordCubit>()
-                                      .deleteMedicalRecord(record.id!);
-                                },
-                                child: const Text(
-                                  'Delete',
-                                  style: TextStyle(color: Colors.white),
+                                child: MedicalRecordFormDialogForPatient(
+                                  patient: widget.patient,
+                                  recordToEdit: record,
+                                  tabId: tabId,
                                 ),
                               ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
+                            ),
+                          );
+                          Navigator.pop(context); // Close the history list dialog
+                        },
+                      ),
+                    if (RolePermissions.canDeleteMedicalRecords(
+                      context.read<AuthCubit>().currentRole,
+                    ))
+                      IconButton(
+                        icon: const Icon(
+                          Icons.delete,
+                          size: 20,
+                          color: Colors.red,
+                        ),
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Text('Delete Record'),
+                              content: const Text(
+                                'Are you sure you want to delete this record?',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx),
+                                  child: const Text('Cancel'),
+                                ),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.red,
+                                  ),
+                                  onPressed: () {
+                                    Navigator.pop(ctx);
+                                    context
+                                        .read<MedicalRecordCubit>()
+                                        .deleteMedicalRecord(record.id!);
+                                  },
+                                  child: const Text(
+                                    'Delete',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
                   ],
                 ),
               ],
@@ -753,13 +766,5 @@ class _PatientMedicalRecordsListDialogState
         child: _buildPrescriptionLine(line.trim(), baseStyle),
       )).toList(),
     );
-  }
-
-  String _formatPatientNameForSmallScreen(String fullName) {
-    final parts = fullName.split(' ');
-    if (parts.length > 1) {
-      return 'Records:\n  ${parts[0]}\n ';
-    }
-    return 'Records:\n  $fullName\n ';
   }
 }

@@ -184,6 +184,7 @@ class BackgroundTunnelTaskHandler extends TaskHandler {
       case 'file_upload_response':
       case 'file_error':
       case 'device_list_response':
+      case 'print_job_progress':
       case 'print_job_response':
       case 'terminal_command_response':
       case 'rdp_sessions_response':

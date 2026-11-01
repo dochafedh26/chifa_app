@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:chifa/app/theme/app_theme.dart';
 import 'package:chifa/services/xampp_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class XamppConnectionDialog extends StatefulWidget {
@@ -28,6 +29,10 @@ class XamppConnectionDialog extends StatefulWidget {
 }
 
 class _XamppConnectionDialogState extends State<XamppConnectionDialog> {
+  bool get _isDesktop =>
+      !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+  bool get _isLinux => !kIsWeb && Platform.isLinux;
+
   bool _isStarting = false;
   bool _startSuccess = false;
   String? _startError;
@@ -41,7 +46,7 @@ class _XamppConnectionDialogState extends State<XamppConnectionDialog> {
   }
 
   Future<void> _startXampp() async {
-    if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS) {
+    if (!_isDesktop) {
       setState(() {
         _startError =
             'XAMPP auto-start is only supported on Windows, Linux, and macOS';
@@ -207,7 +212,7 @@ class _XamppConnectionDialogState extends State<XamppConnectionDialog> {
                 ),
               ),
             ],
-            if (Platform.isLinux && !_startSuccess) ...[
+            if (_isLinux && !_startSuccess) ...[
               const SizedBox(height: 16),
               TextField(
                 controller: _passwordController,
@@ -311,18 +316,18 @@ class _XamppConnectionDialogState extends State<XamppConnectionDialog> {
         ),
       ),
       actions: [
-        if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS)
+        if (!_isDesktop)
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('Close'),
           ),
-        if (Platform.isWindows || Platform.isLinux || Platform.isMacOS)
+        if (_isDesktop)
           TextButton(
             onPressed: _isStarting ? null : () => Navigator.of(context).pop(),
             child: const Text('Cancel'),
           ),
         const SizedBox(width: 8),
-        if (Platform.isWindows || Platform.isLinux || Platform.isMacOS)
+        if (_isDesktop)
           ElevatedButton.icon(
             onPressed: _isStarting || _startSuccess ? null : _startXampp,
             icon: _isStarting
@@ -345,7 +350,7 @@ class _XamppConnectionDialogState extends State<XamppConnectionDialog> {
               ),
             ),
           ),
-        if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS)
+        if (!_isDesktop)
           ElevatedButton.icon(
             onPressed: widget.onRetry,
             icon: const Icon(Icons.refresh_rounded),

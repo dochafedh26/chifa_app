@@ -84,8 +84,8 @@ class PaymentRepository implements BaseRepository<Payment, int> {
           for (var service in services) {
             final sUuid = SyncManager().generateUuid();
             await conn.insert(
-              '''INSERT INTO payment_services (uuid, payment_id, service_id, service_name, service_price, doctor_commission, needs_sync)
-                 VALUES (?, ?, ?, ?, ?, ?, 1)''',
+              '''INSERT INTO payment_services (uuid, payment_id, service_id, service_name, service_price, doctor_commission, service_type, needs_sync)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 1)''',
               [
                 sUuid,
                 id,
@@ -93,6 +93,7 @@ class PaymentRepository implements BaseRepository<Payment, int> {
                 service.serviceName,
                 service.servicePrice,
                 service.doctorCommission,
+                service.serviceType,
               ],
             );
           }
@@ -110,13 +111,21 @@ class PaymentRepository implements BaseRepository<Payment, int> {
     try {
       final result = await _db.execute(
         '''UPDATE payments SET
-           invoice_id = ?, total_amount = ?, payment_method = ?, note = ?, needs_sync = 1
+           invoice_id = ?, total_amount = ?, payment_method = ?, note = ?, discount_amount = ?, discount_type = ?, discount_value = ?,
+           discount_commission_amount = ?, discount_commission_type = ?, discount_commission_value = ?, apply_commission_discount = ?, needs_sync = 1
            WHERE payment_id = ?''',
         [
           entity.invoiceId,
           entity.amount,
           entity.paymentMethod,
           entity.notes,
+          entity.discountAmount,
+          entity.discountType,
+          entity.discountValue,
+          entity.discountCommissionAmount,
+          entity.discountCommissionType,
+          entity.discountCommissionValue,
+          entity.applyCommissionDiscount ? 1 : 0,
           id,
         ],
       );
@@ -289,9 +298,21 @@ class PaymentRepository implements BaseRepository<Payment, int> {
         // 1. Update payment
         await conn.execute(
           '''UPDATE payments SET
-             total_amount = ?, note = ?, needs_sync = 1
+             total_amount = ?, note = ?, discount_amount = ?, discount_type = ?, discount_value = ?,
+             discount_commission_amount = ?, discount_commission_type = ?, discount_commission_value = ?, apply_commission_discount = ?, needs_sync = 1
              WHERE payment_id = ?''',
-          [payment.amount, payment.notes, paymentId],
+          [
+            payment.amount,
+            payment.notes,
+            payment.discountAmount,
+            payment.discountType,
+            payment.discountValue,
+            payment.discountCommissionAmount,
+            payment.discountCommissionType,
+            payment.discountCommissionValue,
+            payment.applyCommissionDiscount ? 1 : 0,
+            paymentId,
+          ],
         );
 
         // 2. Delete existing services (soft delete)
@@ -304,8 +325,8 @@ class PaymentRepository implements BaseRepository<Payment, int> {
         for (var service in newServices) {
           final sUuid = SyncManager().generateUuid();
           await conn.insert(
-            '''INSERT INTO payment_services (uuid, payment_id, service_id, service_name, service_price, doctor_commission, needs_sync)
-               VALUES (?, ?, ?, ?, ?, ?, 1)''',
+            '''INSERT INTO payment_services (uuid, payment_id, service_id, service_name, service_price, doctor_commission, service_type, needs_sync)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 1)''',
             [
               sUuid,
               paymentId,
@@ -313,6 +334,7 @@ class PaymentRepository implements BaseRepository<Payment, int> {
               service.serviceName,
               service.servicePrice,
               service.doctorCommission,
+              service.serviceType,
             ],
           );
         }

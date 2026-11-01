@@ -1,6 +1,9 @@
+import 'package:chifa/app/cubits/auth_cubit.dart';
 import 'package:chifa/app/cubits/billing_cubit.dart';
 import 'package:chifa/app/screens/billing/invoice_form_dialog.dart';
 import 'package:chifa/app/screens/billing/invoice_print_dialog.dart';
+import 'package:chifa/app/theme/app_theme.dart';
+import 'package:chifa/app/utils/role_permissions.dart';
 import 'package:chifa/services/db/models/employee.dart';
 import 'package:chifa/services/db/models/payment.dart';
 import 'package:chifa/services/db/models/payment_service.dart';
@@ -9,7 +12,7 @@ import 'package:chifa/services/pdf_generation_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
-import 'package:printing/printing.dart';
+import 'package:chifa/app/utils/responsive.dart';
 
 /// Billing & Invoices Screen
 class BillingScreen extends StatefulWidget {
@@ -134,10 +137,10 @@ class _BillingScreenState extends State<BillingScreen> {
         doctorName: doctorName,
       );
 
-      final pdfBytes = doc.save();
+      final pdfBytes = await doc.save();
 
       if (mounted) {
-        await Printing.layoutPdf(onLayout: (format) async => pdfBytes);
+        await PdfGenerationService().printPdfBytes(pdfBytes, name: 'Billing_List.pdf', context: context);
         if (!mounted) return;
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -161,145 +164,256 @@ class _BillingScreenState extends State<BillingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 800;
+    final isMobile = context.isMobile;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Top Action Bar
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8.0),
-          child: isMobile
-              ? Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
+    if (isMobile) {
+      return Scaffold(
+        backgroundColor: Colors.transparent,
+        floatingActionButton: FloatingActionButton(
+          backgroundColor: AppTheme.primary,
+          foregroundColor: Colors.white,
+          onPressed: _showCreateInvoiceDialog,
+          tooltip: 'Nouvel Encaissement',
+          child: const Icon(Icons.add),
+        ),
+        body: RefreshIndicator(
+          onRefresh: () async {
+            _applyFilters();
+          },
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              // Top Action & Search Bar (Mobile Compact)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 40,
                           child: TextField(
                             controller: _searchController,
                             decoration: InputDecoration(
-                              hintText: 'Search...',
-                              prefixIcon: const Icon(Icons.search),
+                              hintText: 'Recherche encaissement...',
+                              hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+                              prefixIcon: const Icon(Icons.search, size: 20),
+                              suffixIcon: _searchController.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear, size: 16),
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        _onSearchChanged('');
+                                      },
+                                    )
+                                  : null,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
                               border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(color: Colors.grey.shade300),
                               ),
-                              isDense: true,
+                              filled: true,
+                              fillColor: Colors.white,
                             ),
                             onChanged: _onSearchChanged,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          onPressed: _showCreateInvoiceDialog,
-                          icon: const Icon(
-                            Icons.add_circle,
-                            color: Colors.blue,
-                            size: 32,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: FilterChip(
-                            label: const Text('Filters'),
-                            selected: _showFilters,
-                            onSelected: (val) =>
-                                setState(() => _showFilters = val),
-                            avatar: Icon(
-                              Icons.filter_list,
-                              size: 18,
-                              color: _showFilters ? Colors.white : null,
+                      ),
+                      const SizedBox(width: 8),
+                      // Filter toggle button
+                      InkWell(
+                        onTap: () => setState(() => _showFilters = !_showFilters),
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          height: 40,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          decoration: BoxDecoration(
+                            color: _showFilters ? AppTheme.primary : Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: _showFilters ? AppTheme.primary : Colors.grey.shade300,
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          onPressed: _printBillingList,
-                          icon: Badge(
-                            label: Text('${_selectedPaymentIds.length}'),
-                            isLabelVisible: _selectedPaymentIds.isNotEmpty,
-                            child: const Icon(Icons.print, color: Colors.blue),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.filter_list,
+                                size: 18,
+                                color: _showFilters ? Colors.white : Colors.grey.shade700,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Filtres',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: _showFilters ? Colors.white : Colors.grey.shade800,
+                                ),
+                              ),
+                            ],
                           ),
-                          tooltip: _selectedPaymentIds.isEmpty
-                              ? 'Print List'
-                              : 'Print Selected (${_selectedPaymentIds.length})',
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          onPressed: () {
-                            context.read<BillingCubit>().loadAllPayments();
-                            context.read<BillingCubit>().loadServices();
-                            context.read<BillingCubit>().loadDoctors();
-                          },
-                          icon: const Icon(Icons.refresh),
-                        ),
-                      ],
-                    ),
-                  ],
-                )
-              : Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          hintText: 'Quick search (name, service)...',
-                          prefixIcon: const Icon(Icons.search),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          isDense: true,
-                        ),
-                        onChanged: _onSearchChanged,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Tooltip(
-                      message: _showFilters ? 'Hide Filters' : 'Show Filters',
-                      child: FilterChip(
-                        label: const Text('Filters'),
-                        selected: _showFilters,
-                        onSelected: (val) => setState(() => _showFilters = val),
-                        avatar: Icon(
-                          Icons.filter_list,
-                          size: 18,
-                          color: _showFilters ? Colors.white : null,
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      onPressed: () {
-                        context.read<BillingCubit>().loadAllPayments();
-                        context.read<BillingCubit>().loadServices();
-                        context.read<BillingCubit>().loadDoctors();
-                      },
-                      icon: const Icon(Icons.refresh),
-                      tooltip: 'Refresh',
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton.icon(
-                      onPressed: _showCreateInvoiceDialog,
-                      icon: const Icon(Icons.add),
-                      label: const Text('New Payment'),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton.icon(
-                      onPressed: _printBillingList,
-                      icon: const Icon(Icons.print),
-                      label: Text(_selectedPaymentIds.isEmpty
-                          ? 'Print List'
-                          : 'Print Selected (${_selectedPaymentIds.length})'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
+                      const SizedBox(width: 4),
+                      IconButton(
+                        onPressed: _printBillingList,
+                        icon: Badge(
+                          label: Text('${_selectedPaymentIds.length}'),
+                          isLabelVisible: _selectedPaymentIds.isNotEmpty,
+                          child: const Icon(Icons.print_outlined, color: Colors.blue, size: 22),
+                        ),
+                        visualDensity: VisualDensity.compact,
+                        tooltip: 'Imprimer la liste',
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
+              ),
+
+              // Collapsible Filter Bar
+              if (_showFilters)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: _buildFilterBar(),
+                  ),
+                ),
+
+              // Summary Cards (in a compact single row on mobile!)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                  child: BlocBuilder<BillingCubit, BillingState>(
+                    builder: (context, state) {
+                      final role = context.watch<AuthCubit>().currentRole;
+                      final canViewCommissions = RolePermissions.canViewDoctorCommissions(role);
+                      final cards = [
+                        _SummaryCard(
+                          label: role == EmployeeRole.nurse ? 'Total Encaissé' : 'Total Revenue',
+                          value: state.totalFilteredAmount,
+                          icon: Icons.account_balance_wallet,
+                          color: Colors.teal,
+                        ),
+                        if (canViewCommissions)
+                          _SummaryCard(
+                            label: 'Commissions',
+                            value: state.totalFilteredCommission,
+                            icon: Icons.person_outline,
+                            color: Colors.orange,
+                          ),
+                        _SummaryCard(
+                          label: role == EmployeeRole.nurse ? 'Encaissements' : 'Payments',
+                          value: state.payments.length.toDouble(),
+                          icon: Icons.receipt_long,
+                          color: Colors.blue,
+                          isInteger: true,
+                        ),
+                      ];
+
+                      return Row(
+                        children: cards
+                            .map((c) => Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 3),
+                                    child: c,
+                                  ),
+                                ))
+                            .toList(),
+                      );
+                    },
+                  ),
+                ),
+              ),
+
+              // Selection Action Bar
+              SliverToBoxAdapter(
+                child: _buildSelectionBar(),
+              ),
+
+              // Payments list as a SliverList
+              _buildSliverPaymentList(),
+
+              // Clearance for FAB and bottom navigation bar
+              const SliverToBoxAdapter(
+                child: SizedBox(height: 80),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Top Action Bar (Desktop)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Quick search (name, service)...',
+                    prefixIcon: const Icon(Icons.search),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    isDense: true,
+                  ),
+                  onChanged: _onSearchChanged,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Tooltip(
+                message: _showFilters ? 'Hide Filters' : 'Show Filters',
+                child: FilterChip(
+                  label: const Text('Filters'),
+                  selected: _showFilters,
+                  onSelected: (val) => setState(() => _showFilters = val),
+                  avatar: Icon(
+                    Icons.filter_list,
+                    size: 18,
+                    color: _showFilters ? Colors.white : null,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: () {
+                  context.read<BillingCubit>().loadAllPayments();
+                  context.read<BillingCubit>().loadServices();
+                  context.read<BillingCubit>().loadDoctors();
+                },
+                icon: const Icon(Icons.refresh),
+                tooltip: 'Refresh',
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: _showCreateInvoiceDialog,
+                icon: const Icon(Icons.add),
+                label: Text(
+                  context.watch<AuthCubit>().currentRole == EmployeeRole.nurse
+                      ? 'Nouvel Encaissement'
+                      : 'New Payment',
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: _printBillingList,
+                icon: const Icon(Icons.print),
+                label: Text(_selectedPaymentIds.isEmpty
+                    ? 'Print List'
+                    : 'Print Selected (${_selectedPaymentIds.length})'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
         ),
 
         // Collapsible Filter Bar
@@ -314,24 +428,27 @@ class _BillingScreenState extends State<BillingScreen> {
 
         const SizedBox(height: 16),
 
-        // Summary Cards
+        // Summary Cards (Desktop)
         BlocBuilder<BillingCubit, BillingState>(
           builder: (context, state) {
+            final role = context.watch<AuthCubit>().currentRole;
+            final canViewCommissions = RolePermissions.canViewDoctorCommissions(role);
             final cards = [
               _SummaryCard(
-                label: 'Total Revenue',
+                label: role == EmployeeRole.nurse ? 'Total Encaissé' : 'Total Revenue',
                 value: state.totalFilteredAmount,
                 icon: Icons.account_balance_wallet,
                 color: Colors.teal,
               ),
+              if (canViewCommissions)
+                _SummaryCard(
+                  label: 'Commissions',
+                  value: state.totalFilteredCommission,
+                  icon: Icons.person_outline,
+                  color: Colors.orange,
+                ),
               _SummaryCard(
-                label: 'Commissions',
-                value: state.totalFilteredCommission,
-                icon: Icons.person_outline,
-                color: Colors.orange,
-              ),
-              _SummaryCard(
-                label: 'Payments',
+                label: role == EmployeeRole.nurse ? 'Encaissements' : 'Payments',
                 value: state.payments.length.toDouble(),
                 icon: Icons.receipt_long,
                 color: Colors.blue,
@@ -339,87 +456,27 @@ class _BillingScreenState extends State<BillingScreen> {
               ),
             ];
 
-            return isMobile
-                ? Column(
-                    children: cards
-                        .map(
-                          (c) => Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: c,
-                          ),
-                        )
-                        .toList(),
+            return Row(
+              children: cards
+                  .map(
+                    (c) => Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                        ),
+                        child: c,
+                      ),
+                    ),
                   )
-                : Row(
-                    children: cards
-                        .map(
-                          (c) => Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                              ),
-                              child: c,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  );
+                  .toList(),
+            );
           },
         ),
 
         const SizedBox(height: 16),
 
         // Selection Action Bar
-        BlocBuilder<BillingCubit, BillingState>(
-          builder: (context, state) {
-            if (state.payments.isEmpty) return const SizedBox.shrink();
-            final isAllSelected = state.payments.isNotEmpty &&
-                state.payments.every((p) => _selectedPaymentIds.contains(p.paymentId));
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: Row(
-                children: [
-                  Checkbox(
-                    value: isAllSelected,
-                    onChanged: (val) {
-                      setState(() {
-                        if (val == true) {
-                          _selectedPaymentIds.addAll(
-                            state.payments
-                                .map((p) => p.paymentId)
-                                .whereType<int>(),
-                          );
-                        } else {
-                          _selectedPaymentIds.clear();
-                        }
-                      });
-                    },
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    isAllSelected ? 'Deselect All' : 'Select All',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                  const Spacer(),
-                  if (_selectedPaymentIds.isNotEmpty)
-                    Chip(
-                      label: Text(
-                        '${_selectedPaymentIds.length} selected',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
-                      backgroundColor: Colors.blue.shade50,
-                      deleteIcon: const Icon(Icons.clear, size: 14),
-                      onDeleted: () {
-                        setState(() {
-                          _selectedPaymentIds.clear();
-                        });
-                      },
-                    ),
-                ],
-              ),
-            );
-          },
-        ),
+        _buildSelectionBar(),
 
         // Payments list
         Expanded(
@@ -441,8 +498,155 @@ class _BillingScreenState extends State<BillingScreen> {
     );
   }
 
+  Widget _buildSelectionBar() {
+    final isMobile = context.isMobile;
+    return BlocBuilder<BillingCubit, BillingState>(
+      builder: (context, state) {
+        if (state.payments.isEmpty) return const SizedBox.shrink();
+        final isAllSelected = state.payments.isNotEmpty &&
+            state.payments.every((p) => _selectedPaymentIds.contains(p.paymentId));
+        return Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: isMobile ? 14.0 : 16.0,
+            vertical: isMobile ? 4.0 : 8.0,
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: Checkbox(
+                  value: isAllSelected,
+                  onChanged: (val) {
+                    setState(() {
+                      if (val == true) {
+                        _selectedPaymentIds.addAll(
+                          state.payments
+                              .map((p) => p.paymentId)
+                              .whereType<int>(),
+                        );
+                      } else {
+                        _selectedPaymentIds.clear();
+                      }
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                isAllSelected ? 'Deselect All' : 'Select All',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: isMobile ? 12 : 13,
+                ),
+              ),
+              const Spacer(),
+              if (_selectedPaymentIds.isNotEmpty)
+                Chip(
+                  label: Text(
+                    '${_selectedPaymentIds.length} selected',
+                    style: TextStyle(
+                      fontSize: isMobile ? 11 : 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  backgroundColor: Colors.blue.shade50,
+                  deleteIcon: const Icon(Icons.clear, size: 14),
+                  onDeleted: () {
+                    setState(() {
+                      _selectedPaymentIds.clear();
+                    });
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSliverPaymentList() {
+    return BlocBuilder<BillingCubit, BillingState>(
+      builder: (context, state) {
+        if (state.isLoading && state.payments.isEmpty) {
+          return const SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (state.error != null && state.payments.isEmpty) {
+          return SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
+                  const SizedBox(height: 12),
+                  Text('Error: ${state.error}'),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () => context.read<BillingCubit>().loadAllPayments(),
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        final payments = state.payments;
+
+        if (payments.isEmpty && !state.isLoading) {
+          return SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.receipt_long, size: 48, color: Colors.grey.shade300),
+                  const SizedBox(height: 12),
+                  Text(
+                    'No payments found',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              final payment = payments[index];
+              return _PaymentCard(
+                payment: payment,
+                onRefresh: _applyFilters,
+                isSelected: _selectedPaymentIds.contains(payment.paymentId),
+                onSelectedChanged: (val) {
+                  if (payment.paymentId != null) {
+                    setState(() {
+                      if (val == true) {
+                        _selectedPaymentIds.add(payment.paymentId!);
+                      } else {
+                        _selectedPaymentIds.remove(payment.paymentId!);
+                      }
+                    });
+                  }
+                },
+              );
+            },
+            childCount: payments.length,
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildFilterBar() {
-    final isMobile = MediaQuery.of(context).size.width < 800;
+    final isMobile = context.isMobile;
 
     return BlocBuilder<BillingCubit, BillingState>(
       builder: (context, state) {
@@ -803,11 +1007,14 @@ class _PaymentCardState extends State<_PaymentCard> {
 
   Future<void> _loadServicesAndCommission() async {
     if (widget.payment.paymentId != null) {
+      if (!mounted) return;
       setState(() => _isLoadingServices = true);
       final repo = PaymentRepository();
       final result = await repo.getServicesByPaymentId(widget.payment.paymentId!);
+      if (!mounted) return;
       result.fold(
         (failure) {
+          if (!mounted) return;
           setState(() {
             _commission = 0.0;
             _services = [];
@@ -816,6 +1023,7 @@ class _PaymentCardState extends State<_PaymentCard> {
         },
         (services) {
           final total = services.fold<double>(0, (sum, s) => sum + s.doctorCommission);
+          if (!mounted) return;
           setState(() {
             _commission = total;
             _services = services;
@@ -873,187 +1081,247 @@ class _PaymentCardState extends State<_PaymentCard> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = context.isMobile;
     final theme = Theme.of(context);
     final accentColor = theme.colorScheme.primary;
     final patientName = '${widget.payment.patientName ?? ""} ${widget.payment.patientSurname ?? ""}'.trim();
 
+    final role = context.watch<AuthCubit>().currentRole;
+    final isNurse = role == EmployeeRole.nurse;
+    final canViewCommissions = RolePermissions.canViewDoctorCommissions(role);
+    final canDelete = RolePermissions.canDeletePayments(role);
+    final canEdit = RolePermissions.canEditPayments(role);
+
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: widget.isSelected ? AppTheme.primary : Colors.grey.shade200,
+          width: widget.isSelected ? 1.5 : 1,
+        ),
+      ),
+      color: widget.isSelected ? AppTheme.primary.withValues(alpha: 0.03) : Colors.white,
+      margin: EdgeInsets.symmetric(
+        horizontal: isMobile ? 12 : 16,
+        vertical: isMobile ? 4 : 6,
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(isMobile ? 12 : 16),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 4.0),
+            SizedBox(
+              width: 24,
+              height: 24,
               child: Checkbox(
                 value: widget.isSelected,
                 onChanged: widget.onSelectedChanged,
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: isMobile ? 8 : 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: accentColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(Icons.receipt_long, color: accentColor),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Text(
-                        'Payment #${widget.payment.paymentId ?? "N/A"}',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      Container(
+                        padding: EdgeInsets.all(isMobile ? 6 : 8),
+                        decoration: BoxDecoration(
+                          color: accentColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.receipt_long,
+                          color: accentColor,
+                          size: isMobile ? 18 : 22,
+                        ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        patientName.isEmpty ? 'No patient' : patientName,
-                        style: TextStyle(color: Colors.grey.shade700, fontSize: 14),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Payment #${widget.payment.paymentId ?? "N/A"}',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: isMobile ? 14 : 16,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              patientName.isEmpty ? 'Aucun patient' : patientName,
+                              style: TextStyle(
+                                color: Colors.grey.shade700,
+                                fontSize: isMobile ? 13 : 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.receipt_long_outlined, color: Colors.teal),
+                        iconSize: isMobile ? 20 : 24,
+                        padding: EdgeInsets.all(isMobile ? 4 : 8),
+                        constraints: const BoxConstraints(),
+                        tooltip: 'Reçu / Imprimer',
+                        onPressed: () => _showDetails(context),
+                      ),
+                      const SizedBox(width: 4),
+                      PopupMenuButton<String>(
+                        iconSize: isMobile ? 20 : 24,
+                        padding: EdgeInsets.all(isMobile ? 4 : 8),
+                        constraints: const BoxConstraints(),
+                        onSelected: (value) {
+                          switch (value) {
+                            case 'edit':
+                              _editPayment(context);
+                              break;
+                            case 'print':
+                              _showDetails(context);
+                              break;
+                            case 'delete':
+                              _confirmDelete(context);
+                              break;
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          if (canEdit)
+                            const PopupMenuItem(
+                              value: 'edit',
+                              child: ListTile(
+                                leading: Icon(Icons.edit, size: 20),
+                                title: Text('Edit'),
+                                contentPadding: EdgeInsets.zero,
+                                dense: true,
+                              ),
+                            ),
+                          const PopupMenuItem(
+                            value: 'print',
+                            child: ListTile(
+                              leading: Icon(Icons.print, size: 20),
+                              title: Text('Print/Details'),
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                          ),
+                          if (canDelete)
+                            const PopupMenuItem(
+                              value: 'delete',
+                              child: ListTile(
+                                leading: Icon(Icons.delete, size: 20, color: Colors.red),
+                                title: Text('Delete', style: TextStyle(color: Colors.red)),
+                                contentPadding: EdgeInsets.zero,
+                                dense: true,
+                              ),
+                            ),
+                        ],
                       ),
                     ],
                   ),
-                ),
-                PopupMenuButton<String>(
-                  onSelected: (value) {
-                    switch (value) {
-                      case 'edit':
-                        _editPayment(context);
-                        break;
-                      case 'print':
-                        _showDetails(context);
-                        break;
-                      case 'delete':
-                        _confirmDelete(context);
-                        break;
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'edit',
-                      child: ListTile(
-                        leading: Icon(Icons.edit, size: 20),
-                        title: Text('Edit'),
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
+                  SizedBox(height: isMobile ? 10 : 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _InfoRow(
+                          icon: Icons.calendar_today,
+                          label: 'Date',
+                          value: DateFormat('dd/MM/yyyy HH:mm').format(widget.payment.paymentDate),
+                          isMobile: isMobile,
+                        ),
                       ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'print',
-                      child: ListTile(
-                        leading: Icon(Icons.print, size: 20),
-                        title: Text('Print/Details'),
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
+                      Expanded(
+                        child: _InfoRow(
+                          icon: Icons.account_balance_wallet,
+                          label: isNurse ? 'Total Validé' : 'Total',
+                          value: '${widget.payment.amount.toStringAsFixed(2)} DA',
+                          valueColor: Colors.teal,
+                          isMobile: isMobile,
+                        ),
                       ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: ListTile(
-                        leading: Icon(Icons.delete, size: 20, color: Colors.red),
-                        title: Text('Delete', style: TextStyle(color: Colors.red)),
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
+                    ],
+                  ),
+                  SizedBox(height: isMobile ? 8 : 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _InfoRow(
+                          icon: Icons.check_circle,
+                          label: 'Status',
+                          value: 'VALIDÉ / ENCAISSÉ',
+                          valueColor: Colors.green,
+                          badge: true,
+                          isMobile: isMobile,
+                        ),
                       ),
+                      if (canViewCommissions)
+                        Expanded(
+                          child: _InfoRow(
+                            icon: Icons.person_outline,
+                            label: 'Commission',
+                            value: '${_commission.toStringAsFixed(2)} DA',
+                            valueColor: Colors.orange,
+                            isMobile: isMobile,
+                          ),
+                        )
+                      else
+                        const Spacer(),
+                    ],
+                  ),
+                  Divider(height: isMobile ? 16 : 24),
+                  Text(
+                    'Services',
+                    style: TextStyle(
+                      fontSize: isMobile ? 11 : 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade700,
                     ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _InfoRow(
-                    icon: Icons.calendar_today,
-                    label: 'Date',
-                    value: DateFormat('dd/MM/yyyy').format(widget.payment.paymentDate),
                   ),
-                ),
-                Expanded(
-                  child: _InfoRow(
-                    icon: Icons.account_balance_wallet,
-                    label: 'Total',
-                    value: '${widget.payment.amount.toStringAsFixed(2)} DA',
-                    valueColor: Colors.teal,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _InfoRow(
-                    icon: Icons.check_circle,
-                    label: 'Status',
-                    value: 'PAID',
-                    valueColor: Colors.green,
-                    badge: true,
-                  ),
-                ),
-                Expanded(
-                  child: _InfoRow(
-                    icon: Icons.person_outline,
-                    label: 'Commission',
-                    value: '${_commission.toStringAsFixed(2)} DA',
-                    valueColor: Colors.orange,
-                  ),
-                ),
-              ],
-            ),
-            const Divider(height: 24),
-            Text(
-              'Services',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey.shade700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            _isLoadingServices
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : _services.isEmpty
-                    ? Text(
-                        widget.payment.servicesText ?? 'No services listed',
-                        style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                      )
-                    : Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _services.map((s) {
-                          return Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.shade50,
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: Colors.blue.shade100),
-                            ),
-                            child: Text(
-                              '${s.serviceName} (${s.servicePrice.toStringAsFixed(2)} DA)',
+                  const SizedBox(height: 6),
+                  _isLoadingServices
+                      ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : _services.isEmpty
+                          ? Text(
+                              widget.payment.servicesText ?? 'Aucun acte listé',
                               style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue.shade800,
+                                fontSize: isMobile ? 12 : 13,
+                                color: Colors.grey.shade600,
                               ),
+                            )
+                          : Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: _services.map((s) {
+                                return Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: isMobile ? 8 : 10,
+                                    vertical: isMobile ? 4 : 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.shade50,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.blue.shade100),
+                                  ),
+                                  child: Text(
+                                    '${s.serviceName} (${s.servicePrice.toStringAsFixed(2)} DA)',
+                                    style: TextStyle(
+                                      fontSize: isMobile ? 11 : 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue.shade800,
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
                             ),
-                          );
-                        }).toList(),
-                      ),
                 ],
               ),
             ),
@@ -1070,6 +1338,7 @@ class _InfoRow extends StatelessWidget {
   final String value;
   final Color? valueColor;
   final bool badge;
+  final bool isMobile;
 
   const _InfoRow({
     required this.icon,
@@ -1077,43 +1346,64 @@ class _InfoRow extends StatelessWidget {
     required this.value,
     this.valueColor,
     this.badge = false,
+    this.isMobile = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 16, color: Colors.grey.shade600),
-        const SizedBox(width: 8),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-            ),
-            const SizedBox(height: 2),
-            badge
-                ? Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.green,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
+        Icon(icon, size: isMobile ? 14 : 16, color: Colors.grey.shade600),
+        SizedBox(width: isMobile ? 6 : 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: isMobile ? 10 : 11,
+                  color: Colors.grey.shade600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              badge
+                  ? Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isMobile ? 6 : 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.green,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        value,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: isMobile ? 10 : 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    )
+                  : Text(
                       value,
-                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: isMobile ? 12 : 14,
+                        fontWeight: FontWeight.bold,
+                        color: valueColor ?? Colors.black87,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  )
-                : Text(
-                    value,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: valueColor ?? Colors.black87,
-                    ),
-                  ),
-          ],
+            ],
+          ),
         ),
       ],
     );
@@ -1137,44 +1427,57 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = context.isMobile;
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 8 : 16,
+          vertical: isMobile ? 8 : 14,
+        ),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: EdgeInsets.all(isMobile ? 6 : 8),
               decoration: BoxDecoration(
                 color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(icon, color: color),
+              child: Icon(icon, color: color, size: isMobile ? 18 : 22),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: isMobile ? 8 : 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     label,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: isMobile ? 10 : 12,
                       color: Colors.grey.shade600,
                       fontWeight: FontWeight.w500,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: isMobile ? 2 : 4),
                   Text(
                     isInteger
                         ? value.toInt().toString()
                         : '${value.toStringAsFixed(2)} DA',
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: isMobile ? 13 : 16,
                       fontWeight: FontWeight.bold,
                       color: color,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../services/pathology/pathology_scraper_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/responsive.dart';
 
 class AiSearchScreen extends StatefulWidget {
   const AiSearchScreen({super.key});
@@ -104,17 +105,19 @@ class _AiSearchScreenState extends State<AiSearchScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = context.isMobile;
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
       body: Column(
         children: [
-          _buildHeader(),
+          _buildHeader(context),
+          if (isMobile) _buildMobileSuggestionsBar(),
           Expanded(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Left sidebar: history + suggestions
-                _buildLeftPanel(),
+                // Left sidebar: history + suggestions (desktop only)
+                if (!isMobile) _buildLeftPanel(),
                 // Main content
                 Expanded(child: _buildMainContent()),
               ],
@@ -125,9 +128,42 @@ class _AiSearchScreenState extends State<AiSearchScreen>
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildMobileSuggestionsBar() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+      height: 48,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: AppTheme.divider)),
+      ),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        itemCount: _suggestedPathologies.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final p = _suggestedPathologies[index];
+          return ActionChip(
+            label: Text(p, style: const TextStyle(fontSize: 12)),
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            backgroundColor: AppTheme.bgLight,
+            side: BorderSide(color: AppTheme.divider),
+            onPressed: () => _search(p),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    final isMobile = context.isMobile;
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        isMobile ? 16 : 24,
+        isMobile ? 12 : 20,
+        isMobile ? 16 : 24,
+        isMobile ? 12 : 16,
+      ),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -160,36 +196,43 @@ class _AiSearchScreenState extends State<AiSearchScreen>
                 child: Icon(
                   Icons.auto_awesome_rounded,
                   color: AppTheme.primaryLight,
-                  size: 20,
+                  size: isMobile ? 18 : 20,
                 ),
               ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Assistant IA Clinique',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.3,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Assistant IA Clinique',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: isMobile ? 16 : 18,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  Text(
-                    'Guides cliniques enrichis par vos protocoles Google Drive',
-                    style: TextStyle(
-                      color: AppTheme.sidebarText,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
+                    if (!context.isPhoneLandscape)
+                      Text(
+                        'Guides cliniques enrichis par Drive',
+                        style: TextStyle(
+                          color: AppTheme.sidebarText,
+                          fontSize: 11,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               // Drive badge
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isMobile ? 8 : 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1a73e8).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(20),
@@ -202,21 +245,23 @@ class _AiSearchScreenState extends State<AiSearchScreen>
                   children: [
                     const Icon(Icons.cloud_done_rounded,
                         size: 13, color: Color(0xFF4fc3f7)),
-                    const SizedBox(width: 5),
-                    Text(
-                      'Google Drive PDFs',
-                      style: TextStyle(
-                        color: const Color(0xFF4fc3f7),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                    if (!isMobile) ...[
+                      const SizedBox(width: 5),
+                      Text(
+                        'Google Drive PDFs',
+                        style: TextStyle(
+                          color: const Color(0xFF4fc3f7),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: isMobile ? 10 : 16),
           // Search bar
           Row(
             children: [
@@ -225,35 +270,34 @@ class _AiSearchScreenState extends State<AiSearchScreen>
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.15),
-                    ),
                   ),
                   child: TextField(
                     controller: _searchController,
                     focusNode: _focusNode,
-                    style: const TextStyle(color: Colors.white, fontSize: 15),
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
                     decoration: InputDecoration(
-                      hintText:
-                          'Rechercher une pathologie (ex: Pneumonie, HTA, Asthme...)',
+                      hintText: isMobile
+                          ? 'Rechercher une pathologie...'
+                          : 'Rechercher une pathologie (ex: Pneumonie, HTA, Asthme...)',
                       hintStyle: TextStyle(
                         color: Colors.white.withValues(alpha: 0.4),
-                        fontSize: 14,
+                        fontSize: 13,
                       ),
                       prefixIcon: Icon(
                         Icons.search_rounded,
                         color: Colors.white.withValues(alpha: 0.5),
+                        size: 20,
                       ),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(
-                          vertical: 14, horizontal: 16),
+                          vertical: 12, horizontal: 14),
                       filled: false,
                     ),
                     onSubmitted: (_) => _search(),
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 child: ElevatedButton(
@@ -261,8 +305,10 @@ class _AiSearchScreenState extends State<AiSearchScreen>
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primary,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 14),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isMobile ? 16 : 24,
+                      vertical: 12,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
@@ -278,12 +324,15 @@ class _AiSearchScreenState extends State<AiSearchScreen>
                                 AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         )
-                      : const Row(
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.send_rounded, size: 16),
-                            SizedBox(width: 6),
-                            Text('Analyser',
-                                style: TextStyle(fontWeight: FontWeight.w700)),
+                            const Icon(Icons.send_rounded, size: 16),
+                            if (!isMobile) ...[
+                              const SizedBox(width: 6),
+                              const Text('Analyser',
+                                  style: TextStyle(fontWeight: FontWeight.w700)),
+                            ],
                           ],
                         ),
                 ),

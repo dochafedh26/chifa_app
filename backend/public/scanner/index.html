@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Scanner Caméra — Clinique Chifa</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Montserrat', sans-serif;
+      background: #090f1f;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    header {
+      background: #0f1c3d;
+      padding: 0.8rem 1.2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1.5px solid #1e3a78;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-weight: 800;
+      font-size: 1.1rem;
+    }
+    .brand-icon {
+      background: #0284c7;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+    }
+    .session-badge {
+      background: #1e293b;
+      padding: 0.3rem 0.7rem;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      color: #38bdf8;
+      font-weight: 700;
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+    .camera-select {
+      background: #1e293b;
+      color: #38bdf8;
+      border: 1px solid #334155;
+      padding: 0.35rem 0.6rem;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      max-width: 170px;
+      outline: none;
+      cursor: pointer;
+    }
+    .dell-hint {
+      background: #1e293b;
+      color: #fde047;
+      padding: 0.45rem 1rem;
+      font-size: 0.78rem;
+      text-align: center;
+      border-bottom: 1px solid #334155;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+    .dell-hint button {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      font-weight: bold;
+      margin-left: 0.5rem;
+    }
+    .scanner-viewport {
+      flex: 1;
+      position: relative;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .scan-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+    .viewfinder {
+      width: 260px;
+      height: 260px;
+      border: 3px solid #38bdf8;
+      border-radius: 24px;
+      box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.55);
+      position: relative;
+      animation: pulse 2s infinite ease-in-out;
+    }
+    @keyframes pulse {
+      0% { border-color: #38bdf8; }
+      50% { border-color: #22c55e; }
+      100% { border-color: #38bdf8; }
+    }
+    .laser {
+      position: absolute;
+      left: 10px; right: 10px; height: 3px;
+      background: linear-gradient(90deg, transparent, #38bdf8, transparent);
+      box-shadow: 0 0 8px #38bdf8;
+      animation: scan 2s infinite ease-in-out;
+    }
+    @keyframes scan {
+      0% { top: 15px; opacity: 0.2; }
+      50% { top: 235px; opacity: 1; }
+      100% { top: 15px; opacity: 0.2; }
+    }
+    .instructions {
+      position: absolute;
+      bottom: 24px;
+      background: rgba(15, 23, 42, 0.85);
+      padding: 0.6rem 1.2rem;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      backdrop-filter: blur(8px);
+      text-align: center;
+      max-width: 90%;
+    }
+    .controls-bar {
+      background: #0f1c3d;
+      padding: 0.8rem 1.2rem;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      border-top: 1.5px solid #1e3a78;
+    }
+    .btn-ctrl {
+      background: #1e293b;
+      color: #fff;
+      border: 1px solid #334155;
+      padding: 0.6rem 1.2rem;
+      border-radius: 12px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .btn-ctrl:active {
+      transform: scale(0.96);
+    }
+    .modal-success {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(10, 17, 40, 0.95);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      text-align: center;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+    .modal-success.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .success-icon {
+      width: 72px;
+      height: 72px;
+      background: #22c55e;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.2rem;
+      margin-bottom: 1.2rem;
+      box-shadow: 0 0 30px rgba(34, 197, 94, 0.6);
+    }
+    .success-title {
+      font-size: 1.4rem;
+      font-weight: 800;
+      margin-bottom: 0.6rem;
+    }
+    .success-sub {
+      color: #94a3b8;
+      font-size: 0.9rem;
+      margin-bottom: 1.5rem;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="brand-icon">✚</div>
+      <span>Scanner Chifa</span>
+    </div>
+    <div class="header-actions">
+      <select id="cameraSelect" class="camera-select" title="Choisir la caméra"></select>
+      <div class="session-badge" id="sessionDisplay">Session active</div>
+    </div>
+  </header>
+
+  <div class="dell-hint" id="dellHint">
+    <span>💡 <b>Webcam Dell :</b> Si vous voyez l'icône caméra barrée, sélectionnez <b>Integrated Webcam</b> ci-dessus et vérifiez le clapet physique (ou touche <b>F4</b>).</span>
+    <button onclick="document.getElementById('dellHint').style.display='none'">✕</button>
+  </div>
+
+  <div class="scanner-viewport">
+    <video id="video" playsinline autoplay muted></video>
+
+    <div class="scan-overlay">
+      <div class="viewfinder">
+        <div class="laser"></div>
+      </div>
+      <div class="instructions">Pointez la caméra vers le QR code de la carte patient</div>
+    </div>
+
+    <!-- Modal Success -->
+    <div class="modal-success" id="modalSuccess">
+      <div class="success-icon">✓</div>
+      <div class="success-title">Code QR Détecté !</div>
+      <div class="success-sub" id="successDetails">Les données ont été transmises instantanément à l'application Chifa sur votre ordinateur.</div>
+      <button class="btn-ctrl" id="btnRescan">Scanner un autre patient</button>
+    </div>
+  </div>
+
+  <div class="controls-bar">
+    <button class="btn-ctrl" id="btnFlipCam">🔄 Changer Caméra</button>
+    <button class="btn-ctrl" id="btnFile">📁 Image</button>
+    <button class="btn-ctrl" id="btnTorch">⚡ Flash</button>
+    <input type="file" id="fileInput" accept="image/*" style="display:none">
+  </div>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get('session') || urlParams.get('s') || 'default';
+    document.getElementById('sessionDisplay').textContent = `Session: #${sessionId.substring(0, 8)}`;
+
+    const video = document.getElementById('video');
+    const cameraSelect = document.getElementById('cameraSelect');
+    const modalSuccess = document.getElementById('modalSuccess');
+    const successDetails = document.getElementById('successDetails');
+    const btnRescan = document.getElementById('btnRescan');
+    const btnFlipCam = document.getElementById('btnFlipCam');
+    const btnTorch = document.getElementById('btnTorch');
+    const btnFile = document.getElementById('btnFile');
+    const fileInput = document.getElementById('fileInput');
+
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    let currentFacingMode = isMobile ? 'environment' : 'user';
+    let currentStream = null;
+    let track = null;
+    let isScanning = true;
+    let torchOn = false;
+    let availableVideoDevices = [];
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    async function populateCameras() {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        availableVideoDevices = devices.filter(d => d.kind === 'videoinput');
+        cameraSelect.innerHTML = '';
+
+        if (availableVideoDevices.length === 0) {
+          const opt = document.createElement('option');
+          opt.text = isMobile ? 'Caméra mobile' : 'Webcam PC';
+          opt.value = '';
+          cameraSelect.appendChild(opt);
+          return;
+        }
+
+        let bestIndex = 0;
+        availableVideoDevices.forEach((dev, idx) => {
+          const opt = document.createElement('option');
+          opt.value = dev.deviceId;
+          const label = dev.label || `Caméra ${idx + 1}`;
+          opt.text = label;
+          cameraSelect.appendChild(opt);
+
+          const lower = label.toLowerCase();
+          // Avoid IR / Windows Hello camera on Dell laptops
+          if (!lower.includes('ir') && !lower.includes('hello') && !lower.includes('depth')) {
+            if (lower.includes('integrated') || lower.includes('rgb') || lower.includes('webcam') || lower.includes('front')) {
+              bestIndex = idx;
+            }
+          }
+        });
+
+        if (availableVideoDevices.length > 0) {
+          cameraSelect.selectedIndex = bestIndex;
+        }
+      } catch (e) {
+        console.warn('Erreur enumerateDevices:', e);
+      }
+    }
+
+    async function startCamera(deviceId = null) {
+      if (currentStream) {
+        currentStream.getTracks().forEach(t => t.stop());
+        currentStream = null;
+      }
+
+      const constraintsList = [];
+
+      if (deviceId) {
+        constraintsList.push({
+          video: { deviceId: { exact: deviceId } },
+          audio: false
+        });
+      }
+
+      if (isMobile) {
+        constraintsList.push({
+          video: { facingMode: { ideal: currentFacingMode }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false
+        });
+        constraintsList.push({ video: { facingMode: currentFacingMode }, audio: false });
+      } else {
+        // Desktop / Laptop: Explicitly user front camera (Dell Integrated Webcam), NOT environment IR
+        constraintsList.push({
+          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false
+        });
+        constraintsList.push({ video: { facingMode: 'user' }, audio: false });
+      }
+
+      constraintsList.push({ video: true, audio: false });
+
+      let stream = null;
+      let errLast = null;
+
+      for (const c of constraintsList) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(c);
+          if (stream && stream.getVideoTracks().length > 0) break;
+        } catch (e) {
+          errLast = e;
+        }
+      }
+
+      if (!stream) {
+        console.warn('Impossible de démarrer la caméra:', errLast);
+        alert('Impossible d\'activer la caméra. Vérifiez les autorisations de votre navigateur : ' + (errLast ? errLast.message : ''));
+        return;
+      }
+
+      currentStream = stream;
+      video.srcObject = stream;
+      video.setAttribute('playsinline', 'true');
+      video.setAttribute('muted', 'true');
+      video.muted = true;
+
+      try {
+        await video.play();
+      } catch (e) {
+        console.warn('video.play() warning:', e);
+      }
+
+      track = stream.getVideoTracks()[0];
+
+      await populateCameras();
+      if (deviceId && cameraSelect.value !== deviceId) {
+        cameraSelect.value = deviceId;
+      }
+
+      isScanning = true;
+      detectLoop();
+    }
+
+    cameraSelect.addEventListener('change', () => {
+      startCamera(cameraSelect.value);
+    });
+
+    btnFlipCam.addEventListener('click', () => {
+      if (availableVideoDevices.length > 1) {
+        cameraSelect.selectedIndex = (cameraSelect.selectedIndex + 1) % availableVideoDevices.length;
+        startCamera(cameraSelect.value);
+      } else {
+        currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
+        startCamera();
+      }
+    });
+
+    btnTorch.addEventListener('click', async () => {
+      if (track && track.getCapabilities && track.getCapabilities().torch) {
+        torchOn = !torchOn;
+        await track.applyConstraints({ advanced: [{ torch: torchOn }] });
+        btnTorch.textContent = torchOn ? '⚡ Flash (Allumé)' : '⚡ Flash';
+      }
+    });
+
+    btnFile.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const img = new Image();
+      img.onload = () => {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0, img.width, img.height);
+        const imageData = ctx.getImageData(0, 0, img.width, img.height);
+        if (typeof jsQR !== 'undefined') {
+          const code = jsQR(imageData.data, imageData.width, imageData.height);
+          if (code && code.data) {
+            onCodeDetected(code.data);
+            return;
+          }
+        }
+        if (barcodeDetector) {
+          barcodeDetector.detect(canvas).then(barcodes => {
+            if (barcodes.length > 0) onCodeDetected(barcodes[0].rawValue);
+            else alert('Aucun QR code trouvé dans cette image.');
+          }).catch(() => alert('Aucun QR code trouvé dans cette image.'));
+        } else {
+          alert('Aucun QR code trouvé dans cette image.');
+        }
+      };
+      img.src = URL.createObjectURL(file);
+    });
+
+    btnRescan.addEventListener('click', () => {
+      modalSuccess.classList.remove('active');
+      isScanning = true;
+    });
+
+    // Audio Beep
+    function playBeep() {
+      try {
+        const ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctxAudio.createOscillator();
+        const gain = ctxAudio.createGain();
+        osc.frequency.value = 880;
+        gain.gain.value = 0.3;
+        osc.connect(gain);
+        gain.connect(ctxAudio.destination);
+        osc.start();
+        osc.stop(ctxAudio.currentTime + 0.15);
+      } catch (_) {}
+    }
+
+    // Modern Native BarcodeDetector (Chrome, Safari, Edge, Android, iOS)
+    let barcodeDetector = null;
+    if ('BarcodeDetector' in window) {
+      try {
+        barcodeDetector = new BarcodeDetector({ formats: ['qr_code', 'code_128', 'ean_13'] });
+      } catch (_) {}
+    }
+
+    async function detectLoop() {
+      if (!isScanning) {
+        requestAnimationFrame(detectLoop);
+        return;
+      }
+
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        // 1. Try BarcodeDetector
+        if (barcodeDetector) {
+          try {
+            const barcodes = await barcodeDetector.detect(video);
+            if (barcodes.length > 0) {
+              onCodeDetected(barcodes[0].rawValue);
+              return;
+            }
+          } catch (_) {}
+        }
+
+        // 2. Fallback jsQR
+        if (typeof jsQR !== 'undefined') {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: 'dontInvert',
+          });
+          if (code && code.data) {
+            onCodeDetected(code.data);
+            return;
+          }
+        }
+      }
+      requestAnimationFrame(detectLoop);
+    }
+
+    async function onCodeDetected(payload) {
+      isScanning = false;
+      playBeep();
+      if (navigator.vibrate) navigator.vibrate(100);
+
+      modalSuccess.classList.add('active');
+
+      // Send to server bridge
+      const candidates = [
+        '/chifa/api/tv/scan-result',
+        '/api/tv/scan-result',
+        '/tv/api/scan-result'
+      ];
+      for (const url of candidates) {
+        try {
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId, payload })
+          });
+          if (res.ok) break;
+        } catch (_) {}
+      }
+    }
+
+    startCamera();
+  </script>
+</body>
+</html>

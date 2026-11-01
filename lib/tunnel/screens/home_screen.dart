@@ -1,3 +1,4 @@
+import 'package:chifa/app/cubits/auth_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
@@ -13,7 +14,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+class _HomeScreenState extends State<TcpTunnelHomeScreen> with SingleTickerProviderStateMixin {
   late AnimationController _pulseCtrl;
 
   @override
@@ -99,7 +100,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     final svc = context.watch<TunnelService>();
-    final settings = context.read<SettingsService>();
+    final settings = context.watch<SettingsService>();
+    bool isNurse = false;
+    try {
+      isNurse = context.watch<AuthCubit>().isNurse;
+    } catch (_) {}
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -121,26 +126,47 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 const Text('Active Machine:', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w500)),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      dropdownColor: const Color(0xFF0F1629),
-                      value: settings.selectedProfileId,
-                      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF00BFA5)),
-                      items: settings.profiles.map((p) {
-                        return DropdownMenuItem<String>(
-                          value: p.id,
-                          child: Text(p.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                        );
-                      }).toList(),
-                      onChanged: svc.isConnected
-                          ? null // Disable switching if active tunnel is running (forces disconnection)
-                          : (val) {
-                              if (val != null) {
-                                _switchProfile(svc, settings, val);
-                              }
-                            },
-                    ),
-                  ),
+                  child: isNurse
+                      ? Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12.0),
+                          child: Text(
+                            settings.selectedProfile.name,
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                          ),
+                        )
+                      : Builder(
+                          builder: (context) {
+                            final profileMap = <String, String>{};
+                            for (final p in settings.profiles) {
+                              profileMap[p.id] = p.name;
+                            }
+                            final String? validProfileId = profileMap.containsKey(settings.selectedProfileId)
+                                ? settings.selectedProfileId
+                                : (profileMap.isNotEmpty ? profileMap.keys.first : null);
+
+                            return DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                isExpanded: true,
+                                dropdownColor: const Color(0xFF0F1629),
+                                value: validProfileId,
+                                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF00BFA5)),
+                                items: profileMap.entries.map((entry) {
+                                  return DropdownMenuItem<String>(
+                                    value: entry.key,
+                                    child: Text(entry.value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                                  );
+                                }).toList(),
+                                onChanged: svc.isConnected
+                                    ? null // Disable switching if active tunnel is running (forces disconnection)
+                                    : (val) {
+                                        if (val != null) {
+                                          _switchProfile(svc, settings, val);
+                                        }
+                                      },
+                              ),
+                            );
+                          },
+                        ),
                 ),
               ],
             ),
@@ -179,14 +205,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddDialog(svc, settings),
-        backgroundColor: const Color(0xFF00BFA5),
-        foregroundColor: Colors.black,
-        icon: const Icon(Icons.add),
-        label: const Text('Add Tunnel', style: TextStyle(fontWeight: FontWeight.w700)),
-        elevation: 4,
-      ),
+      floatingActionButton: isNurse
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _showAddDialog(svc, settings),
+              backgroundColor: const Color(0xFF00BFA5),
+              foregroundColor: Colors.black,
+              icon: const Icon(Icons.add),
+              label: const Text('Add Tunnel', style: TextStyle(fontWeight: FontWeight.w700)),
+              elevation: 4,
+            ),
     );
   }
 }
@@ -234,6 +262,8 @@ class _ConnectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isSmallScreen = MediaQuery.of(context).size.width < 500;
+
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(20),
@@ -259,7 +289,7 @@ class _ConnectionHeader extends StatelessWidget {
               // Pulse orb
               AnimatedBuilder(
                 animation: pulseCtrl,
-                builder: (_, __) => Container(
+                builder: (_, child) => Container(
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
@@ -301,14 +331,27 @@ class _ConnectionHeader extends StatelessWidget {
                   ],
                 ),
               ),
-              // Connect/Disconnect button
-              _ConnectButton(
+              if (!isSmallScreen) ...[
+                const SizedBox(width: 14),
+                _ConnectButton(
+                  state: svc.state,
+                  onPressed: onToggle,
+                  color: _stateColor,
+                ),
+              ],
+            ],
+          ),
+          if (isSmallScreen) ...[
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: _ConnectButton(
                 state: svc.state,
                 onPressed: onToggle,
                 color: _stateColor,
               ),
-            ],
-          ),
+            ),
+          ],
 
           if (svc.isConnected) ...[
             const SizedBox(height: 16),
@@ -413,3 +456,6 @@ class _EmptyState extends StatelessWidget {
         ),
       );
 }
+
+
+typedef TcpTunnelHomeScreen = HomeScreen;

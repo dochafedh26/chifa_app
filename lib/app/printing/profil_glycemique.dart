@@ -1,9 +1,9 @@
 import "package:chifa/services/db/models/models.dart";
 import "package:intl/intl.dart";
-import "dart:io";
 import "dart:typed_data";
 import "package:pdf/pdf.dart";
 import "package:pdf/widgets.dart" as pw;
+import "package:chifa/app/printing/pdf_asset_helper.dart";
 
 Future<Uint8List> generateProfilGlycemiquePdf({
   required Patient patient,
@@ -15,37 +15,8 @@ Future<Uint8List> generateProfilGlycemiquePdf({
   final dateStr = dateFormat.format(dateCreation);
 
   // ───── Load custom fonts ─────
-  final Uint8List regularFontBytes;
-  final Uint8List boldFontBytes;
-  try {
-    const regularFontPath =
-        'assets/fonts/Bricolage-Grotesque/BricolageGrotesque-Regular.ttf';
-    const boldFontPath =
-        'assets/fonts/Bricolage-Grotesque/BricolageGrotesque-Bold.ttf';
-
-    Future<File?> getFontFile(String path) async {
-      final possiblePaths = [path, '${Directory.current.path}/$path'];
-      for (final p in possiblePaths) {
-        final f = File(p);
-        if (await f.exists()) return f;
-      }
-      return null;
-    }
-
-    final regularFile = await getFontFile(regularFontPath);
-    final boldFile = await getFontFile(boldFontPath);
-
-    if (regularFile == null) throw Exception('Regular font file not found');
-    if (boldFile == null) throw Exception('Bold font file not found');
-
-    regularFontBytes = await regularFile.readAsBytes();
-    boldFontBytes = await boldFile.readAsBytes();
-  } catch (e) {
-    rethrow;
-  }
-
-  final regularFont = pw.Font.ttf(regularFontBytes.buffer.asByteData());
-  final boldFont = pw.Font.ttf(boldFontBytes.buffer.asByteData());
+  final regularFont = await PdfAssetHelper.loadRegularFont();
+  final boldFont = await PdfAssetHelper.loadBoldFont();
 
   final brandColor = PdfColor.fromHex('#1A7CC5');
   final lightBgColor = PdfColor.fromHex('#F4F9FD');
@@ -124,7 +95,7 @@ Future<Uint8List> generateProfilGlycemiquePdf({
                       style: normalStyle,
                       children: [
                         const pw.TextSpan(text: 'Âge : '),
-                        pw.TextSpan(text: '${patient.age} ans', style: boldStyle),
+                        pw.TextSpan(text: patient.formattedAge, style: boldStyle),
                       ],
                     ),
                   ),

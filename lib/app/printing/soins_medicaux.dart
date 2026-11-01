@@ -1,8 +1,8 @@
 import "package:chifa/services/db/models/models.dart";
-import "dart:io";
 import "dart:typed_data";
 import "package:pdf/pdf.dart";
 import "package:pdf/widgets.dart" as pw;
+import "package:chifa/app/printing/pdf_asset_helper.dart";
 
 
 /// Generates the Soins Médicaux PDF and returns the bytes
@@ -17,54 +17,9 @@ Future<Uint8List> generateSoinsMedicauxPdf({
   final dateStr =
       '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
 
-  // Load the template background image
-  final Uint8List imageBytes;
-  try {
-    final assetPath = template.assetPath;
-    final possiblePaths = [
-      assetPath,
-      Directory.current.path.endsWith('build')
-          ? assetPath
-          : '${Directory.current.path}/$assetPath',
-    ];
-
-    File? imageFile;
-    for (final path in possiblePaths) {
-      final f = File(path);
-      if (await f.exists()) {
-        imageFile = f;
-        break;
-      }
-    }
-
-    if (imageFile == null) {
-      throw Exception('Ordonnance template image not found');
-    }
-    imageBytes = await imageFile.readAsBytes();
-  } catch (e) {
-    rethrow;
-  }
-
-  // Load custom font
-  final Uint8List fontBytes;
-  try {
-    const fontPath =
-        'assets/fonts/Bricolage-Grotesque/BricolageGrotesque-Bold.ttf';
-    final possibleFontPaths = [fontPath, '${Directory.current.path}/$fontPath'];
-    File? fontFile;
-    for (final path in possibleFontPaths) {
-      final f = File(path);
-      if (await f.exists()) {
-        fontFile = f;
-        break;
-      }
-    }
-    if (fontFile == null) throw Exception('Font file not found');
-    fontBytes = await fontFile.readAsBytes();
-  } catch (e) {
-    rethrow;
-  }
-  final customFont = pw.Font.ttf(fontBytes.buffer.asByteData());
+  // Load the template background image and font
+  final imageBytes = await PdfAssetHelper.loadBytes(template.assetPath);
+  final customFont = await PdfAssetHelper.loadBoldFont();
   final brandColor = PdfColor.fromHex('#1A7CC5');
 
   final pdfImage = pw.MemoryImage(imageBytes);
@@ -131,7 +86,7 @@ Future<Uint8List> generateSoinsMedicauxPdf({
                         pw.Padding(
                           padding: const pw.EdgeInsets.only(left: 65),
                           child: pw.Text(
-                            '${patient.age} ans',
+                            patient.formattedAge,
                             style: pw.TextStyle(
                               fontSize: 10,
                               fontWeight: pw.FontWeight.bold,
@@ -160,7 +115,7 @@ Future<Uint8List> generateSoinsMedicauxPdf({
                         pw.Padding(
                           padding: const pw.EdgeInsets.only(right: 40),
                           child: pw.Text(
-                            '${patient.age} ans',
+                            patient.formattedAge,
                             style: pw.TextStyle(
                               fontSize: 10,
                               fontWeight: pw.FontWeight.bold,
@@ -227,7 +182,7 @@ Future<Uint8List> generateSoinsMedicauxPdf({
               ),
               pw.SizedBox(width: 10),
               pw.Text(
-                '${patient.age} ans  •  $dateStr',
+                '${patient.formattedAge}  •  $dateStr',
                 style: pw.TextStyle(fontSize: 9, color: brandColor),
               ),
             ],

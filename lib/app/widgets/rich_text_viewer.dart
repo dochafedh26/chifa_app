@@ -56,7 +56,7 @@ class RichTextViewer extends StatelessWidget {
     );
   }
 
-  /// Utility function to convert rich text to plain text (e.g. for simple views or exports)
+  /// Utility function to convert rich text or Quill Delta JSON to clean plain text
   static String toPlainText(String text) {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return '';
@@ -66,8 +66,53 @@ class RichTextViewer extends StatelessWidget {
       try {
         final decoded = jsonDecode(trimmed);
         final List<dynamic> ops = decoded is List ? decoded : (decoded['ops'] ?? decoded);
-        final doc = quill.Document.fromJson(ops);
-        return doc.toPlainText().trim();
+
+        final StringBuffer buffer = StringBuffer();
+        int orderedCounter = 0;
+        List<String> lineTextSegments = [];
+
+        for (final op in ops) {
+          if (op is! Map) continue;
+          final insertVal = op['insert'];
+          if (insertVal is! String) continue;
+
+          final Map<String, dynamic> attrs = op['attributes'] != null 
+              ? Map<String, dynamic>.from(op['attributes']) 
+              : const {};
+
+          final List<String> segments = insertVal.split('\n');
+
+          for (int i = 0; i < segments.length; i++) {
+            if (segments[i].isNotEmpty) {
+              lineTextSegments.add(segments[i]);
+            }
+
+            if (i < segments.length - 1) {
+              final listType = attrs['list'] as String?;
+              String prefix = '';
+              if (listType == 'bullet') {
+                prefix = '• ';
+                orderedCounter = 0;
+              } else if (listType == 'ordered') {
+                orderedCounter++;
+                prefix = '$orderedCounter. ';
+              } else {
+                orderedCounter = 0;
+              }
+
+              buffer.write(prefix);
+              buffer.write(lineTextSegments.join());
+              buffer.writeln();
+              lineTextSegments.clear();
+            }
+          }
+        }
+
+        if (lineTextSegments.isNotEmpty) {
+          buffer.write(lineTextSegments.join());
+        }
+
+        return buffer.toString().trim();
       } catch (_) {
         // Fallback
       }

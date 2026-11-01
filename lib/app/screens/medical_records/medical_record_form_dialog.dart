@@ -1,3 +1,4 @@
+import 'package:chifa/services/pdf_generation_service.dart';
 import 'package:chifa/app/cubits/medical_record_cubit.dart';
 import 'package:chifa/app/cubits/soins_service_cubit.dart';
 import 'package:chifa/app/cubits/workspace_cubit.dart';
@@ -8,6 +9,7 @@ import 'package:chifa/services/db/models/patient.dart';
 import 'package:chifa/services/db/models/soins_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:chifa/app/utils/responsive.dart';
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 
@@ -193,15 +195,27 @@ class _MedicalRecordFormDialogState extends State<MedicalRecordFormDialog> {
   }
 
   void _printSoins() async {
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => generateSoinsMedicauxPdf(
+    try {
+      final pdfBytes = await generateSoinsMedicauxPdf(
         patient: _getDummyPatient(),
         weight: _weightController.text.trim().isNotEmpty
             ? _weightController.text.trim()
             : null,
         soinsText: _soinsController.text,
-      ),
-    );
+      );
+      if (!mounted) return;
+      await PdfGenerationService().printPdfBytes(
+        pdfBytes,
+        name: 'soins_medicaux.pdf',
+        context: context,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Print error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   void _saveSoins([int? recordId]) async {
@@ -328,7 +342,7 @@ class _MedicalRecordFormDialogState extends State<MedicalRecordFormDialog> {
         backgroundColor: Colors.white,
         body: Padding(
           padding: EdgeInsets.all(
-            MediaQuery.of(context).size.width < 600 ? 12.0 : 24.0,
+            context.isMobile ? 12.0 : 24.0,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -360,7 +374,7 @@ class _MedicalRecordFormDialogState extends State<MedicalRecordFormDialog> {
                           runSpacing: 16,
                           children: [
                             SizedBox(
-                              width: MediaQuery.of(context).size.width < 600
+                              width: context.isMobile
                                   ? double.infinity
                                   : (MediaQuery.of(context).size.width - 100) /
                                         2,
@@ -384,7 +398,7 @@ class _MedicalRecordFormDialogState extends State<MedicalRecordFormDialog> {
                               ),
                             ),
                             SizedBox(
-                              width: MediaQuery.of(context).size.width < 600
+                              width: context.isMobile
                                   ? double.infinity
                                   : (MediaQuery.of(context).size.width - 100) /
                                         2,
@@ -437,7 +451,7 @@ class _MedicalRecordFormDialogState extends State<MedicalRecordFormDialog> {
                           runSpacing: 16,
                           children: [
                             SizedBox(
-                              width: MediaQuery.of(context).size.width < 600
+                              width: context.isMobile
                                   ? double.infinity
                                   : (MediaQuery.of(context).size.width - 100) /
                                         3,
@@ -455,7 +469,7 @@ class _MedicalRecordFormDialogState extends State<MedicalRecordFormDialog> {
                               ),
                             ),
                             SizedBox(
-                              width: MediaQuery.of(context).size.width < 600
+                              width: context.isMobile
                                   ? (MediaQuery.of(context).size.width - 40) / 2
                                   : (MediaQuery.of(context).size.width - 100) /
                                         3,
@@ -473,7 +487,7 @@ class _MedicalRecordFormDialogState extends State<MedicalRecordFormDialog> {
                               ),
                             ),
                             SizedBox(
-                              width: MediaQuery.of(context).size.width < 600
+                              width: context.isMobile
                                   ? (MediaQuery.of(context).size.width - 40) / 2
                                   : (MediaQuery.of(context).size.width - 100) /
                                         3,
@@ -494,7 +508,7 @@ class _MedicalRecordFormDialogState extends State<MedicalRecordFormDialog> {
                           runSpacing: 16,
                           children: [
                             SizedBox(
-                              width: MediaQuery.of(context).size.width < 600
+                              width: context.isMobile
                                   ? (MediaQuery.of(context).size.width - 40) / 2
                                   : (MediaQuery.of(context).size.width - 80) /
                                         2,
@@ -509,7 +523,7 @@ class _MedicalRecordFormDialogState extends State<MedicalRecordFormDialog> {
                               ),
                             ),
                             SizedBox(
-                              width: MediaQuery.of(context).size.width < 600
+                              width: context.isMobile
                                   ? (MediaQuery.of(context).size.width - 40) / 2
                                   : (MediaQuery.of(context).size.width - 80) /
                                         2,
@@ -613,39 +627,42 @@ class _MedicalRecordFormDialogState extends State<MedicalRecordFormDialog> {
                                       borderRadius: BorderRadius.circular(4),
                                       color: Colors.white,
                                     ),
-                                    child: ListView.builder(
-                                      shrinkWrap: true,
-                                      itemCount: _filteredSoins.length,
-                                      itemBuilder: (context, index) {
-                                        final soin = _filteredSoins[index];
-                                        return ListTile(
-                                          dense: true,
-                                          title: Text(
-                                            soin.nom,
-                                            style: const TextStyle(
-                                              fontSize: 13,
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      child: ListView.builder(
+                                        shrinkWrap: true,
+                                        itemCount: _filteredSoins.length,
+                                        itemBuilder: (context, index) {
+                                          final soin = _filteredSoins[index];
+                                          return ListTile(
+                                            dense: true,
+                                            title: Text(
+                                              soin.nom,
+                                              style: const TextStyle(
+                                                fontSize: 13,
+                                              ),
                                             ),
-                                          ),
-                                          trailing: const Icon(
-                                            Icons.add_circle_outline,
-                                            color: Colors.blue,
-                                            size: 20,
-                                          ),
-                                          onTap: () {
-                                            setState(() {
-                                              final currentText =
-                                                  _soinsController.text;
-                                              final newText = '- ${soin.nom}';
-                                              _soinsController.text =
-                                                  currentText.isEmpty
-                                                  ? newText
-                                                  : '$currentText\n$newText';
-                                              _soinsSearchController.clear();
-                                              _showSoinsSuggestions = false;
-                                            });
-                                          },
-                                        );
-                                      },
+                                            trailing: const Icon(
+                                              Icons.add_circle_outline,
+                                              color: Colors.blue,
+                                              size: 20,
+                                            ),
+                                            onTap: () {
+                                              setState(() {
+                                                final currentText =
+                                                    _soinsController.text;
+                                                final newText = '- ${soin.nom}';
+                                                _soinsController.text =
+                                                    currentText.isEmpty
+                                                    ? newText
+                                                    : '$currentText\n$newText';
+                                                _soinsSearchController.clear();
+                                                _showSoinsSuggestions = false;
+                                              });
+                                            },
+                                          );
+                                        },
+                                      ),
                                     ),
                                   ),
                               ],

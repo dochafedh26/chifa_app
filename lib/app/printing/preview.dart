@@ -1,3 +1,4 @@
+import 'package:chifa/services/pdf_generation_service.dart';
 import "dart:typed_data";
 
 import "package:flutter/material.dart";
@@ -34,9 +35,10 @@ Future<void> showPdfPreview({
                     icon: const Icon(Icons.print),
                     tooltip: 'Print',
                     onPressed: () {
-                      Printing.layoutPdf(
-                        onLayout: (format) => pdfBytes,
-                        format: pageFormat,
+                      PdfGenerationService().printPdfBytes(
+                        pdfBytes,
+                        name: 'document.pdf',
+                        context: dialogContext,
                       );
                     },
                   ),

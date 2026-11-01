@@ -1,8 +1,18 @@
 import 'dart:convert';
-
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 class ApiConfig {
-  static const String baseUrl = 'https://medevsync.com/chiffa/api';
+  // Octenium cloud API base URL
+  static String get baseUrl {
+    if (kIsWeb) {
+      // In browser, dynamically use the current host origin (e.g. https://medevsync.com)
+      final currentOrigin = Uri.base.origin;
+      return '$currentOrigin/chifa/api';
+    }
+    return 'https://srv50.octenium.net/chifa/api';
+  }
+
+  static const String syncKey = 'chifa_sync_secure_key_2026';
   static const Duration timeout = Duration(seconds: 30);
 }
 
@@ -13,66 +23,54 @@ class HttpApiService {
   
   factory HttpApiService() => _instance;
   
-  Future<Map<String, dynamic>> get(String endpoint, {Map<String, String>? params}) async {
-    try {
-      final uri = Uri.parse('${ApiConfig.baseUrl}/$endpoint').replace(queryParameters: params);
-      final response = await http.get(uri);
-      
-      return _handleResponse(response);
-    } catch (e) {
-      return {'error': e.toString()};
+  Map<String, String> get _headers => {
+    'Content-Type': 'application/json',
+    'X-Sync-Key': ApiConfig.syncKey,
+  };
+
+  Future<Map<String, dynamic>> postQuery({
+    required String sql,
+    List<dynamic>? params,
+    bool isInsert = false,
+  }) async {
+    final candidateUris = <Uri>[
+      Uri.parse('${ApiConfig.baseUrl}/sync/query'),
+    ];
+
+    if (kIsWeb) {
+      final origin = Uri.base.origin;
+      final alt1 = Uri.parse('$origin/chifa/api/sync/query');
+      final alt2 = Uri.parse('$origin/api/sync/query');
+      if (!candidateUris.contains(alt1)) candidateUris.add(alt1);
+      if (!candidateUris.contains(alt2)) candidateUris.add(alt2);
     }
-  }
-  
-  Future<Map<String, dynamic>> post(String endpoint, Map<String, dynamic> data) async {
-    try {
-      final uri = Uri.parse('${ApiConfig.baseUrl}/$endpoint');
-      final response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(data),
-      );
-      
-      return _handleResponse(response);
-    } catch (e) {
-      return {'error': e.toString()};
+
+    String lastError = '';
+    for (final uri in candidateUris) {
+      try {
+        final response = await http.post(
+          uri,
+          headers: _headers,
+          body: jsonEncode({
+            'sql': sql,
+            'params': params ?? [],
+            'is_insert': isInsert,
+          }),
+        ).timeout(ApiConfig.timeout);
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          return data;
+        } else {
+          lastError = 'HTTP ${response.statusCode}: ${response.body}';
+        }
+      } catch (e) {
+        lastError = e.toString();
+      }
     }
-  }
-  
-  Future<Map<String, dynamic>> put(String endpoint, int id, Map<String, dynamic> data) async {
-    try {
-      final uri = Uri.parse('${ApiConfig.baseUrl}/$endpoint/$id');
-      final response = await http.put(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(data),
-      );
-      
-      return _handleResponse(response);
-    } catch (e) {
-      return {'error': e.toString()};
-    }
-  }
-  
-  Future<Map<String, dynamic>> delete(String endpoint, int id) async {
-    try {
-      final uri = Uri.parse('${ApiConfig.baseUrl}/$endpoint/$id');
-      final response = await http.delete(uri);
-      
-      return _handleResponse(response);
-    } catch (e) {
-      return {'error': e.toString()};
-    }
-  }
-  
-  Map<String, dynamic> _handleResponse(http.Response response) {
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      return data;
-    }
-    
-    return {'error': data['error'] ?? 'Request failed', 'statusCode': response.statusCode};
+
+    debugPrint('[HttpApiService] SQL query relay error: $lastError');
+    return {'error': lastError, 'success': false};
   }
 }
 
@@ -91,119 +89,59 @@ class ApiDatabaseService {
   
   Future<void> connect() async {
     _isConnected = true;
-    // API database service ready (Web Mode)
+    debugPrint('ApiDatabaseService ready (Connected via HTTP SQL Relay to Octenium)');
   }
   
   Future<List<Map<String, dynamic>>> query(String sql, [List<dynamic>? params]) async {
-    final table = _extractTableName(sql);
-    if (table == null) return [];
-    
-    final isSelect = sql.trim().toLowerCase().startsWith('select');
-    if (!isSelect) return [];
-    
-    final result = await _api.get(table);
-    return (result['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-  }
-  
-  Future<int> insert(String sql, List<dynamic>? params) async {
-    final table = _extractTableName(sql);
-    if (table == null) return 0;
-    
-    final data = _buildInsertData(table, params);
-    final result = await _api.post(table, data);
-    
-    return (result['id'] as int?) ?? 0;
-  }
-  
-  Future<bool> execute(String sql, [List<dynamic>? params]) async {
-    final table = _extractTableName(sql);
-    if (table == null) return false;
-    
-    final isUpdate = sql.trim().toLowerCase().startsWith('update');
-    final isDelete = sql.trim().toLowerCase().startsWith('delete');
-    
-    if (isUpdate) {
-      final id = params?.first;
-      if (id != null) {
-        final data = _buildUpdateData(table, params);
-        final result = await _api.put(table, id as int, data);
-        return result['success'] == true;
-      }
+    final res = await _api.postQuery(sql: sql, params: params, isInsert: false);
+    if (res['data'] is List) {
+      return (res['data'] as List).map((row) => Map<String, dynamic>.from(row as Map)).toList();
     }
-    
-    if (isDelete) {
-      final id = params?.first;
-      if (id != null) {
-        final result = await _api.delete(table, id as int);
-        return result['success'] == true;
-      }
-    }
-    
-    return false;
+    return [];
   }
   
-  String? _extractTableName(String sql) {
-    final regExp = RegExp(r'INSERT\s+INTO\s+|UPDATE\s+|DELETE\s+FROM\s+', caseSensitive: false);
-    final match = regExp.firstMatch(sql);
-    if (match != null) {
-      final tableMatch = RegExp(r'[`"\[]?(\w+)[`"\]]?', caseSensitive: false).firstMatch(sql.substring(match.start));
-      return tableMatch?.group(1);
-    }
-    return null;
+  Future<int> insert(String sql, [List<dynamic>? params]) async {
+    final res = await _api.postQuery(sql: sql, params: params, isInsert: true);
+    final id = res['insertId'];
+    if (id is int) return id;
+    if (id is String) return int.tryParse(id) ?? 0;
+    return 0;
   }
   
-  Map<String, String> _buildQueryParams(List<dynamic> params) {
-    return {};
+  Future<int> execute(String sql, [List<dynamic>? params]) async {
+    final res = await _api.postQuery(sql: sql, params: params, isInsert: false);
+    final affected = res['affectedRows'];
+    if (affected is int) return affected;
+    if (affected is String) return int.tryParse(affected) ?? 0;
+    return res['success'] == true ? 1 : 0;
   }
-  
-  Map<String, dynamic> _buildInsertData(String table, List<dynamic>? params) {
-    final data = <String, dynamic>{};
-    
-    switch (table) {
-      case 'patients':
-        if (params != null && params.length >= 10) {
-          data['first_name'] = params[1];
-          data['last_name'] = params[2];
-          data['gender'] = params[3];
-          data['date_of_birth'] = params[4];
-          data['phone'] = params[5];
-          data['email'] = params[6];
-          data['national_id'] = params[7];
-          data['address'] = params[8];
-          data['atcd'] = params[9];
-        }
-        break;
-      case 'appointments':
-        if (params != null && params.length >= 7) {
-          data['patient_id'] = params[1];
-          data['doctor_id'] = params[2];
-          data['appointment_date'] = params[3];
-          data['status'] = params[4];
-          data['notes'] = params[5];
-        }
-        break;
-      case 'medicalrecords':
-        if (params != null && params.length >= 14) {
-          data['patient_id'] = params[1];
-          data['doctor_id'] = params[2];
-          data['record_date'] = params[3];
-          data['motif'] = params[4];
-          data['details'] = params[5];
-          data['diagnostic'] = params[6];
-          data['prescriptions'] = params[7];
-          data['weight'] = params[8];
-          data['temperature'] = params[9];
-          data['tension_arterielle'] = params[10];
-          data['frequence_cardiaque'] = params[11];
-          data['spao2'] = params[12];
-        }
-        break;
-    }
-    
-    return data;
+
+  Future<T> transaction<T>(Future<T> Function(dynamic conn) callback) async {
+    return await callback(this);
   }
-  
-  Map<String, dynamic> _buildUpdateData(String table, List<dynamic>? params) {
-    return {};
+
+  Future<bool> tableExists(String table) async {
+    final results = await query(
+      "SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?",
+      [table],
+    );
+    return results.isNotEmpty && (int.tryParse(results.first['count'].toString()) ?? 0) > 0;
+  }
+
+  Future<bool> columnExists(String table, String column) async {
+    final results = await query(
+      "SELECT COUNT(*) as count FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?",
+      [table, column],
+    );
+    return results.isNotEmpty && (int.tryParse(results.first['count'].toString()) ?? 0) > 0;
+  }
+
+  Future<List<String>> getTables() async {
+    final results = await query("SHOW TABLES");
+    return results.map((row) => row.values.first.toString()).toList();
+  }
+
+  Future<void> runMigrations() async {
+    debugPrint('Web Mode: Migrations handled directly on Cloud database.');
   }
 }

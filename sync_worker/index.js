@@ -1,3 +1,5 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 require('dotenv').config();
 const mysql = require('mysql2/promise');
 
@@ -29,6 +31,8 @@ const tables = [
     'arret_de_travail',
     'certificat_bonne_sante',
     'certificat_dispension_sport',
+    'certificat_aptitude_sport',
+    'interpretation_ecg',
     'certificat_maladie_chronique',
     'ordonnance_type',
     'patients_fideles',
@@ -63,19 +67,19 @@ async function getPool(dbConfig) {
 }
 
 const localConfig = {
-    host: process.env.LOCAL_DB_HOST,
-    port: process.env.LOCAL_DB_PORT,
-    user: process.env.LOCAL_DB_USER,
-    password: process.env.LOCAL_DB_PASS,
-    database: process.env.LOCAL_DB_NAME,
+    host: process.env.LOCAL_DB_HOST || '127.0.0.1',
+    port: parseInt(process.env.LOCAL_DB_PORT) || 3306,
+    user: process.env.LOCAL_DB_USER || 'chiffa',
+    password: process.env.LOCAL_DB_PASS || 'MyNewPass@2025',
+    database: process.env.LOCAL_DB_NAME || 'clinic',
 };
 
 const remoteConfig = {
-    host: process.env.REMOTE_DB_HOST,
-    port: process.env.REMOTE_DB_PORT,
-    user: process.env.REMOTE_DB_USER,
-    password: process.env.REMOTE_DB_PASS,
-    database: process.env.REMOTE_DB_NAME,
+    host: process.env.REMOTE_DB_HOST || 'srv50.octenium.net',
+    port: parseInt(process.env.REMOTE_DB_PORT) || 3306,
+    user: process.env.REMOTE_DB_USER || 'rnhgnubg_chifa',
+    password: process.env.REMOTE_DB_PASS || 'MyNetPass@2026',
+    database: process.env.REMOTE_DB_NAME || 'rnhgnubg_chifa',
 };
 
 let localPool, remotePool;
@@ -283,34 +287,43 @@ async function syncTable(tableName) {
             );
         }
 
-        const [remoteChanges] = await remotePool.execute(
-            `SELECT * FROM \`${tableName}\` WHERE updated_at > ? AND (source_id IS NULL OR source_id != 'local_server')`,
+        const [remoteChangesRaw] = await remotePool.execute(
+            `SELECT * FROM \`${tableName}\` WHERE updated_at > ?`,
             [lastPullAt]
         );
 
-        if (remoteChanges.length > 0) {
+        if (remoteChangesRaw.length > 0) {
             const [localUuidRows] = await localPool.execute(
                 `SELECT uuid FROM \`${tableName}\``
             );
             const localUuidSet = new Set(localUuidRows.map(r => r.uuid));
 
-            const rowsToInsert = [];
-            const rowsWithConflict = [];
-            for (const remoteRow of remoteChanges) {
-                if (localUuidSet.has(remoteRow.uuid)) {
-                    conflictCount++;
-                    rowsWithConflict.push(remoteRow.uuid);
+            // Only skip if source_id is local_server AND row is already present locally
+            const remoteChanges = remoteChangesRaw.filter(row => {
+                if (row.source_id === 'local_server' && row.uuid && localUuidSet.has(row.uuid)) {
+                    return false;
                 }
-                rowsToInsert.push(remoteRow);
-            }
+                return true;
+            });
 
-            if (rowsWithConflict.length > 0) {
-                logInfo(`Pulling ${remoteChanges.length} remote changes for ${tableName} (${conflictCount} conflicts)`);
-            } else {
-                logInfo(`Pulling ${remoteChanges.length} remote changes for ${tableName}`);
-            }
+            if (remoteChanges.length > 0) {
+                const rowsToInsert = [];
+                const rowsWithConflict = [];
+                for (const remoteRow of remoteChanges) {
+                    if (localUuidSet.has(remoteRow.uuid)) {
+                        conflictCount++;
+                        rowsWithConflict.push(remoteRow.uuid);
+                    }
+                    rowsToInsert.push(remoteRow);
+                }
 
-            const batchedRows = rowsToInsert.map(row => ({ ...row, source_id: 'cloud_server', needs_sync: 0 }));
+                if (rowsWithConflict.length > 0) {
+                    logInfo(`Pulling ${remoteChanges.length} remote changes for ${tableName} (${conflictCount} conflicts)`);
+                } else {
+                    logInfo(`Pulling ${remoteChanges.length} remote changes for ${tableName}`);
+                }
+
+                const batchedRows = rowsToInsert.map(row => ({ ...row, source_id: 'cloud_server', needs_sync: 0 }));
 
             for (let i = 0; i < batchedRows.length; i += BATCH_SIZE) {
                 const batch = batchedRows.slice(i, i + BATCH_SIZE);
@@ -343,6 +356,7 @@ async function syncTable(tableName) {
                 'INSERT INTO sync_status (table_name, last_pull_at) VALUES (?, ?) ON DUPLICATE KEY UPDATE last_pull_at = VALUES(last_pull_at)',
                 [tableName, now]
             );
+        }
         }
 
         const duration = Date.now() - syncStartTime;

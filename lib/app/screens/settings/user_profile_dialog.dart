@@ -32,135 +32,137 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       contentPadding: EdgeInsets.zero,
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Header with Avatar
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Theme.of(
-                context,
-              ).colorScheme.primaryContainer.withValues(alpha: 0.3),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(16),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header with Avatar
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Theme.of(
+                  context,
+                ).colorScheme.primaryContainer.withValues(alpha: 0.3),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(16),
+                ),
+              ),
+              child: Column(
+                children: [
+                  CircleAvatar(
+                    radius: 40,
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    child: Text(
+                      widget.user.firstName[0].toUpperCase() +
+                          widget.user.lastName[0].toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    widget.user.fullName,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    widget.user.role.name,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
             ),
-            child: Column(
-              children: [
-                CircleAvatar(
-                  radius: 40,
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  child: Text(
-                    widget.user.firstName[0].toUpperCase() +
-                        widget.user.lastName[0].toUpperCase(),
-                    style: const TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+
+            // User details
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  _buildInfoRow(
+                    context,
+                    Icons.email_outlined,
+                    'Email',
+                    widget.user.email,
+                  ),
+                  if (widget.user.phone != null && widget.user.phone!.isNotEmpty)
+                    _buildInfoRow(
+                      context,
+                      Icons.phone_outlined,
+                      'Phone',
+                      widget.user.phone!,
                     ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  widget.user.fullName,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  widget.user.role.name,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // User details
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                _buildInfoRow(
-                  context,
-                  Icons.email_outlined,
-                  'Email',
-                  widget.user.email,
-                ),
-                if (widget.user.phone != null && widget.user.phone!.isNotEmpty)
+                  if (widget.user.specialization != null &&
+                      widget.user.specialization!.isNotEmpty)
+                    _buildInfoRow(
+                      context,
+                      Icons.work_outline,
+                      'Specialization',
+                      widget.user.specialization!,
+                    ),
                   _buildInfoRow(
                     context,
-                    Icons.phone_outlined,
-                    'Phone',
-                    widget.user.phone!,
+                    Icons.security_outlined,
+                    'Access Level',
+                    widget.user.accessLevel.name,
                   ),
-                if (widget.user.specialization != null &&
-                    widget.user.specialization!.isNotEmpty)
-                  _buildInfoRow(
-                    context,
-                    Icons.work_outline,
-                    'Specialization',
-                    widget.user.specialization!,
-                  ),
-                _buildInfoRow(
-                  context,
-                  Icons.security_outlined,
-                  'Access Level',
-                  widget.user.accessLevel.name,
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
 
-          // Working Hours Section (Doctors Only)
-          if (widget.user.role == EmployeeRole.doctor) ...[
+            // Working Hours Section (Doctors Only)
+            if (widget.user.role == EmployeeRole.doctor) ...[
+              const Divider(height: 1),
+              _buildWorkingHoursSection(context),
+            ],
+
+            // Actions
             const Divider(height: 1),
-            _buildWorkingHoursSection(context),
-          ],
-
-          // Actions
-          const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                TextButton.icon(
-                  onPressed: () {
-                    context.read<AuthCubit>().logout();
-                    context.go('/login');
-                  },
-                  icon: const Icon(Icons.logout, color: Colors.red),
-                  label: const Text(
-                    'Logout',
-                    style: TextStyle(color: Colors.red),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton.icon(
+                    onPressed: () {
+                      context.read<AuthCubit>().logout();
+                      context.go('/login');
+                    },
+                    icon: const Icon(Icons.logout, color: Colors.red),
+                    label: const Text(
+                      'Logout',
+                      style: TextStyle(color: Colors.red),
+                    ),
                   ),
-                ),
-                Row(
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Close'),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context); // Close profile dialog
-                        _showEditProfileDialog(context);
-                      },
-                      icon: const Icon(Icons.edit_outlined),
-                      label: const Text('Edit Profile'),
-                    ),
-                  ],
-                ),
-              ],
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Close'),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context); // Close profile dialog
+                          _showEditProfileDialog(context);
+                        },
+                        icon: const Icon(Icons.edit_outlined),
+                        label: const Text('Edit Profile'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-        ],
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }

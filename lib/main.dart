@@ -18,11 +18,15 @@ import 'package:chifa/app/screens/auth/login_screen.dart';
 import 'package:chifa/app/screens/main_shell.dart';
 import 'package:chifa/app/theme/app_theme.dart';
 import 'package:chifa/services/db/database_manager.dart';
+import 'package:chifa/services/db/local_sqlite_service.dart';
 import 'package:chifa/services/db/repositories/appointment_repository.dart';
 import 'package:chifa/services/db/repositories/arret_de_travail_repository.dart';
 import 'package:chifa/services/db/repositories/auth_repository.dart';
 import 'package:chifa/services/db/repositories/bilan_repository.dart';
 import 'package:chifa/services/db/repositories/certificat_bonne_sante_repository.dart';
+import 'package:chifa/services/db/repositories/certificat_coups_et_blessures_repository.dart';
+import 'package:chifa/services/db/repositories/certificat_aptitude_sport_repository.dart';
+import 'package:chifa/services/db/repositories/interpretation_ecg_repository.dart';
 import 'package:chifa/services/db/repositories/certificat_dispense_sport_repository.dart';
 import 'package:chifa/services/db/repositories/certificat_maladie_chronique_repository.dart';
 import 'package:chifa/services/db/repositories/certificat_prenuptial_repository.dart';
@@ -36,6 +40,7 @@ import 'package:chifa/services/db/repositories/payment_repository.dart';
 import 'package:chifa/services/db/repositories/prescription_repository.dart';
 import 'package:chifa/services/db/repositories/service_repository.dart';
 import 'package:chifa/services/db/repositories/soins_service_repository.dart';
+import 'package:chifa/services/db/sync_manager.dart';
 import 'package:chifa/services/db/sync_worker_manager.dart';
 import 'package:chifa/services/xampp_service.dart';
 import 'package:chifa/tunnel/services/settings_service.dart';
@@ -52,10 +57,12 @@ import 'package:flutter_quill/flutter_quill.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  try {
-    await dotenv.load(fileName: ".env");
-  } catch (e) {
-    debugPrint('Warning: Could not load .env file: $e');
+  if (!kIsWeb) {
+    try {
+      await dotenv.load(fileName: ".env");
+    } catch (e) {
+      debugPrint('Warning: Could not load .env file: $e');
+    }
   }
 
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
@@ -67,9 +74,25 @@ void main() async {
     }
   }
 
-  // Initialize database with default (xampp)
+  // Initialize local SQLite service for offline resilience (Desktop / Mobile only)
+  if (!kIsWeb) {
+    try {
+      await LocalSqliteService.instance.init();
+      debugPrint('Local SQLite service initialized successfully');
+    } catch (e) {
+      debugPrint('Local SQLite initialization warning: $e');
+    }
+  }
+
+  // Initialize database (Web uses HTTP API directly to Octenium Cloud)
   try {
-    await DatabaseManager.initialize(databaseType: 'xampp');
+    if (kIsWeb) {
+      await DatabaseManager.initialize(databaseType: 'web');
+    } else {
+      await DatabaseManager.initialize(databaseType: 'xampp');
+      // Automatically keep Windows local database synchronized with Octenium cloud
+      SyncManager().startPeriodicSync();
+    }
   } catch (e) {
     debugPrint('Database initialization failed: $e');
     // Don't rethrow - let the app start and show the dialog
@@ -129,6 +152,15 @@ class MyApp extends StatelessWidget {
         RepositoryProvider(
           create: (context) => CertificatPrenuptialRepository(),
         ),
+        RepositoryProvider(
+          create: (context) => CertificatCoupsEtBlessuresRepository(),
+        ),
+        RepositoryProvider(
+          create: (context) => CertificatAptitudeSportRepository(),
+        ),
+        RepositoryProvider(
+          create: (context) => InterpretationEcgRepository(),
+        ),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -186,6 +218,9 @@ class MyApp extends StatelessWidget {
               context.read<CertificatBonneSanteRepository>(),
               context.read<CertificatDispenseSportRepository>(),
               context.read<CertificatPrenuptialRepository>(),
+              context.read<CertificatCoupsEtBlessuresRepository>(),
+              context.read<CertificatAptitudeSportRepository>(),
+              context.read<InterpretationEcgRepository>(),
             ),
           ),
           BlocProvider(

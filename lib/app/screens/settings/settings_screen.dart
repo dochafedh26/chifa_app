@@ -1,11 +1,13 @@
 import 'package:chifa/app/cubits/settings_cubit.dart';
 import 'package:chifa/app/screens/settings/clinic_settings_dialog.dart';
+import 'package:chifa/app/screens/settings/services_settings_tab.dart';
 import 'package:chifa/app/screens/settings/user_form_dialog.dart';
 import 'package:chifa/services/db/database_manager.dart';
 import 'package:chifa/services/db/models/employee.dart';
 import 'package:chifa/services/db/sync_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:chifa/app/utils/responsive.dart';
 
 /// Settings Screen - User management and clinic settings
 class SettingsScreen extends StatefulWidget {
@@ -22,7 +24,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     context.read<SettingsCubit>().loadUsers();
     context.read<SettingsCubit>().loadSettings();
   }
@@ -73,7 +75,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 800;
+    final isMobile = context.isMobile;
 
     return Column(
       children: [
@@ -89,6 +91,10 @@ class _SettingsScreenState extends State<SettingsScreen>
               icon: const Icon(Icons.business),
               text: isMobile ? 'Clinic' : 'Clinic Settings',
             ),
+            Tab(
+              icon: const Icon(Icons.medical_services_outlined),
+              text: isMobile ? 'Tarifs' : 'Services & Tarifs',
+            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -103,6 +109,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 onShowClinicSettings: _showClinicSettings,
                 onFullSync: () => _showFullSyncDialog(context),
               ),
+              const ServicesSettingsTab(),
             ],
           ),
         ),
@@ -193,26 +200,91 @@ class _UserCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isPending = !user.isActive;
+    final isMobile = context.isMobile;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: isPending
+            ? BorderSide(color: Colors.orange.shade300, width: 1.5)
+            : BorderSide.none,
+      ),
       child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 10 : 16,
+          vertical: isMobile ? 8 : 16,
+        ),
         leading: CircleAvatar(
           backgroundColor: _getRoleColor(user.role).withValues(alpha: 0.1),
           child: Icon(_getRoleIcon(user.role), color: _getRoleColor(user.role)),
         ),
-        title: Text(
-          user.fullName,
-          style: const TextStyle(fontWeight: FontWeight.bold),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                user.fullName,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (isPending)
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isMobile ? 6 : 8,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.shade300),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.hourglass_top_rounded, size: 12, color: Colors.orange.shade800),
+                    if (!isMobile) ...[
+                      const SizedBox(width: 4),
+                      Text(
+                        'En attente',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.orange.shade800,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+          ],
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 8),
-            Text('Email: ${user.email}'),
+            Text('Email: ${user.email}', overflow: TextOverflow.ellipsis),
             Text('Role: ${_formatRole(user.role)}'),
             if (user.specialization != null && user.specialization!.isNotEmpty)
-              Text('Specialization: ${user.specialization}'),
+              Text('Specialization: ${user.specialization}', overflow: TextOverflow.ellipsis),
+            if (isPending) ...[
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                onPressed: () {
+                  if (user.employeeId != null) {
+                    context.read<SettingsCubit>().approveUser(user.employeeId!);
+                  }
+                },
+                icon: const Icon(Icons.check_rounded, size: 16),
+                label: Text(isMobile ? 'Approuver' : 'Approuver le compte'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.green.shade600,
+                  visualDensity: VisualDensity.compact,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ],
           ],
         ),
         trailing: PopupMenuButton<int>(
@@ -221,11 +293,17 @@ class _UserCard extends StatelessWidget {
               _showEditUserDialog(context, user);
             } else if (value == 2) {
               _showDeleteConfirmation(context, user);
+            } else if (value == 3 && user.employeeId != null) {
+              context.read<SettingsCubit>().toggleUserActive(user.employeeId!, !user.isActive);
             }
           },
-          itemBuilder: (context) => const [
-            PopupMenuItem(value: 1, child: Text('Edit')),
-            PopupMenuItem(value: 2, child: Text('Delete')),
+          itemBuilder: (context) => [
+            const PopupMenuItem(value: 1, child: Text('Edit')),
+            PopupMenuItem(
+              value: 3,
+              child: Text(user.isActive ? 'Désactiver le compte' : 'Activer / Approuver'),
+            ),
+            const PopupMenuItem(value: 2, child: Text('Delete')),
           ],
         ),
         isThreeLine: true,
@@ -466,52 +544,63 @@ class _SettingsTab extends StatelessWidget {
                                   ],
                                 );
                               }
-                              return Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  ElevatedButton.icon(
-                                    onPressed: () {
-                                      if (DatabaseManager.secondary == null) {
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          const SnackBar(
-                                            content: Text(
-                                              'You are directly connected to the cloud. Synchronization is automatic.',
+                              return Builder(
+                                builder: (context) {
+                                  final isMobile = context.isMobile;
+                                  final syncButtons = [
+                                    ElevatedButton.icon(
+                                      onPressed: () {
+                                        if (DatabaseManager.secondary == null) {
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'You are directly connected to the cloud. Synchronization is automatic.',
+                                              ),
                                             ),
-                                          ),
-                                        );
-                                      } else {
-                                        SyncManager().trySync();
-                                      }
-                                    },
-                                    icon: const Icon(Icons.sync),
-                                    label: const Text('Sync'),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  ElevatedButton.icon(
-                                    onPressed: () {
-                                      if (DatabaseManager.secondary == null) {
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          const SnackBar(
-                                            content: Text(
-                                              'You are directly connected to the cloud. Synchronization is automatic.',
-                                            ),
-                                          ),
-                                        );
-                                      } else {
-                                        onFullSync();
-                                      }
-                                    },
-                                    icon: const Icon(Icons.sync),
-                                    label: const Text('Full Sync'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.orange,
+                                          );
+                                        } else {
+                                          SyncManager().trySync();
+                                        }
+                                      },
+                                      icon: const Icon(Icons.sync),
+                                      label: const Text('Sync'),
                                     ),
-                                  ),
-                                ],
+                                    SizedBox(width: isMobile ? 0 : 12, height: isMobile ? 8 : 0),
+                                    ElevatedButton.icon(
+                                      onPressed: () {
+                                        if (DatabaseManager.secondary == null) {
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'You are directly connected to the cloud. Synchronization is automatic.',
+                                              ),
+                                            ),
+                                          );
+                                        } else {
+                                          onFullSync();
+                                        }
+                                      },
+                                      icon: const Icon(Icons.sync),
+                                      label: const Text('Full Sync'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.orange,
+                                      ),
+                                    ),
+                                  ];
+                                  return isMobile
+                                      ? Column(
+                                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                                          children: syncButtons,
+                                        )
+                                      : Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: syncButtons,
+                                        );
+                                },
                               );
                             },
                           ),

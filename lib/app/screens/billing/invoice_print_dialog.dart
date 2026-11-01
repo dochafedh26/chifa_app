@@ -5,6 +5,7 @@ import 'package:chifa/services/db/models/invoice.dart';
 import 'package:chifa/services/db/models/patient.dart';
 import 'package:chifa/services/db/models/payment.dart';
 import 'package:chifa/services/db/models/service.dart';
+import 'package:chifa/services/db/repositories/payment_repository.dart';
 import 'package:chifa/services/pdf_generation_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -58,12 +59,31 @@ class _InvoicePrintDialogState extends State<InvoicePrintDialog> {
         patient = patientState.selectedPatient;
       }
 
-      // For now, create dummy services based on payment amount
+      // Load actual services if available, fallback to payment servicesText
       final services = <Service>[];
-      if (widget.payment.amount > 0) {
+      if (widget.payment.paymentId != null) {
+        final repo = PaymentRepository();
+        final result = await repo.getServicesByPaymentId(widget.payment.paymentId!);
+        result.fold((_) {}, (loadedServices) {
+          for (final s in loadedServices) {
+            services.add(
+              Service(
+                serviceId: s.serviceId,
+                serviceName: s.serviceName,
+                price: s.servicePrice,
+                doctorCommission: s.doctorCommission,
+              ),
+            );
+          }
+        });
+      }
+
+      if (services.isEmpty && widget.payment.amount > 0) {
+        final text = widget.payment.servicesText;
+        final serviceName = (text != null && text.trim().isNotEmpty) ? text : 'Consultation';
         services.add(
           Service(
-            serviceName: widget.payment.servicesText ?? 'Consultation',
+            serviceName: serviceName,
             price: widget.payment.amount,
           ),
         );
@@ -115,11 +135,8 @@ class _InvoicePrintDialogState extends State<InvoicePrintDialog> {
       services: _services,
     );
 
-    final pdfBytes = doc.save();
-    await Printing.layoutPdf(
-      onLayout: (format) async => pdfBytes,
-      format: PdfPageFormat.a5,
-    );
+    final pdfBytes = await doc.save();
+    await PdfGenerationService().printPdfBytes(pdfBytes, name: 'Facture.pdf', context: context, pageSize: 'A5');
   }
 
   Future<void> _previewPdf() async {
@@ -228,7 +245,7 @@ class _InvoicePrintDialogState extends State<InvoicePrintDialog> {
                       ),
                       const SizedBox(height: 4),
                       Text('  Name: ${_patient!.fullName}'),
-                      Text('  Age: ${_patient!.age} ans'),
+                      Text('  Age: ${_patient!.formattedAge}'),
                       if (_patient!.phone != null &&
                           _patient!.phone!.isNotEmpty)
                         Text('  Phone: ${_patient!.phone}'),

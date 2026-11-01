@@ -4,6 +4,7 @@ import 'package:chifa/services/db/models/inventory_item.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:chifa/app/utils/responsive.dart';
 
 /// Inventory Management Screen
 class InventoryScreen extends StatefulWidget {
@@ -52,7 +53,7 @@ class _InventoryScreenState extends State<InventoryScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 800;
+    final isMobile = context.isMobile;
 
     return Column(
       children: [

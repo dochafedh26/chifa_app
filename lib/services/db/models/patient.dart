@@ -1,4 +1,5 @@
 import "package:equatable/equatable.dart";
+import '../../formatters/formatters.dart';
 
 enum PatientStatus { waiting, current, done }
 
@@ -49,15 +50,11 @@ class Patient extends Equatable {
 
   String get fullName => '$firstName $lastName';
 
-  int get age {
-    final now = DateTime.now();
-    int age = now.year - dateOfBirth.year;
-    final monthDiff = now.month - dateOfBirth.month;
-    if (monthDiff < 0 || (monthDiff == 0 && now.day < dateOfBirth.day)) {
-      age--;
-    }
-    return age;
-  }
+  int get age => Formatters.calculateAgeComponents(dateOfBirth).years;
+
+  String get formattedAge => Formatters.formatAge(dateOfBirth);
+  String get ageDisplay => formattedAge;
+  String get ageString => formattedAge;
 
   Map<String, dynamic> toMap() {
     return {
@@ -95,7 +92,10 @@ class Patient extends Equatable {
       ),
       dateOfBirth: map['date_of_birth'] is DateTime
           ? map['date_of_birth'] as DateTime
-          : DateTime.parse(map['date_of_birth'] as String),
+          : (map['date_of_birth'] != null
+              ? DateTime.tryParse(map['date_of_birth'].toString()) ??
+                  DateTime(2000)
+              : DateTime(2000)),
       phone: map['phone'] as String?,
       atcd: map['atcd'] as String? ?? '',
       source: map['source'] as String?,
@@ -104,7 +104,10 @@ class Patient extends Equatable {
       address: map['address'] as String?,
       createdAt: map['created_at'] is DateTime
           ? map['created_at'] as DateTime
-          : DateTime.parse(map['created_at'] as String),
+          : (map['created_at'] != null
+              ? DateTime.tryParse(map['created_at'].toString()) ??
+                  DateTime.now()
+              : DateTime.now()),
       status: PatientStatus.values.firstWhere(
         (e) => e.name.toLowerCase() == map['status']?.toString().toLowerCase(),
         orElse: () => PatientStatus.waiting,

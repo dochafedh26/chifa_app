@@ -80,7 +80,7 @@ class PatientRepository implements BaseRepository<Patient, int> {
       
       final id = await _db.insert(
         '''INSERT INTO patients (uuid, first_name, last_name, gender, date_of_birth, phone, atcd, source, email, national_id, address, status, is_deleted, needs_sync, source_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, 'local_server')''',
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?)''',
         [
           uuid,
           entity.firstName,
@@ -94,6 +94,7 @@ class PatientRepository implements BaseRepository<Patient, int> {
           entity.nationalId,
           entity.address,
           entity.status.name,
+          SyncManager.currentSourceId,
         ],
       );
       return Right(id);
@@ -257,7 +258,7 @@ class PatientRepository implements BaseRepository<Patient, int> {
           maxRecords = null;
           break;
         default:
-          return getAll();
+          return await getAll();
       }
 
       String sql = '''SELECT p.*, IFNULL(pf.medical_records_count, 0) as medical_records_count,

@@ -45,7 +45,7 @@ class AppointmentRepository implements BaseRepository<Appointment, int> {
       final uuid = SyncManager().generateUuid();
       final id = await _db.insert(
         '''INSERT INTO appointments (uuid, patient_id, doctor_id, appointment_date, status, notes, is_deleted, needs_sync, source_id)
-           VALUES (?, ?, ?, ?, ?, ?, 0, 1, 'local_server')''',
+           VALUES (?, ?, ?, ?, ?, ?, 0, 1, ?)''',
         [
           uuid,
           entity.patientId,
@@ -53,6 +53,7 @@ class AppointmentRepository implements BaseRepository<Appointment, int> {
           entity.appointmentDate.toIso8601String(),
           entity.status.name,
           entity.notes,
+          SyncManager.currentSourceId,
         ],
       );
       return Right(id);
@@ -199,9 +200,21 @@ class AppointmentRepository implements BaseRepository<Appointment, int> {
         'UPDATE appointments SET status = ?, needs_sync = 1 WHERE appointment_id = ?',
         [status.name, id],
       );
-      return Right(result > 0);
+      return Right(result >= 0);
     } catch (e) {
-      return Left(DatabaseFailure('Failed to update appointment status: ${e.toString()}'));
+      // If MySQL failed (e.g. ENUM restriction), alter table to VARCHAR(50) and retry
+      try {
+        await _db.execute(
+          'ALTER TABLE `appointments` MODIFY COLUMN `status` VARCHAR(50) DEFAULT "Scheduled"',
+        );
+        final retryResult = await _db.execute(
+          'UPDATE appointments SET status = ?, needs_sync = 1 WHERE appointment_id = ?',
+          [status.name, id],
+        );
+        return Right(retryResult >= 0);
+      } catch (e2) {
+        return Left(DatabaseFailure('Failed to update appointment status: $e ($e2)'));
+      }
     }
   }
 

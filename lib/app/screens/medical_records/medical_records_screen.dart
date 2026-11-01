@@ -1,6 +1,8 @@
+import 'package:chifa/app/cubits/auth_cubit.dart';
 import 'package:chifa/app/cubits/medical_record_cubit.dart';
 import 'package:chifa/app/cubits/patient_cubit.dart';
 import 'package:chifa/app/cubits/workspace_cubit.dart';
+import 'package:chifa/app/utils/role_permissions.dart';
 import 'package:chifa/app/screens/medical_records/medical_record_form_dialog.dart';
 import 'package:chifa/app/screens/medical_records/medical_record_form_dialog_for_patient.dart';
 import 'package:chifa/services/db/models/medical_record.dart';
@@ -10,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:chifa/app/widgets/rich_text_viewer.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:chifa/app/utils/responsive.dart';
 
 /// Medical Records Screen - Displays consultations and medical records
 class MedicalRecordsScreen extends StatefulWidget {
@@ -156,7 +159,9 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 800;
+    final isMobile = context.isMobile;
+    final role = context.watch<AuthCubit>().currentRole;
+    final canCreateRecord = RolePermissions.canCreateMedicalRecord(role);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -183,15 +188,17 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
                             onChanged: _onSearchChanged,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          onPressed: _showCreateDialog,
-                          icon: const Icon(
-                            Icons.add_circle,
-                            color: Colors.blue,
-                            size: 32,
+                        if (canCreateRecord) ...[
+                          const SizedBox(width: 8),
+                          IconButton(
+                            onPressed: _showCreateDialog,
+                            icon: const Icon(
+                              Icons.add_circle,
+                              color: Colors.blue,
+                              size: 32,
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -263,12 +270,14 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
                       icon: const Icon(Icons.refresh),
                       tooltip: 'Refresh',
                     ),
-                    const SizedBox(width: 8),
-                    ElevatedButton.icon(
-                      onPressed: _showCreateDialog,
-                      icon: const Icon(Icons.add),
-                      label: const Text('New Record'),
-                    ),
+                    if (canCreateRecord) ...[
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        onPressed: _showCreateDialog,
+                        icon: const Icon(Icons.add),
+                        label: const Text('New Record'),
+                      ),
+                    ],
                   ],
                 ),
         ),
@@ -337,6 +346,10 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
                 );
               }
 
+              final currentRole = context.watch<AuthCubit>().currentRole;
+              final canEdit = RolePermissions.canEditMedicalRecord(currentRole);
+              final canDelete = RolePermissions.canDeleteMedicalRecords(currentRole);
+
               return ListView.builder(
                 padding: const EdgeInsets.only(bottom: 16),
                 itemCount: state.medicalRecords.length,
@@ -345,8 +358,8 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
                   return _MedicalRecordCard(
                     record: record,
                     onTap: () => _showDetailsDialog(record),
-                    onEdit: () => _showEditDialog(record),
-                    onDelete: () => _confirmDelete(record),
+                    onEdit: canEdit ? () => _showEditDialog(record) : null,
+                    onDelete: canDelete ? () => _confirmDelete(record) : null,
                   );
                 },
               );
@@ -358,7 +371,7 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
   }
 
   Widget _buildFilterBar() {
-    final isMobile = MediaQuery.of(context).size.width < 800;
+    final isMobile = context.isMobile;
 
     return BlocBuilder<MedicalRecordCubit, MedicalRecordState>(
       builder: (context, state) {
@@ -566,19 +579,19 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
 class _MedicalRecordCard extends StatelessWidget {
   final MedicalRecord record;
   final VoidCallback onTap;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   const _MedicalRecordCard({
     required this.record,
     required this.onTap,
-    required this.onEdit,
-    required this.onDelete,
+    this.onEdit,
+    this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 800;
+    final isMobile = context.isMobile;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -652,8 +665,8 @@ class _MedicalRecordCard extends StatelessWidget {
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.more_vert),
                   onSelected: (value) {
-                    if (value == 'edit') onEdit();
-                    if (value == 'delete') onDelete();
+                    if (value == 'edit') onEdit?.call();
+                    if (value == 'delete') onDelete?.call();
                     if (value == 'view') onTap();
                   },
                   itemBuilder: (context) => [
@@ -664,20 +677,22 @@ class _MedicalRecordCard extends StatelessWidget {
                         title: Text('View'),
                       ),
                     ),
-                    const PopupMenuItem(
-                      value: 'edit',
-                      child: ListTile(
-                        leading: Icon(Icons.edit, color: Colors.orange),
-                        title: Text('Edit'),
+                    if (onEdit != null)
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: ListTile(
+                          leading: Icon(Icons.edit, color: Colors.orange),
+                          title: Text('Edit'),
+                        ),
                       ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: ListTile(
-                        leading: Icon(Icons.delete, color: Colors.red),
-                        title: Text('Delete'),
+                    if (onDelete != null)
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: ListTile(
+                          leading: Icon(Icons.delete, color: Colors.red),
+                          title: Text('Delete'),
+                        ),
                       ),
-                    ),
                   ],
                 )
               else
@@ -689,16 +704,18 @@ class _MedicalRecordCard extends StatelessWidget {
                       onPressed: onTap,
                       tooltip: 'View Details',
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.edit, color: Colors.orange),
-                      onPressed: onEdit,
-                      tooltip: 'Edit Record',
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: onDelete,
-                      tooltip: 'Delete Record',
-                    ),
+                    if (onEdit != null)
+                      IconButton(
+                        icon: const Icon(Icons.edit, color: Colors.orange),
+                        onPressed: onEdit,
+                        tooltip: 'Edit Record',
+                      ),
+                    if (onDelete != null)
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: onDelete,
+                        tooltip: 'Delete Record',
+                      ),
                   ],
                 ),
             ],

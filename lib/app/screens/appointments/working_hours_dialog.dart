@@ -94,29 +94,31 @@ class _WorkingHoursDialogState extends State<WorkingHoursDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Add Working Hours'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            title: const Text('Date'),
-            subtitle: Text(DateFormat('yyyy-MM-dd').format(_selectedDate)),
-            trailing: const Icon(Icons.calendar_today),
-            onTap: _selectDate,
-          ),
-          const Divider(),
-          ListTile(
-            title: const Text('Start Time'),
-            subtitle: Text(_formatTimeOfDay(_startTime)),
-            trailing: const Icon(Icons.access_time),
-            onTap: () => _selectTime(true),
-          ),
-          ListTile(
-            title: const Text('End Time'),
-            subtitle: Text(_formatTimeOfDay(_endTime)),
-            trailing: const Icon(Icons.access_time),
-            onTap: () => _selectTime(false),
-          ),
-        ],
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: const Text('Date'),
+              subtitle: Text(DateFormat('yyyy-MM-dd').format(_selectedDate)),
+              trailing: const Icon(Icons.calendar_today),
+              onTap: _selectDate,
+            ),
+            const Divider(),
+            ListTile(
+              title: const Text('Start Time'),
+              subtitle: Text(_formatTimeOfDay(_startTime)),
+              trailing: const Icon(Icons.access_time),
+              onTap: () => _selectTime(true),
+            ),
+            ListTile(
+              title: const Text('End Time'),
+              subtitle: Text(_formatTimeOfDay(_endTime)),
+              trailing: const Icon(Icons.access_time),
+              onTap: () => _selectTime(false),
+            ),
+          ],
+        ),
       ),
       actions: [
         TextButton(

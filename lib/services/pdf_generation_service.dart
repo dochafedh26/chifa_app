@@ -1,12 +1,15 @@
-import 'dart:io';
 import 'dart:typed_data';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:chifa/tunnel/services/tunnel_service.dart';
 
 import 'package:chifa/services/db/models/invoice.dart';
 import 'package:chifa/services/db/models/patient.dart';
 import 'package:chifa/services/db/models/payment.dart';
-import 'package:chifa/services/db/models/print_template.dart';
 import 'package:chifa/services/db/models/service.dart';
-import 'package:chifa/services/db/models/treatment.dart';
+import 'package:chifa/services/formatters/formatters.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -32,6 +35,26 @@ class PdfGenerationService {
     this.doctorSpecialization = 'Médecine Générale',
   });
 
+  static pw.ThemeData? _cachedTheme;
+
+  /// Returns a shared theme with Cairo font for Arabic and Latin/French Unicode support.
+  static Future<pw.ThemeData> getPdfTheme() async {
+    if (_cachedTheme != null) return _cachedTheme!;
+    try {
+      final cairoRegular = await PdfGoogleFonts.cairoRegular();
+      final cairoBold = await PdfGoogleFonts.cairoBold();
+      _cachedTheme = pw.ThemeData.withFont(
+        base: cairoRegular,
+        bold: cairoBold,
+        fontFallback: [cairoRegular, cairoBold],
+      );
+      return _cachedTheme!;
+    } catch (e) {
+      debugPrint('[PdfGenerationService] Failed to load Cairo font: $e');
+      return pw.ThemeData();
+    }
+  }
+
   // ==================== PRESCRIPTION PDF ====================
 
   /// Generate prescription PDF
@@ -40,7 +63,8 @@ class PdfGenerationService {
     required String prescription,
     required DateTime date,
   }) async {
-    final doc = pw.Document();
+    final theme = await getPdfTheme();
+    final doc = pw.Document(theme: theme);
 
     doc.addPage(
       pw.Page(
@@ -118,7 +142,8 @@ class PdfGenerationService {
     required int jours,
     required DateTime dateCreation,
   }) async {
-    final doc = pw.Document();
+    final theme = await getPdfTheme();
+    final doc = pw.Document(theme: theme);
 
     doc.addPage(
       pw.Page(
@@ -244,7 +269,8 @@ class PdfGenerationService {
     required String examenClinique,
     required DateTime date,
   }) async {
-    final doc = pw.Document();
+    final theme = await getPdfTheme();
+    final doc = pw.Document(theme: theme);
 
     doc.addPage(
       pw.Page(
@@ -398,7 +424,8 @@ class PdfGenerationService {
     required Patient patient,
     required List<Service> services,
   }) async {
-    final doc = pw.Document();
+    final theme = await getPdfTheme();
+    final doc = pw.Document(theme: theme);
 
     doc.addPage(
       pw.Page(
@@ -541,7 +568,8 @@ class PdfGenerationService {
     required String bilans,
     required DateTime date,
   }) async {
-    final doc = pw.Document();
+    final theme = await getPdfTheme();
+    final doc = pw.Document(theme: theme);
 
     doc.addPage(
       pw.Page(
@@ -631,11 +659,13 @@ class PdfGenerationService {
     required DateTime endDate,
     String? doctorName,
   }) async {
-    final doc = pw.Document();
+    final theme = await getPdfTheme();
+    final doc = pw.Document(theme: theme);
 
     doc.addPage(
       pw.MultiPage(
         pageTheme: pw.PageTheme(
+          theme: theme,
           pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.fromLTRB(32, 28, 32, 40),
         ),
@@ -1203,24 +1233,372 @@ class PdfGenerationService {
 
   /// Format age from birth date, returning "N/A" for sentinel fallback years
   String _formatAge(DateTime birthDate) {
-    if (birthDate.year == 1990 || birthDate.year == 1800) {
-      return 'N/A';
-    }
-    final now = DateTime.now();
-    int age = now.year - birthDate.year;
-    if (now.month < birthDate.month ||
-        (now.month == birthDate.month && now.day < birthDate.day)) {
-      age--;
-    }
-    return '$age ans';
+    return Formatters.formatAge(birthDate);
   }
 
   // ==================== PRINT AND SAVE METHODS ====================
 
-  /// Print document directly
-  Future<void> printDocument(pw.Document document) async {
+  /// Print document directly over TCP Tunnel (or fallback to local Printing)
+  Future<void> printDocument(
+    pw.Document document, {
+    String name = 'Document.pdf',
+    BuildContext? context,
+    String? pageSize,
+    String? orientation,
+    Future<Uint8List> Function(String pageSize, String orientation)? onGeneratePdf,
+  }) async {
+    final pdfBytes = await document.save();
+    await printPdfBytes(
+      pdfBytes,
+      name: name,
+      context: context,
+      pageSize: pageSize,
+      orientation: orientation,
+      onGeneratePdf: onGeneratePdf,
+    );
+  }
+
+  /// Print raw PDF bytes (remote target printer check, or fallback to local Printing)
+  Future<void> printPdfBytes(
+    Uint8List pdfBytes, {
+    String name = 'Document.pdf',
+    BuildContext? context,
+    String? pageSize,
+    String? orientation,
+    Future<Uint8List> Function(String pageSize, String orientation)? onGeneratePdf,
+  }) async {
+    Uint8List finalPdfBytes = pdfBytes;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final tunnelService = TunnelService.instance;
+      final selectedPrinter = prefs.getString('selected_remote_printer') ?? '';
+
+      if (tunnelService != null && tunnelService.isConnected && tunnelService.peerConnected && selectedPrinter.isNotEmpty) {
+        String targetPageSize = pageSize ?? prefs.getString('remote_print_paper_size') ?? 'A4';
+        String targetOrientation = orientation ?? prefs.getString('remote_print_orientation') ?? 'portrait';
+
+        if (context != null && context.mounted) {
+          final confirm = await showDialog<bool>(
+            context: context,
+            builder: (dialogCtx) => StatefulBuilder(
+              builder: (ctx, setOptionState) {
+                return AlertDialog(
+                  backgroundColor: const Color(0xFF0F1629),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: const BorderSide(color: Color(0xFF1A2340)),
+                  ),
+                  title: Row(
+                    children: [
+                      const Icon(Icons.print_rounded, color: Colors.blueAccent),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Impression - $selectedPrinter',
+                          style: const TextStyle(color: Colors.white, fontSize: 16),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Document: $name', style: const TextStyle(color: Colors.white70, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        const SizedBox(height: 12),
+                        const Text('Format du papier:', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        Container(
+                          height: 40,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF161F38),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF263359)),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: targetPageSize,
+                              isExpanded: true,
+                              dropdownColor: const Color(0xFF161F38),
+                              style: const TextStyle(color: Colors.white, fontSize: 13),
+                              items: ['A4', 'A5', 'Letter', 'Legal'].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                              onChanged: (val) {
+                                if (val != null) setOptionState(() => targetPageSize = val);
+                              },
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        const Text('Orientation:', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ChoiceChip(
+                                label: const Center(child: Text('Portrait', style: TextStyle(color: Colors.white, fontSize: 12))),
+                                selected: targetOrientation == 'portrait',
+                                selectedColor: Colors.blueAccent,
+                                backgroundColor: const Color(0xFF161F38),
+                                onSelected: (_) => setOptionState(() => targetOrientation = 'portrait'),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ChoiceChip(
+                                label: const Center(child: Text('Paysage', style: TextStyle(color: Colors.white, fontSize: 12))),
+                                selected: targetOrientation == 'landscape',
+                                selectedColor: Colors.blueAccent,
+                                backgroundColor: const Color(0xFF161F38),
+                                onSelected: (_) => setOptionState(() => targetOrientation = 'landscape'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(dialogCtx, false),
+                      child: const Text('Annuler', style: TextStyle(color: Colors.white54)),
+                    ),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
+                      onPressed: () => Navigator.pop(dialogCtx, true),
+                      icon: const Icon(Icons.print_rounded, color: Colors.white, size: 18),
+                      label: const Text('Imprimer', style: TextStyle(color: Colors.white)),
+                    ),
+                  ],
+                );
+              },
+            ),
+          );
+
+          if (confirm != true) return;
+
+          await prefs.setString('remote_print_paper_size', targetPageSize);
+          await prefs.setString('remote_print_orientation', targetOrientation);
+        }
+
+        if (onGeneratePdf != null) {
+          try {
+            finalPdfBytes = await onGeneratePdf(targetPageSize, targetOrientation);
+          } catch (e) {
+            debugPrint('[PdfGenerationService] Error re-generating PDF for format $targetPageSize: $e');
+          }
+        }
+
+        final safeName = name.replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '_');
+        final tempFilename = 'print_${DateTime.now().millisecondsSinceEpoch}_$safeName.pdf';
+
+        if (context != null && context.mounted) {
+          double currentProgress = 0.0;
+          String statusMessage = 'Transfert du fichier PDF en cours...';
+          bool isUploading = true;
+          bool isDone = false;
+          String? errorMsg;
+          bool printSuccess = false;
+
+          await showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (dialogContext) {
+              return StatefulBuilder(
+                builder: (ctx, setDialogState) {
+                  void startPrintingProcess() async {
+                    try {
+                      await tunnelService.uploadBytes(
+                        finalPdfBytes,
+                        tempFilename,
+                        onProgress: (p) {
+                          try {
+                            setDialogState(() {
+                              currentProgress = p * 0.4;
+                              statusMessage = 'Transfert du fichier PDF (${(p * 100).toInt()}%)...';
+                            });
+                          } catch (_) {}
+                        },
+                      );
+
+                      try {
+                        setDialogState(() {
+                          isUploading = false;
+                          currentProgress = 0.4;
+                          statusMessage = 'Impression en cours sur $selectedPrinter...';
+                        });
+                      } catch (_) {}
+
+                      await tunnelService.triggerRemotePrint(
+                        tempFilename,
+                        selectedPrinter,
+                        deleteAfter: true,
+                        pageSize: targetPageSize,
+                        orientation: targetOrientation,
+                        onProgress: (pct, page, total, desc) {
+                          try {
+                            setDialogState(() {
+                              currentProgress = 0.4 + (pct * 0.6);
+                              if (desc.isNotEmpty) {
+                                statusMessage = desc;
+                              } else {
+                                statusMessage = 'Impression en cours (${(pct * 100).toInt()}%)...';
+                              }
+                            });
+                          } catch (_) {}
+                        },
+                      );
+
+                      try {
+                        setDialogState(() {
+                          currentProgress = 1.0;
+                          isDone = true;
+                          statusMessage = "Document envoyé avec succès à l'imprimante !";
+                        });
+                      } catch (_) {}
+
+                      printSuccess = true;
+                    } catch (e) {
+                      try {
+                        setDialogState(() {
+                          isDone = true;
+                          errorMsg = e.toString().replaceAll('Exception: ', '');
+                        });
+                      } catch (_) {}
+                    }
+                  }
+
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (statusMessage == 'Transfert du fichier PDF en cours...') {
+                      startPrintingProcess();
+                    }
+                  });
+
+                  if (errorMsg != null) {
+                    return AlertDialog(
+                      backgroundColor: const Color(0xFF0F1629),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(color: Colors.redAccent.shade700),
+                      ),
+                      title: const Row(
+                        children: [
+                          Icon(Icons.error_outline_rounded, color: Colors.redAccent),
+                          SizedBox(width: 10),
+                          Text("Échec de l'impression", style: TextStyle(color: Colors.white, fontSize: 16)),
+                        ],
+                      ),
+                      content: Text(
+                        "Impossible d'imprimer sur \"$selectedPrinter\".\n\n$errorMsg\n\nLe document va basculer en mode local.",
+                        style: const TextStyle(color: Colors.white70, fontSize: 13),
+                      ),
+                      actions: [
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                          onPressed: () => Navigator.pop(dialogContext),
+                          child: const Text('OK', style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    );
+                  }
+
+                  if (isDone) {
+                    return AlertDialog(
+                      backgroundColor: const Color(0xFF0F1629),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(color: Colors.greenAccent.shade700),
+                      ),
+                      title: const Row(
+                        children: [
+                          Icon(Icons.check_circle_outline_rounded, color: Colors.greenAccent),
+                          SizedBox(width: 10),
+                          Text('Impression terminée', style: TextStyle(color: Colors.white, fontSize: 16)),
+                        ],
+                      ),
+                      content: Text(
+                        "Le document \"$name\" a été envoyé avec succès à l'imprimante \"$selectedPrinter\".",
+                        style: const TextStyle(color: Colors.white70, fontSize: 13),
+                      ),
+                      actions: [
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700),
+                          onPressed: () => Navigator.pop(dialogContext),
+                          child: const Text('Fermer', style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    );
+                  }
+
+                  return AlertDialog(
+                    backgroundColor: const Color(0xFF0F1629),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: const BorderSide(color: Color(0xFF1A2340)),
+                    ),
+                    title: Row(
+                      children: [
+                        const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.blueAccent),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            isUploading ? 'Envoi du document...' : 'Impression sur $selectedPrinter...',
+                            style: const TextStyle(color: Colors.white, fontSize: 15),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: currentProgress,
+                            minHeight: 8,
+                            backgroundColor: const Color(0xFF161F38),
+                            color: Colors.blueAccent,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          statusMessage,
+                          style: const TextStyle(color: Colors.white70, fontSize: 12.5),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          );
+
+          if (printSuccess) return;
+        } else {
+          await tunnelService.uploadBytes(finalPdfBytes, tempFilename);
+          await tunnelService.triggerRemotePrint(
+            tempFilename,
+            selectedPrinter,
+            deleteAfter: true,
+            pageSize: targetPageSize,
+            orientation: targetOrientation,
+          );
+          return;
+        }
+      }
+    } catch (_) {}
+
     await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => document.save(),
+      onLayout: (PdfPageFormat format) async => finalPdfBytes,
+      name: name,
     );
   }
 

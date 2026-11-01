@@ -1,3 +1,4 @@
+import 'package:chifa/services/pdf_generation_service.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
@@ -12,6 +13,7 @@ import 'package:chifa/app/cubits/patient_cubit.dart';
 import 'package:chifa/app/cubits/prescription_cubit.dart';
 import 'package:chifa/app/cubits/soins_service_cubit.dart';
 import 'package:chifa/app/cubits/workspace_cubit.dart';
+import 'package:chifa/app/printing/appointment_pdf.dart';
 import 'package:chifa/app/printing/arret_de_travail.dart';
 import 'package:chifa/app/printing/bilan.dart';
 import 'package:chifa/app/printing/certificat_bonne_sante.dart';
@@ -19,6 +21,7 @@ import 'package:chifa/app/printing/dispense_sport.dart';
 import 'package:chifa/app/printing/lettre_de_liaison.dart';
 import 'package:chifa/app/printing/maladie_chronique.dart';
 import 'package:chifa/app/printing/certificat_prenuptial.dart';
+import 'package:chifa/app/printing/coups_et_blessures.dart';
 import 'package:chifa/app/printing/profil_glycemique.dart';
 import 'package:chifa/app/printing/profil_ta.dart';
 import 'package:chifa/app/printing/ordonnance.dart';
@@ -27,6 +30,7 @@ import 'package:chifa/app/printing/soins_medicaux.dart';
 import 'package:chifa/services/db/database.dart';
 import 'package:chifa/services/db/models/appointment.dart';
 import 'package:chifa/services/db/models/arret_de_travail.dart';
+import 'package:chifa/services/db/models/coups_et_blessures.dart';
 import 'package:chifa/services/db/models/bilan.dart';
 import 'package:chifa/services/db/models/bilan_type.dart';
 import 'package:chifa/services/db/models/lettre.dart';
@@ -45,12 +49,14 @@ import 'package:chifa/services/db/repositories/patient_repository.dart';
 import 'package:chifa/services/formatters/formatters.dart';
 import 'package:chifa/services/posology/posology_scraper_service.dart';
 import 'package:chifa/app/widgets/pathology_search_dialog.dart';
+import 'package:chifa/app/widgets/vidal_indication_search_dialog.dart';
 import 'package:chifa/services/cnas/cnas_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
+import 'package:chifa/app/utils/responsive.dart';
 
 Timer? _debounceTimer;
 
@@ -95,12 +101,34 @@ class _MedicalRecordFormDialogForPatientState
   final _paymentNoteController = TextEditingController();
   final _serviceSearchController = TextEditingController();
 
-  // Payment Services
+  // Payment Services (Actes)
   final List<Service> _selectedServices = [];
   List<Service> _filteredServices = [];
   bool _showServiceSuggestions = false;
+
+  // Payment Soins & Injections
+  final List<SoinsService> _selectedPaymentSoins = [];
+  List<SoinsService> _filteredPaymentSoins = [];
+  bool _showPaymentSoinsSuggestions = false;
+  final _paymentSoinsSearchController = TextEditingController();
+
+  double _totalActsAmount = 0.0;
+  double _totalSoinsAmount = 0.0;
+  double _subtotalBeforeDiscount = 0.0;
   double _totalPaymentAmount = 0.0;
   double _totalDoctorCommission = 0.0;
+
+  // Remise (Discount)
+  String _discountType = 'money'; // 'money' (DA) or 'percentage' (%)
+  final _discountController = TextEditingController();
+  double _discountAmount = 0.0;
+
+  // Remise Commission Medecin
+  bool _applyDoctorDiscount = true;
+  String _discountCommissionType = 'proportional'; // 'proportional', 'percentage', 'money'
+  final _discountCommissionController = TextEditingController();
+  double _discountCommissionAmount = 0.0;
+  double _grossDoctorCommission = 0.0;
 
   bool _isProcessingPayment = false;
   String _paymentMethod = 'Cash';
@@ -213,6 +241,17 @@ class _MedicalRecordFormDialogForPatientState
           setState(() {
             _paymentMethod = payment.paymentMethod ?? 'Cash';
             _paymentNoteController.text = payment.notes ?? '';
+            _discountType = payment.discountType;
+            _discountController.text = payment.discountValue > 0
+                ? payment.discountValue.toStringAsFixed(payment.discountType == 'percentage' ? 1 : 0)
+                : '';
+            _discountAmount = payment.discountAmount;
+            _applyDoctorDiscount = payment.applyCommissionDiscount;
+            _discountCommissionType = payment.discountCommissionType;
+            _discountCommissionController.text = payment.discountCommissionValue > 0
+                ? payment.discountCommissionValue.toStringAsFixed(payment.discountCommissionType == 'percentage' ? 1 : 0)
+                : '';
+            _discountCommissionAmount = payment.discountCommissionAmount;
           });
         }
       });
@@ -220,27 +259,35 @@ class _MedicalRecordFormDialogForPatientState
       final result = await repo.getServicesByRecordId(recordId);
       result.fold((_) {}, (paymentServices) {
         if (!mounted) return;
-        final services = paymentServices
-            .map(
-              (ps) => Service(
+        final acts = <Service>[];
+        final soins = <SoinsService>[];
+        for (final ps in paymentServices) {
+          if (ps.serviceType == 'soin') {
+            soins.add(
+              SoinsService(
+                id: ps.serviceId,
+                nom: ps.serviceName,
+                price: ps.servicePrice,
+                doctorCommission: ps.doctorCommission,
+              ),
+            );
+          } else {
+            acts.add(
+              Service(
                 serviceId: ps.serviceId,
                 serviceName: ps.serviceName,
                 price: ps.servicePrice,
                 doctorCommission: ps.doctorCommission,
               ),
-            )
-            .toList();
+            );
+          }
+        }
         setState(() {
           _selectedServices.clear();
-          _selectedServices.addAll(services);
-          _totalPaymentAmount = _selectedServices.fold(
-            0.0,
-            (sum, s) => sum + s.price,
-          );
-          _totalDoctorCommission = _selectedServices.fold(
-            0.0,
-            (sum, s) => sum + s.doctorCommission,
-          );
+          _selectedServices.addAll(acts);
+          _selectedPaymentSoins.clear();
+          _selectedPaymentSoins.addAll(soins);
+          _recalculateTotals();
         });
       });
     } catch (_) {}
@@ -267,6 +314,9 @@ class _MedicalRecordFormDialogForPatientState
     _durationController.dispose();
     _paymentNoteController.dispose();
     _serviceSearchController.dispose();
+    _paymentSoinsSearchController.dispose();
+    _discountController.dispose();
+    _discountCommissionController.dispose();
     _soinsController.dispose();
     _soinsSearchController.dispose();
     super.dispose();
@@ -328,7 +378,7 @@ class _MedicalRecordFormDialogForPatientState
       mainAxisSize: MainAxisSize.min,
       children: [
         SegmentedButton<PrintTemplate>(
-          segments: const [
+          segments: [
             ButtonSegment<PrintTemplate>(
               value: PrintTemplate.chifa,
               label: Text('CHIFA'),
@@ -869,10 +919,10 @@ class _MedicalRecordFormDialogForPatientState
       final dateStr =
           '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
 
-      await Printing.layoutPdf(
-        onLayout: (PdfPageFormat format) async => pdfBytes,
-        name:
-            'ordonnance_${_currentPatient.fullName}_${dateStr.replaceAll('/', '-')}.pdf',
+      await PdfGenerationService().printPdfBytes(
+        pdfBytes,
+        name: 'ordonnance_${_currentPatient.fullName}_${dateStr.replaceAll('/', '-')}.pdf',
+        context: context,
       );
     } catch (e) {
       if (mounted) {
@@ -892,9 +942,10 @@ class _MedicalRecordFormDialogForPatientState
         template: _selectedTemplate,
       );
       if (!mounted) return;
-      await Printing.layoutPdf(
-        onLayout: (format) async => pdfBytes,
+      await PdfGenerationService().printPdfBytes(
+        pdfBytes,
         name: 'ordonnance_vierge.pdf',
+        context: context,
       );
     } catch (e) {
       if (mounted) {
@@ -955,16 +1006,28 @@ class _MedicalRecordFormDialogForPatientState
   }
 
   void _printSoins() async {
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => generateSoinsMedicauxPdf(
+    try {
+      final pdfBytes = await generateSoinsMedicauxPdf(
         patient: _currentPatient,
         weight: _weightController.text.trim().isNotEmpty
             ? _weightController.text.trim()
             : null,
         soinsText: _soinsController.text,
         template: _selectedTemplate,
-      ),
-    );
+      );
+      if (!mounted) return;
+      await PdfGenerationService().printPdfBytes(
+        pdfBytes,
+        name: 'soins_medicaux_${_currentPatient.fullName}.pdf',
+        context: context,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Print error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   Future<void> _saveSoins([int? recordId]) async {
@@ -1207,7 +1270,7 @@ class _MedicalRecordFormDialogForPatientState
                       items: AppointmentStatus.values.map((s) {
                         return DropdownMenuItem(
                           value: s,
-                          child: Text(s.name),
+                          child: Text(s.label),
                         );
                       }).toList(),
                       onChanged: (v) {
@@ -1231,6 +1294,46 @@ class _MedicalRecordFormDialogForPatientState
                   onPressed: () => Navigator.pop(ctx),
                   child: const Text('Annuler'),
                 ),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    if (selectedTime == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Veuillez sélectionner une heure'),
+                          backgroundColor: Colors.orange,
+                        ),
+                      );
+                      return;
+                    }
+                    final appointmentDate = DateTime(
+                      selectedDate.year,
+                      selectedDate.month,
+                      selectedDate.day,
+                      selectedTime!.hour,
+                      selectedTime!.minute,
+                    );
+                    final doctorId = int.tryParse(_doctorId ?? '0') ?? 0;
+                    final appointment = Appointment(
+                      patientId: _currentPatient.patientId!,
+                      doctorId: doctorId,
+                      appointmentDate: appointmentDate,
+                      status: selectedStatus,
+                      notes: notesCtrl.text.isNotEmpty ? notesCtrl.text : null,
+                    );
+                    context.read<AppointmentCubit>().createAppointment(appointment);
+                    Navigator.pop(ctx);
+                    if (mounted) {
+                      final pdfFuture = generateAppointmentPdf(
+                        patient: _currentPatient,
+                        appointment: appointment,
+                      );
+                      showPdfPreview(context: context, generatedPdfBytes: pdfFuture);
+                    }
+                  },
+                  icon: const Icon(Icons.print_outlined),
+                  label: const Text('Save & Print'),
+                ),
+                const SizedBox(width: 8),
                 FilledButton.icon(
                   onPressed: () {
                     if (selectedTime == null) {
@@ -1732,12 +1835,17 @@ class _MedicalRecordFormDialogForPatientState
                           const Divider(height: 1),
                           Padding(
                             padding: const EdgeInsets.all(8.0),
-                            child: quill.QuillEditor.basic(
-                              controller: examenQuillController,
-                              config: const quill.QuillEditorConfig(
-                                minHeight: 200,
-                                scrollable: false,
-                                expands: false,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(
+                                minHeight: 150,
+                              ),
+                              child: quill.QuillEditor.basic(
+                                controller: examenQuillController,
+                                config: const quill.QuillEditorConfig(
+                                  minHeight: 150,
+                                  scrollable: false,
+                                  expands: false,
+                                ),
                               ),
                             ),
                           ),
@@ -2189,6 +2297,265 @@ class _MedicalRecordFormDialogForPatientState
     );
   }
 
+  void _showCoupsEtBlessuresDialog() {
+    DateTime dateConsultation = DateTime.now();
+    DateTime? dateFaits;
+    final heureFaitsCtrl = TextEditingController();
+    String typeAccident = 'Coups et blessures volontaires';
+    final autresTypeCtrl = TextEditingController();
+    final signesSubjectifsCtrl = TextEditingController();
+    final examenCliniqueCtrl = TextEditingController();
+    bool necessiteTraitement = false;
+    final arretJoursCtrl = TextEditingController();
+    final avisSpecialiseCtrl = TextEditingController();
+    final ittJoursCtrl = TextEditingController();
+
+    final typeOptions = [
+      'Coups et blessures volontaires',
+      'Coups et blessures involontaires',
+      'Accident de la circulation',
+      'Accident de la voie publique',
+      'Accident du travail',
+      'Violences sexuelles',
+      'Autres',
+    ];
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setStateDlg) {
+            final dateFormat = DateFormat('dd/MM/yyyy');
+            return AlertDialog(
+              title: const Text('Certificat Médical Initial (Coups et Blessures)'),
+              content: SizedBox(
+                width: 550,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Établir un certificat initial de constatation pour ${_currentPatient.fullName}',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 16),
+                      // Date & heure faits
+                      Row(
+                        children: [
+                          Expanded(
+                            child: InkWell(
+                              onTap: () async {
+                                final d = await showDatePicker(
+                                  context: context,
+                                  initialDate: dateFaits ?? DateTime.now(),
+                                  firstDate: DateTime(2000),
+                                  lastDate: DateTime(2100),
+                                );
+                                if (d != null) {
+                                  setStateDlg(() => dateFaits = d);
+                                }
+                              },
+                              child: InputDecorator(
+                                decoration: InputDecoration(
+                                  labelText: 'Date des faits',
+                                  border: const OutlineInputBorder(),
+                                  suffixIcon: dateFaits != null
+                                      ? IconButton(
+                                          icon: const Icon(Icons.clear),
+                                          onPressed: () => setStateDlg(() => dateFaits = null),
+                                        )
+                                      : null,
+                                ),
+                                child: Text(dateFaits != null ? dateFormat.format(dateFaits!) : 'Non précisée'),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              controller: heureFaitsCtrl,
+                              decoration: const InputDecoration(
+                                labelText: 'Heure des faits (ex: 14:30)',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: typeAccident,
+                        decoration: const InputDecoration(
+                          labelText: 'Type de faits / accident',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: typeOptions.map((opt) => DropdownMenuItem(value: opt, child: Text(opt))).toList(),
+                        onChanged: (val) {
+                          if (val != null) setStateDlg(() => typeAccident = val);
+                        },
+                      ),
+                      if (typeAccident == 'Autres') ...[
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: autresTypeCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Préciser le type',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: signesSubjectifsCtrl,
+                        maxLines: 2,
+                        decoration: const InputDecoration(
+                          labelText: 'Signes subjectifs',
+                          border: OutlineInputBorder(),
+                          hintText: 'Déclarations du patient...',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: examenCliniqueCtrl,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                          labelText: 'Examen clinique',
+                          border: OutlineInputBorder(),
+                          hintText: 'Constatations médicales...',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      CheckboxListTile(
+                        title: const Text('Nécessite un traitement'),
+                        value: necessiteTraitement,
+                        onChanged: (v) => setStateDlg(() => necessiteTraitement = v ?? false),
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                      ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: arretJoursCtrl,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Arrêt de travail (Jours)',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              controller: ittJoursCtrl,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'ITT (Jours)',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: avisSpecialiseCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Avis spécialisé (Optionnel)',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.visibility),
+                  onPressed: () {
+                    final cert = CertificatCoupsEtBlessures(
+                      patientId: _currentPatient.patientId!,
+                      doctorId: int.tryParse(_doctorId ?? ''),
+                      dateConsultation: dateConsultation,
+                      agePatient: _currentPatient.age,
+                      dateFaits: dateFaits,
+                      heureFaits: heureFaitsCtrl.text.trim().isEmpty ? null : heureFaitsCtrl.text.trim(),
+                      typeAccident: typeAccident,
+                      autresAccident: autresTypeCtrl.text.trim().isEmpty ? null : autresTypeCtrl.text.trim(),
+                      signesSubjectifs: signesSubjectifsCtrl.text.trim().isEmpty ? null : signesSubjectifsCtrl.text.trim(),
+                      examenClinique: examenCliniqueCtrl.text.trim().isEmpty ? null : examenCliniqueCtrl.text.trim(),
+                      necessiteTraitement: necessiteTraitement,
+                      arretDeTravailJours: int.tryParse(arretJoursCtrl.text),
+                      avisSpecialise: avisSpecialiseCtrl.text.trim().isEmpty ? null : avisSpecialiseCtrl.text.trim(),
+                      ittJours: int.tryParse(ittJoursCtrl.text),
+                      createdAt: DateTime.now(),
+                    );
+                    final pdfFuture = generateCoupsEtBlessuresPdf(
+                      patient: _currentPatient,
+                      cert: cert,
+                      template: _selectedTemplate,
+                    );
+                    if (!mounted) return;
+                    showPdfPreview(
+                      context: context,
+                      generatedPdfBytes: pdfFuture,
+                      title: 'Certificat Coups et Blessures - Preview',
+                    );
+                  },
+                  label: const Text('Preview'),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.save_alt),
+                  onPressed: () async {
+                    final cert = CertificatCoupsEtBlessures(
+                      patientId: _currentPatient.patientId!,
+                      doctorId: int.tryParse(_doctorId ?? ''),
+                      dateConsultation: dateConsultation,
+                      agePatient: _currentPatient.age,
+                      dateFaits: dateFaits,
+                      heureFaits: heureFaitsCtrl.text.trim().isEmpty ? null : heureFaitsCtrl.text.trim(),
+                      typeAccident: typeAccident,
+                      autresAccident: autresTypeCtrl.text.trim().isEmpty ? null : autresTypeCtrl.text.trim(),
+                      signesSubjectifs: signesSubjectifsCtrl.text.trim().isEmpty ? null : signesSubjectifsCtrl.text.trim(),
+                      examenClinique: examenCliniqueCtrl.text.trim().isEmpty ? null : examenCliniqueCtrl.text.trim(),
+                      necessiteTraitement: necessiteTraitement,
+                      arretDeTravailJours: int.tryParse(arretJoursCtrl.text),
+                      avisSpecialise: avisSpecialiseCtrl.text.trim().isEmpty ? null : avisSpecialiseCtrl.text.trim(),
+                      ittJours: int.tryParse(ittJoursCtrl.text),
+                      createdAt: DateTime.now(),
+                    );
+
+                    await context.read<CertificateCubit>().createCertificatCoupsEtBlessures(cert);
+
+                    final pdfFuture = generateCoupsEtBlessuresPdf(
+                      patient: _currentPatient,
+                      cert: cert,
+                      template: _selectedTemplate,
+                    );
+                    Navigator.pop(ctx);
+                    if (!mounted) return;
+                    showPdfPreview(
+                      context: context,
+                      generatedPdfBytes: pdfFuture,
+                      title: 'Certificat Coups et Blessures - Preview',
+                    );
+                  },
+                  label: const Text('Save & Print'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _submit() {
     final plainDetails = _detailsQuillController.document.toPlainText().trim();
     if (plainDetails.isEmpty) {
@@ -2252,11 +2619,17 @@ class _MedicalRecordFormDialogForPatientState
   }
 
   Future<void> _processPayment(int recordId) async {
-    if (_selectedServices.isEmpty) return;
+    if (_selectedServices.isEmpty && _selectedPaymentSoins.isEmpty) return;
     setState(() => _isProcessingPayment = true);
 
-    final servicesText = _selectedServices.map((s) => s.serviceName).join(', ');
+    final actsText = _selectedServices.map((s) => s.serviceName).join(', ');
+    final soinsText = _selectedPaymentSoins.map((s) => s.nom).join(', ');
+    final servicesText = actsText.isNotEmpty && soinsText.isNotEmpty
+        ? 'Actes: $actsText | Soins: $soinsText'
+        : (actsText.isNotEmpty ? actsText : soinsText);
 
+    final discVal = double.tryParse(_discountController.text.trim()) ?? 0.0;
+    final discComVal = double.tryParse(_discountCommissionController.text.trim()) ?? 0.0;
     final payment = Payment(
       patientId: _currentPatient.patientId,
       doctorId: int.tryParse(_doctorId ?? ''),
@@ -2268,18 +2641,39 @@ class _MedicalRecordFormDialogForPatientState
       recordId: recordId,
       notes: _paymentNoteController.text,
       paymentMethod: _paymentMethod,
+      discountAmount: _discountAmount,
+      discountType: _discountType,
+      discountValue: discVal,
+      discountCommissionAmount: _discountCommissionAmount,
+      discountCommissionType: _discountCommissionType,
+      discountCommissionValue: discComVal,
+      applyCommissionDiscount: _applyDoctorDiscount,
     );
 
-    final paymentServices = _selectedServices
-        .map(
-          (s) => PaymentService(
-            serviceId: s.serviceId,
-            serviceName: s.serviceName,
-            servicePrice: s.price,
-            doctorCommission: s.doctorCommission,
-          ),
-        )
-        .toList();
+    final commissionRatio = (_grossDoctorCommission > 0 && _discountCommissionAmount > 0)
+        ? (1.0 - (_discountCommissionAmount / _grossDoctorCommission)).clamp(0.0, 1.0)
+        : 1.0;
+
+    final paymentServices = [
+      ..._selectedServices.map(
+        (s) => PaymentService(
+          serviceId: s.serviceId,
+          serviceName: s.serviceName,
+          servicePrice: s.price,
+          doctorCommission: (s.doctorCommission * commissionRatio).clamp(0.0, s.price),
+          serviceType: 'act',
+        ),
+      ),
+      ..._selectedPaymentSoins.map(
+        (s) => PaymentService(
+          serviceId: s.id,
+          serviceName: s.nom,
+          servicePrice: s.price,
+          doctorCommission: (s.doctorCommission * commissionRatio).clamp(0.0, s.price),
+          serviceType: 'soin',
+        ),
+      ),
+    ];
 
     await context.read<BillingCubit>().createPaymentWithServices(
       payment,
@@ -2288,7 +2682,7 @@ class _MedicalRecordFormDialogForPatientState
   }
 
   Future<void> _updatePaymentForRecord(int recordId) async {
-    if (_selectedServices.isEmpty) return;
+    if (_selectedServices.isEmpty && _selectedPaymentSoins.isEmpty) return;
     setState(() => _isProcessingPayment = true);
 
     try {
@@ -2301,26 +2695,52 @@ class _MedicalRecordFormDialogForPatientState
           return;
         }
 
-        final servicesText = _selectedServices
-            .map((s) => s.serviceName)
-            .join(', ');
+        final actsText = _selectedServices.map((s) => s.serviceName).join(', ');
+        final soinsText = _selectedPaymentSoins.map((s) => s.nom).join(', ');
+        final servicesText = actsText.isNotEmpty && soinsText.isNotEmpty
+            ? 'Actes: $actsText | Soins: $soinsText'
+            : (actsText.isNotEmpty ? actsText : soinsText);
+
+        final discVal = double.tryParse(_discountController.text.trim()) ?? 0.0;
+        final discComVal = double.tryParse(_discountCommissionController.text.trim()) ?? 0.0;
         final updatedPayment = existingPayment.copyWith(
           amount: _totalPaymentAmount,
           servicesText: servicesText,
           notes: _paymentNoteController.text,
           paymentMethod: _paymentMethod,
+          discountAmount: _discountAmount,
+          discountType: _discountType,
+          discountValue: discVal,
+          discountCommissionAmount: _discountCommissionAmount,
+          discountCommissionType: _discountCommissionType,
+          discountCommissionValue: discComVal,
+          applyCommissionDiscount: _applyDoctorDiscount,
         );
 
-        final paymentServices = _selectedServices
-            .map(
-              (s) => PaymentService(
-                serviceId: s.serviceId,
-                serviceName: s.serviceName,
-                servicePrice: s.price,
-                doctorCommission: s.doctorCommission,
-              ),
-            )
-            .toList();
+        final commissionRatio = (_grossDoctorCommission > 0 && _discountCommissionAmount > 0)
+            ? (1.0 - (_discountCommissionAmount / _grossDoctorCommission)).clamp(0.0, 1.0)
+            : 1.0;
+
+        final paymentServices = [
+          ..._selectedServices.map(
+            (s) => PaymentService(
+              serviceId: s.serviceId,
+              serviceName: s.serviceName,
+              servicePrice: s.price,
+              doctorCommission: (s.doctorCommission * commissionRatio).clamp(0.0, s.price),
+              serviceType: 'act',
+            ),
+          ),
+          ..._selectedPaymentSoins.map(
+            (s) => PaymentService(
+              serviceId: s.id,
+              serviceName: s.nom,
+              servicePrice: s.price,
+              doctorCommission: (s.doctorCommission * commissionRatio).clamp(0.0, s.price),
+              serviceType: 'soin',
+            ),
+          ),
+        ];
 
         final updateResult = await repo.updateWithServices(
           existingPayment.paymentId!,
@@ -2366,7 +2786,7 @@ class _MedicalRecordFormDialogForPatientState
   Future<void> _finalizeAfterCreate(int recordId) async {
     setState(() => _isProcessingPayment = true);
     try {
-      if (_selectedServices.isNotEmpty) {
+      if (_selectedServices.isNotEmpty || _selectedPaymentSoins.isNotEmpty) {
         await _processPayment(recordId);
       }
       if (_soinsController.text.isNotEmpty) {
@@ -2383,7 +2803,9 @@ class _MedicalRecordFormDialogForPatientState
   Future<void> _finalizeAfterUpdate(int recordId) async {
     setState(() => _isProcessingPayment = true);
     try {
-      await _updatePaymentForRecord(recordId);
+      if (_selectedServices.isNotEmpty || _selectedPaymentSoins.isNotEmpty) {
+        await _updatePaymentForRecord(recordId);
+      }
     } finally {
       if (mounted) {
         setState(() => _isProcessingPayment = false);
@@ -2408,15 +2830,72 @@ class _MedicalRecordFormDialogForPatientState
     });
   }
 
+  void _addPaymentSoin(SoinsService soin) {
+    _markAsDirty();
+    setState(() {
+      _selectedPaymentSoins.add(soin);
+      _recalculateTotals();
+    });
+  }
+
+  void _removePaymentSoinAt(int index) {
+    _markAsDirty();
+    setState(() {
+      _selectedPaymentSoins.removeAt(index);
+      _recalculateTotals();
+    });
+  }
+
   void _recalculateTotals() {
-    _totalPaymentAmount = _selectedServices.fold(
+    _totalActsAmount = _selectedServices.fold(
       0.0,
       (sum, item) => sum + item.price,
     );
-    _totalDoctorCommission = _selectedServices.fold(
+    _totalSoinsAmount = _selectedPaymentSoins.fold(
+      0.0,
+      (sum, item) => sum + item.price,
+    );
+    _subtotalBeforeDiscount = _totalActsAmount + _totalSoinsAmount;
+
+    final discVal = double.tryParse(_discountController.text.trim()) ?? 0.0;
+    if (discVal > 0 && _subtotalBeforeDiscount > 0) {
+      if (_discountType == 'percentage') {
+        _discountAmount = (_subtotalBeforeDiscount * discVal / 100.0).clamp(0.0, _subtotalBeforeDiscount);
+      } else {
+        _discountAmount = discVal.clamp(0.0, _subtotalBeforeDiscount);
+      }
+    } else {
+      _discountAmount = 0.0;
+    }
+
+    _totalPaymentAmount = (_subtotalBeforeDiscount - _discountAmount).clamp(0.0, double.infinity);
+
+    final actsCommission = _selectedServices.fold(
       0.0,
       (sum, item) => sum + item.doctorCommission,
     );
+    final soinsCommission = _selectedPaymentSoins.fold(
+      0.0,
+      (sum, item) => sum + item.doctorCommission,
+    );
+    _grossDoctorCommission = actsCommission + soinsCommission;
+
+    if (_applyDoctorDiscount && _grossDoctorCommission > 0 && _discountAmount > 0) {
+      if (_discountCommissionType == 'proportional') {
+        final rate = _subtotalBeforeDiscount > 0 ? (_discountAmount / _subtotalBeforeDiscount) : 0.0;
+        _discountCommissionAmount = (_grossDoctorCommission * rate).clamp(0.0, _grossDoctorCommission);
+      } else if (_discountCommissionType == 'percentage') {
+        final customVal = double.tryParse(_discountCommissionController.text.trim()) ?? 0.0;
+        _discountCommissionAmount = (_grossDoctorCommission * customVal / 100.0).clamp(0.0, _grossDoctorCommission);
+      } else {
+        final customVal = double.tryParse(_discountCommissionController.text.trim()) ?? 0.0;
+        _discountCommissionAmount = customVal.clamp(0.0, _grossDoctorCommission);
+      }
+    } else {
+      _discountCommissionAmount = 0.0;
+    }
+
+    _totalDoctorCommission = (_grossDoctorCommission - _discountCommissionAmount).clamp(0.0, double.infinity);
   }
 
   void _showCnasVerificationDialog() {
@@ -2870,6 +3349,21 @@ class _MedicalRecordFormDialogForPatientState
     });
   }
 
+  void _filterPaymentSoins(String query, List<SoinsService> allSoins) {
+    setState(() {
+      if (query.trim().isEmpty) {
+        _filteredPaymentSoins = allSoins;
+      } else {
+        final lowerQuery = query.toLowerCase();
+        _filteredPaymentSoins = allSoins.where((s) {
+          return s.nom.toLowerCase().contains(lowerQuery) ||
+              (s.price.toString().contains(lowerQuery));
+        }).toList();
+      }
+      _showPaymentSoinsSuggestions = true;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocListener<MedicalRecordCubit, MedicalRecordState>(
@@ -3009,7 +3503,7 @@ class _MedicalRecordFormDialogForPatientState
           ),
           body: Padding(
             padding: EdgeInsets.all(
-              MediaQuery.of(context).size.width < 600 ? 12.0 : 24.0,
+              context.isMobile ? 12.0 : 24.0,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3076,7 +3570,7 @@ class _MedicalRecordFormDialogForPatientState
                                               ),
                                             ),
                                             Text(
-                                              'ID: ${_currentPatient.patientId}  •  ${_currentPatient.age} ans  •  ${_currentPatient.gender == Gender.male ? 'Homme' : _currentPatient.gender == Gender.female ? 'Femme' : 'N/A'}',
+                                              'ID: ${_currentPatient.patientId}  •  ${_currentPatient.formattedAge}  •  ${_currentPatient.gender == Gender.male ? 'Homme' : _currentPatient.gender == Gender.female ? 'Femme' : 'N/A'}',
                                               style: TextStyle(
                                                 fontSize: 13,
                                                 color: Colors.blue.shade700,
@@ -3191,11 +3685,16 @@ class _MedicalRecordFormDialogForPatientState
                                 const Divider(height: 1),
                                 Padding(
                                   padding: const EdgeInsets.all(8.0),
-                                  child: quill.QuillEditor.basic(
-                                    controller: _detailsQuillController,
-                                    config: const quill.QuillEditorConfig(
-                                      scrollable: false,
-                                      expands: false,
+                                  child: ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      minHeight: 150,
+                                    ),
+                                    child: quill.QuillEditor.basic(
+                                      controller: _detailsQuillController,
+                                      config: const quill.QuillEditorConfig(
+                                        scrollable: false,
+                                        expands: false,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -3208,7 +3707,7 @@ class _MedicalRecordFormDialogForPatientState
                             runSpacing: 16,
                             children: [
                               SizedBox(
-                                width: MediaQuery.of(context).size.width < 600
+                                width: context.isMobile
                                     ? double.infinity
                                     : (MediaQuery.of(context).size.width -
                                               100) /
@@ -3228,7 +3727,7 @@ class _MedicalRecordFormDialogForPatientState
                                 ),
                               ),
                               SizedBox(
-                                width: MediaQuery.of(context).size.width < 600
+                                width: context.isMobile
                                     ? (MediaQuery.of(context).size.width - 40) /
                                           2
                                     : (MediaQuery.of(context).size.width -
@@ -3245,7 +3744,7 @@ class _MedicalRecordFormDialogForPatientState
                                 ),
                               ),
                               SizedBox(
-                                width: MediaQuery.of(context).size.width < 600
+                                width: context.isMobile
                                     ? (MediaQuery.of(context).size.width - 40) /
                                           2
                                     : (MediaQuery.of(context).size.width -
@@ -3269,7 +3768,7 @@ class _MedicalRecordFormDialogForPatientState
                             runSpacing: 16,
                             children: [
                               SizedBox(
-                                width: MediaQuery.of(context).size.width < 600
+                                width: context.isMobile
                                     ? (MediaQuery.of(context).size.width - 40) /
                                           2
                                     : (MediaQuery.of(context).size.width - 80) /
@@ -3286,7 +3785,7 @@ class _MedicalRecordFormDialogForPatientState
                                 ),
                               ),
                               SizedBox(
-                                width: MediaQuery.of(context).size.width < 600
+                                width: context.isMobile
                                     ? (MediaQuery.of(context).size.width - 40) /
                                           2
                                     : (MediaQuery.of(context).size.width - 80) /
@@ -3358,7 +3857,7 @@ class _MedicalRecordFormDialogForPatientState
                           Builder(
                             builder: (context) {
                               final small =
-                                  MediaQuery.of(context).size.width < 600;
+                                  context.isMobile;
                               final searchField = Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
@@ -3401,9 +3900,28 @@ class _MedicalRecordFormDialogForPatientState
                                                 );
                                               },
                                             )
-                                          : ElevatedButton(
-                                              onPressed: _addNewMedicament,
-                                              child: const Icon(Icons.add),
+                                          : Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                IconButton(
+                                                  icon: const Icon(Icons.manage_search, color: Colors.blue),
+                                                  tooltip: 'Recherche VIDAL par Indication',
+                                                  onPressed: () async {
+                                                    final selectedMed = await VidalIndicationSearchDialog.show(
+                                                      context,
+                                                      initialQuery: _medicSearchController.text,
+                                                    );
+                                                    if (selectedMed != null) {
+                                                      _medicSearchController.text = selectedMed.name;
+                                                      _searchMedicament(selectedMed.name);
+                                                    }
+                                                  },
+                                                ),
+                                                ElevatedButton(
+                                                  onPressed: _addNewMedicament,
+                                                  child: const Icon(Icons.add),
+                                                ),
+                                              ],
                                             ),
                                     ),
                                     onChanged: _searchMedicament,
@@ -3771,7 +4289,9 @@ class _MedicalRecordFormDialogForPatientState
                                           constraints: const BoxConstraints(
                                             maxHeight: 200,
                                           ),
-                                          child: ListView.builder(
+                                          child: Material(
+                                         color: Colors.transparent,
+                                         child: ListView.builder(
                                             shrinkWrap: true,
                                             itemCount:
                                                 state.prescriptions.length,
@@ -3809,8 +4329,9 @@ class _MedicalRecordFormDialogForPatientState
                                               );
                                             },
                                           ),
-                                        );
-                                      }
+                                        ),
+                                      );
+                                    }
 
                                       return const SizedBox.shrink();
                                     },
@@ -4031,6 +4552,12 @@ class _MedicalRecordFormDialogForPatientState
                                 onPressed: _showPrenuptialDialog,
                               ),
                               _certButton(
+                                icon: Icons.personal_injury,
+                                color: Colors.deepOrange,
+                                label: 'Coups & Blessures',
+                                onPressed: _showCoupsEtBlessuresDialog,
+                              ),
+                              _certButton(
                                 icon: Icons.bloodtype_outlined,
                                 color: Colors.blueGrey,
                                 label: 'Suivi Glycémique',
@@ -4114,436 +4641,689 @@ class _MedicalRecordFormDialogForPatientState
                           ),
                           const SizedBox(height: 16),
                           BlocBuilder<BillingCubit, BillingState>(
-                            buildWhen: (previous, current) =>
-                                previous.services != current.services ||
-                                previous.isLoading != current.isLoading,
-                            builder: (context, state) {
-                              if (state.isLoading && state.services.isEmpty) {
-                                return const Center(
-                                  child: CircularProgressIndicator(),
-                                );
-                              }
+                            builder: (context, billingState) {
+                              return BlocBuilder<SoinsServiceCubit, SoinsServiceState>(
+                                builder: (context, soinsState) {
+                                  final allActs = billingState.services;
+                                  final allSoins = soinsState.services;
 
-                              if (state.services.isNotEmpty) {
-                                final allServices = state.services;
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // Searchable service input
-                                    Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: [
-                                        TextField(
-                                          controller: _serviceSearchController,
-                                          decoration: InputDecoration(
-                                            labelText: 'Search Services',
-                                            hintText: 'Type to search...',
-                                            isDense: true,
-                                            border: const OutlineInputBorder(),
-                                            prefixIcon: const Icon(
-                                              Icons.search,
-                                              size: 20,
-                                            ),
-                                            suffixIcon:
-                                                _serviceSearchController
-                                                    .text
-                                                    .isNotEmpty
-                                                ? IconButton(
-                                                    icon: const Icon(
-                                                      Icons.clear,
-                                                      size: 16,
+                                  final hasSelection = _selectedServices.isNotEmpty || _selectedPaymentSoins.isNotEmpty;
+
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // --- 1. SECTION ACTES MEDICAUX ---
+                                      Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue.shade50.withValues(alpha: 0.4),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: Colors.blue.shade100),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Icon(Icons.medical_services_outlined, size: 18, color: Colors.blue.shade700),
+                                                    const SizedBox(width: 8),
+                                                    Text(
+                                                      '1. Actes Médicaux (Consultations, Gestes)',
+                                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blue.shade900),
                                                     ),
-                                                    onPressed: () {
-                                                      _serviceSearchController
-                                                          .clear();
+                                                  ],
+                                                ),
+                                                if (_totalActsAmount > 0)
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.blue.shade100,
+                                                      borderRadius: BorderRadius.circular(12),
+                                                    ),
+                                                    child: Text(
+                                                      '${_totalActsAmount.toStringAsFixed(0)} DA',
+                                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue.shade900),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 10),
+                                            TextField(
+                                              controller: _serviceSearchController,
+                                              decoration: InputDecoration(
+                                                hintText: 'Rechercher un acte médical (ex: Consultation, ECG, Lavage)...',
+                                                isDense: true,
+                                                fillColor: Colors.white,
+                                                filled: true,
+                                                border: const OutlineInputBorder(),
+                                                prefixIcon: const Icon(Icons.search, size: 20),
+                                                suffixIcon: _serviceSearchController.text.isNotEmpty
+                                                    ? IconButton(
+                                                        icon: const Icon(Icons.clear, size: 16),
+                                                        onPressed: () {
+                                                          _serviceSearchController.clear();
+                                                          setState(() {
+                                                            _showServiceSuggestions = false;
+                                                            _filteredServices = [];
+                                                          });
+                                                        },
+                                                      )
+                                                    : null,
+                                              ),
+                                              onChanged: (val) => _filterServices(val, allActs),
+                                              onTap: () {
+                                                if (_serviceSearchController.text.isEmpty) {
+                                                  _filterServices('', allActs);
+                                                }
+                                              },
+                                            ),
+                                            if (_showServiceSuggestions && _filteredServices.isNotEmpty)
+                                              Container(
+                                                constraints: const BoxConstraints(maxHeight: 180),
+                                                margin: const EdgeInsets.only(top: 4),
+                                                decoration: BoxDecoration(
+                                                  border: Border.all(color: Colors.grey.shade300),
+                                                  borderRadius: BorderRadius.circular(8),
+                                                  color: Colors.white,
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: Colors.black.withValues(alpha: 0.08),
+                                                      blurRadius: 6,
+                                                      offset: const Offset(0, 2),
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: ListView.separated(
+                                                  shrinkWrap: true,
+                                                  padding: EdgeInsets.zero,
+                                                  itemCount: _filteredServices.length,
+                                                  separatorBuilder: (_, _) => Divider(height: 1, color: Colors.grey.shade200),
+                                                  itemBuilder: (context, index) {
+                                                    final act = _filteredServices[index];
+                                                    final isSelected = _selectedServices.any((s) => s.serviceId == act.serviceId);
+                                                    return ListTile(
+                                                      dense: true,
+                                                      leading: Icon(
+                                                        isSelected ? Icons.check_circle : Icons.add_circle_outline,
+                                                        color: isSelected ? Colors.green : Colors.blueGrey,
+                                                        size: 20,
+                                                      ),
+                                                      title: Text(act.serviceName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                                      subtitle: Text(
+                                                        'Tarif: ${act.price.toStringAsFixed(0)} DA | Com: ${act.doctorCommission.toStringAsFixed(0)} DA',
+                                                        style: TextStyle(fontSize: 11, color: Colors.grey[700]),
+                                                      ),
+                                                      onTap: () {
+                                                        _addService(act);
+                                                        _serviceSearchController.clear();
+                                                        setState(() {
+                                                          _showServiceSuggestions = false;
+                                                          _filteredServices = [];
+                                                        });
+                                                      },
+                                                    );
+                                                  },
+                                                ),
+                                              ),
+                                            if (_selectedServices.isNotEmpty) ...[
+                                              const SizedBox(height: 8),
+                                              Wrap(
+                                                spacing: 6,
+                                                runSpacing: 6,
+                                                children: _selectedServices.asMap().entries.map((entry) {
+                                                  final index = entry.key;
+                                                  final act = entry.value;
+                                                  return Chip(
+                                                    avatar: const Icon(Icons.medical_services, size: 14, color: Colors.blue),
+                                                    label: Text(
+                                                      '${act.serviceName} (${act.price.toStringAsFixed(0)} DA)',
+                                                      style: const TextStyle(fontSize: 12),
+                                                    ),
+                                                    deleteIcon: const Icon(Icons.close, size: 14),
+                                                    onDeleted: () => _removeServiceAt(index),
+                                                    backgroundColor: Colors.blue.shade50,
+                                                    side: BorderSide(color: Colors.blue.shade200),
+                                                  );
+                                                }).toList(),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 16),
+
+                                      // --- 2. SECTION SOINS & INJECTIONS ---
+                                      Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.teal.shade50.withValues(alpha: 0.4),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: Colors.teal.shade100),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Icon(Icons.vaccines_outlined, size: 18, color: Colors.teal.shade700),
+                                                    const SizedBox(width: 8),
+                                                    Text(
+                                                      '2. Soins & Injections (Médicaments administrés)',
+                                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.teal.shade900),
+                                                    ),
+                                                  ],
+                                                ),
+                                                if (_totalSoinsAmount > 0)
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.teal.shade100,
+                                                      borderRadius: BorderRadius.circular(12),
+                                                    ),
+                                                    child: Text(
+                                                      '${_totalSoinsAmount.toStringAsFixed(0)} DA',
+                                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal.shade900),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 10),
+                                            TextField(
+                                              controller: _paymentSoinsSearchController,
+                                              decoration: InputDecoration(
+                                                hintText: 'Rechercher un soin / médicament (ex: Spasfon, Dexa, Perfusion)...',
+                                                isDense: true,
+                                                fillColor: Colors.white,
+                                                filled: true,
+                                                border: const OutlineInputBorder(),
+                                                prefixIcon: const Icon(Icons.search, size: 20),
+                                                suffixIcon: _paymentSoinsSearchController.text.isNotEmpty
+                                                    ? IconButton(
+                                                        icon: const Icon(Icons.clear, size: 16),
+                                                        onPressed: () {
+                                                          _paymentSoinsSearchController.clear();
+                                                          setState(() {
+                                                            _showPaymentSoinsSuggestions = false;
+                                                            _filteredPaymentSoins = [];
+                                                          });
+                                                        },
+                                                      )
+                                                    : null,
+                                              ),
+                                              onChanged: (val) => _filterPaymentSoins(val, allSoins),
+                                              onTap: () {
+                                                if (_paymentSoinsSearchController.text.isEmpty) {
+                                                  _filterPaymentSoins('', allSoins);
+                                                }
+                                              },
+                                            ),
+                                            if (_showPaymentSoinsSuggestions && _filteredPaymentSoins.isNotEmpty)
+                                              Container(
+                                                constraints: const BoxConstraints(maxHeight: 180),
+                                                margin: const EdgeInsets.only(top: 4),
+                                                decoration: BoxDecoration(
+                                                  border: Border.all(color: Colors.grey.shade300),
+                                                  borderRadius: BorderRadius.circular(8),
+                                                  color: Colors.white,
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: Colors.black.withValues(alpha: 0.08),
+                                                      blurRadius: 6,
+                                                      offset: const Offset(0, 2),
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: ListView.separated(
+                                                  shrinkWrap: true,
+                                                  padding: EdgeInsets.zero,
+                                                  itemCount: _filteredPaymentSoins.length,
+                                                  separatorBuilder: (_, _) => Divider(height: 1, color: Colors.grey.shade200),
+                                                  itemBuilder: (context, index) {
+                                                    final soin = _filteredPaymentSoins[index];
+                                                    final isSelected = _selectedPaymentSoins.any((s) => s.id == soin.id);
+                                                    return ListTile(
+                                                      dense: true,
+                                                      leading: Icon(
+                                                        isSelected ? Icons.check_circle : Icons.add_circle_outline,
+                                                        color: isSelected ? Colors.green : Colors.teal,
+                                                        size: 20,
+                                                      ),
+                                                      title: Text(soin.nom, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                                      subtitle: Text(
+                                                        'Tarif: ${soin.price.toStringAsFixed(0)} DA | Com: ${soin.doctorCommission.toStringAsFixed(0)} DA',
+                                                        style: TextStyle(fontSize: 11, color: Colors.grey[700]),
+                                                      ),
+                                                      onTap: () {
+                                                        _addPaymentSoin(soin);
+                                                        _paymentSoinsSearchController.clear();
+                                                        setState(() {
+                                                          _showPaymentSoinsSuggestions = false;
+                                                          _filteredPaymentSoins = [];
+                                                        });
+                                                      },
+                                                    );
+                                                  },
+                                                ),
+                                              ),
+                                            if (_selectedPaymentSoins.isNotEmpty) ...[
+                                              const SizedBox(height: 8),
+                                              Wrap(
+                                                spacing: 6,
+                                                runSpacing: 6,
+                                                children: _selectedPaymentSoins.asMap().entries.map((entry) {
+                                                  final index = entry.key;
+                                                  final soin = entry.value;
+                                                  return Chip(
+                                                    avatar: const Icon(Icons.vaccines, size: 14, color: Colors.teal),
+                                                    label: Text(
+                                                      '${soin.nom} (${soin.price.toStringAsFixed(0)} DA)',
+                                                      style: const TextStyle(fontSize: 12),
+                                                    ),
+                                                    deleteIcon: const Icon(Icons.close, size: 14),
+                                                    onDeleted: () => _removePaymentSoinAt(index),
+                                                    backgroundColor: Colors.teal.shade50,
+                                                    side: BorderSide(color: Colors.teal.shade200),
+                                                  );
+                                                }).toList(),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 16),
+
+                                      // --- REMISE / DISCOUNT SECTION ---
+                                      Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.amber.shade50.withValues(alpha: 0.4),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: Colors.amber.shade200),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Icon(Icons.discount_outlined, size: 18, color: Colors.amber.shade900),
+                                                    const SizedBox(width: 8),
+                                                    Text(
+                                                      'Remise / Réduction (Optionnel)',
+                                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amber.shade900),
+                                                    ),
+                                                  ],
+                                                ),
+                                                if (_discountAmount > 0)
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.amber.shade100,
+                                                      borderRadius: BorderRadius.circular(12),
+                                                    ),
+                                                    child: Text(
+                                                      '- ${_discountAmount.toStringAsFixed(0)} DA ${_discountType == "percentage" ? "(-${_discountController.text}%)" : ""}',
+                                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 10),
+                                            Row(
+                                              children: [
+                                                SegmentedButton<String>(
+                                                  segments: const [
+                                                    ButtonSegment<String>(
+                                                      value: 'money',
+                                                      label: Text('DA'),
+                                                    ),
+                                                    ButtonSegment<String>(
+                                                      value: 'percentage',
+                                                      label: Text('%'),
+                                                    ),
+                                                  ],
+                                                  selected: {_discountType},
+                                                  onSelectionChanged: (val) {
+                                                    setState(() {
+                                                      _discountType = val.first;
+                                                      _recalculateTotals();
+                                                    });
+                                                  },
+                                                ),
+                                                const SizedBox(width: 12),
+                                                Expanded(
+                                                  child: TextField(
+                                                    controller: _discountController,
+                                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                                    decoration: InputDecoration(
+                                                      labelText: _discountType == 'percentage'
+                                                          ? 'Pourcentage de remise (%)'
+                                                          : 'Montant de remise (DA)',
+                                                      hintText: _discountType == 'percentage' ? 'Ex: 10 pour 10%' : 'Ex: 100 pour 100 DA',
+                                                      suffixText: _discountType == 'percentage' ? '%' : 'DA',
+                                                      isDense: true,
+                                                      fillColor: Colors.white,
+                                                      filled: true,
+                                                      border: const OutlineInputBorder(),
+                                                      prefixIcon: const Icon(Icons.percent, size: 18),
+                                                      suffixIcon: _discountController.text.isNotEmpty
+                                                          ? IconButton(
+                                                              icon: const Icon(Icons.clear, size: 16),
+                                                              onPressed: () {
+                                                                _discountController.clear();
+                                                                setState(() {
+                                                                  _recalculateTotals();
+                                                                });
+                                                              },
+                                                            )
+                                                          : null,
+                                                    ),
+                                                    onChanged: (val) {
                                                       setState(() {
-                                                        _showServiceSuggestions =
-                                                            false;
-                                                        _filteredServices = [];
+                                                        _recalculateTotals();
                                                       });
                                                     },
-                                                  )
-                                                : null,
-                                          ),
-                                          onChanged: (value) => _filterServices(
-                                            value,
-                                            allServices,
-                                          ),
-                                          onTap: () {
-                                            if (_serviceSearchController
-                                                .text
-                                                .isEmpty) {
-                                              _filterServices('', allServices);
-                                            }
-                                          },
-                                        ),
-                                        // Suggestions dropdown
-                                        if (_showServiceSuggestions &&
-                                            _filteredServices.isNotEmpty)
-                                          Container(
-                                            constraints: const BoxConstraints(
-                                              maxHeight: 200,
-                                            ),
-                                            margin: const EdgeInsets.only(
-                                              top: 4,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              border: Border.all(
-                                                color: Colors.grey.shade300,
-                                              ),
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                              color: Colors.white,
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: Colors.black
-                                                      .withValues(alpha: 0.08),
-                                                  blurRadius: 8,
-                                                  offset: const Offset(0, 2),
+                                                  ),
                                                 ),
                                               ],
                                             ),
-                                            child: ListView.separated(
-                                              shrinkWrap: true,
-                                              padding: EdgeInsets.zero,
-                                              itemCount:
-                                                  _filteredServices.length,
-                                              separatorBuilder: (_, index) =>
-                                                  Divider(
-                                                    height: 1,
-                                                    color: Colors.grey.shade200,
-                                                  ),
-                                              itemBuilder: (context, index) {
-                                                final service =
-                                                    _filteredServices[index];
-                                                final isAlreadySelected =
-                                                    _selectedServices.any(
-                                                      (s) =>
-                                                          s.serviceId ==
-                                                          service.serviceId,
-                                                    );
-                                                return ListTile(
-                                                  dense: true,
-                                                  contentPadding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 12,
-                                                        vertical: 2,
-                                                      ),
-                                                  leading: Icon(
-                                                    isAlreadySelected
-                                                        ? Icons.check_circle
-                                                        : Icons
-                                                              .add_circle_outline,
-                                                    color: isAlreadySelected
-                                                        ? Colors.green
-                                                        : Colors.grey,
-                                                    size: 20,
-                                                  ),
-                                                  title: Text(
-                                                    service.serviceName,
-                                                    style: TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      fontSize: 13,
-                                                      color: isAlreadySelected
-                                                          ? Colors
-                                                                .green
-                                                                .shade700
-                                                          : null,
-                                                    ),
-                                                  ),
-                                                  subtitle: Row(
+                                            if (_discountAmount > 0 || _discountController.text.isNotEmpty) ...[
+                                              const SizedBox(height: 12),
+                                              const Divider(height: 1),
+                                              const SizedBox(height: 8),
+                                              Row(
+                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                children: [
+                                                  Row(
                                                     children: [
+                                                      Icon(Icons.medical_information_outlined, size: 16, color: Colors.orange.shade800),
+                                                      const SizedBox(width: 6),
                                                       Text(
-                                                        '${service.price.toStringAsFixed(2)} DA',
-                                                        style: TextStyle(
-                                                          fontSize: 11,
-                                                          color: Colors
-                                                              .blue
-                                                              .shade700,
-                                                          fontWeight:
-                                                              FontWeight.w500,
+                                                        'Réduire la commission médecin',
+                                                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Colors.orange.shade900),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  Switch(
+                                                    value: _applyDoctorDiscount,
+                                                    activeColor: Colors.orange.shade800,
+                                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                    onChanged: (val) {
+                                                      setState(() {
+                                                        _applyDoctorDiscount = val;
+                                                        _recalculateTotals();
+                                                      });
+                                                    },
+                                                  ),
+                                                ],
+                                              ),
+                                              if (_applyDoctorDiscount) ...[
+                                                const SizedBox(height: 6),
+                                                Row(
+                                                  children: [
+                                                    SegmentedButton<String>(
+                                                      segments: const [
+                                                        ButtonSegment<String>(
+                                                          value: 'proportional',
+                                                          label: Text('Proportionnelle', style: TextStyle(fontSize: 11)),
+                                                        ),
+                                                        ButtonSegment<String>(
+                                                          value: 'custom',
+                                                          label: Text('Personnalisée', style: TextStyle(fontSize: 11)),
+                                                        ),
+                                                      ],
+                                                      selected: {_discountCommissionType == 'proportional' ? 'proportional' : 'custom'},
+                                                      onSelectionChanged: (val) {
+                                                        setState(() {
+                                                          if (val.first == 'proportional') {
+                                                            _discountCommissionType = 'proportional';
+                                                          } else {
+                                                            _discountCommissionType = 'percentage';
+                                                          }
+                                                          _recalculateTotals();
+                                                        });
+                                                      },
+                                                    ),
+                                                    if (_discountCommissionAmount > 0) ...[
+                                                      const Spacer(),
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.orange.shade100,
+                                                          borderRadius: BorderRadius.circular(10),
+                                                        ),
+                                                        child: Text(
+                                                          '- ${_discountCommissionAmount.toStringAsFixed(0)} DA',
+                                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.orange.shade900),
                                                         ),
                                                       ),
-                                                      const SizedBox(width: 12),
-                                                      Text(
-                                                        'Commission: ${service.doctorCommission.toStringAsFixed(2)} DA',
-                                                        style: TextStyle(
-                                                          fontSize: 11,
-                                                          color: Colors
-                                                              .orange
-                                                              .shade700,
-                                                          fontWeight:
-                                                              FontWeight.w500,
+                                                    ],
+                                                  ],
+                                                ),
+                                                if (_discountCommissionType != 'proportional') ...[
+                                                  const SizedBox(height: 8),
+                                                  Row(
+                                                    children: [
+                                                      SegmentedButton<String>(
+                                                        segments: const [
+                                                          ButtonSegment<String>(value: 'money', label: Text('DA', style: TextStyle(fontSize: 11))),
+                                                          ButtonSegment<String>(value: 'percentage', label: Text('%', style: TextStyle(fontSize: 11))),
+                                                        ],
+                                                        selected: {_discountCommissionType},
+                                                        onSelectionChanged: (val) {
+                                                          setState(() {
+                                                            _discountCommissionType = val.first;
+                                                            _recalculateTotals();
+                                                          });
+                                                        },
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                      Expanded(
+                                                        child: TextField(
+                                                          controller: _discountCommissionController,
+                                                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                                          decoration: InputDecoration(
+                                                            labelText: _discountCommissionType == 'percentage' ? 'Remise com. (%)' : 'Remise com. (DA)',
+                                                            hintText: _discountCommissionType == 'percentage' ? 'Ex: 10' : 'Ex: 50',
+                                                            suffixText: _discountCommissionType == 'percentage' ? '%' : 'DA',
+                                                            isDense: true,
+                                                            fillColor: Colors.white,
+                                                            filled: true,
+                                                            border: const OutlineInputBorder(),
+                                                            suffixIcon: _discountCommissionController.text.isNotEmpty
+                                                                ? IconButton(
+                                                                    icon: const Icon(Icons.clear, size: 14),
+                                                                    onPressed: () {
+                                                                      _discountCommissionController.clear();
+                                                                      setState(() {
+                                                                        _recalculateTotals();
+                                                                      });
+                                                                    },
+                                                                  )
+                                                                : null,
+                                                          ),
+                                                          onChanged: (val) {
+                                                            setState(() {
+                                                              _recalculateTotals();
+                                                            });
+                                                          },
                                                         ),
                                                       ),
                                                     ],
                                                   ),
-                                                  onTap: () {
-                                                    _addService(service);
-                                                    _serviceSearchController
-                                                        .clear();
-                                                    setState(() {
-                                                      _showServiceSuggestions =
-                                                          false;
-                                                      _filteredServices = [];
-                                                    });
-                                                  },
-                                                );
-                                              },
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 12),
-
-                                    // Selected services chips
-                                    if (_selectedServices.isNotEmpty) ...[
-                                      Wrap(
-                                        spacing: 8,
-                                        runSpacing: 8,
-                                        children: _selectedServices.asMap().entries.map((entry) {
-                                          final index = entry.key;
-                                          final service = entry.value;
-                                          return Chip(
-                                            label: Text(
-                                              '${service.serviceName} — ${service.price.toStringAsFixed(2)} DA',
-                                              style: const TextStyle(
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                            deleteIcon: const Icon(
-                                              Icons.close,
-                                              size: 16,
-                                            ),
-                                            onDeleted: () =>
-                                                _removeServiceAt(index),
-                                            backgroundColor:
-                                                Colors.green.shade50,
-                                            side: BorderSide(
-                                              color: Colors.green.shade200,
-                                            ),
-                                          );
-                                        }).toList(),
-                                      ),
-                                      const SizedBox(height: 12),
-
-                                      // Breakdown table
-                                      Container(
-                                        decoration: BoxDecoration(
-                                          border: Border.all(
-                                            color: Colors.grey.shade300,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                        ),
-                                        child: Column(
-                                          children: [
-                                            // Table header
-                                            Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 12,
-                                                    vertical: 8,
-                                                  ),
-                                              decoration: BoxDecoration(
-                                                color: Colors.grey.shade100,
-                                                borderRadius:
-                                                    const BorderRadius.vertical(
-                                                      top: Radius.circular(7),
-                                                    ),
-                                              ),
-                                              child: const Row(
-                                                children: [
-                                                  Expanded(
-                                                    flex: 4,
-                                                    child: Text(
-                                                      'Service',
-                                                      style: TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 12,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  Expanded(
-                                                    flex: 2,
-                                                    child: Text(
-                                                      'Amount',
-                                                      textAlign:
-                                                          TextAlign.right,
-                                                      style: TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 12,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  Expanded(
-                                                    flex: 2,
-                                                    child: Text(
-                                                      'Commission',
-                                                      textAlign:
-                                                          TextAlign.right,
-                                                      style: TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 12,
-                                                      ),
-                                                    ),
-                                                  ),
                                                 ],
-                                              ),
-                                            ),
-                                            // Table rows
-                                            ..._selectedServices.map((service) {
-                                              return Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 12,
-                                                      vertical: 6,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  border: Border(
-                                                    top: BorderSide(
-                                                      color:
-                                                          Colors.grey.shade200,
-                                                    ),
-                                                  ),
-                                                ),
-                                                child: Row(
-                                                  children: [
-                                                    Expanded(
-                                                      flex: 4,
-                                                      child: Text(
-                                                        service.serviceName,
-                                                        style: const TextStyle(
-                                                          fontSize: 12,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    Expanded(
-                                                      flex: 2,
-                                                      child: Text(
-                                                        '${service.price.toStringAsFixed(2)} DA',
-                                                        textAlign:
-                                                            TextAlign.right,
-                                                        style: TextStyle(
-                                                          fontSize: 12,
-                                                          color: Colors
-                                                              .blue
-                                                              .shade700,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    Expanded(
-                                                      flex: 2,
-                                                      child: Text(
-                                                        '${service.doctorCommission.toStringAsFixed(2)} DA',
-                                                        textAlign:
-                                                            TextAlign.right,
-                                                        style: TextStyle(
-                                                          fontSize: 12,
-                                                          color: Colors
-                                                              .orange
-                                                              .shade700,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              );
-                                            }),
-                                            // Totals row
-                                            Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 12,
-                                                    vertical: 8,
-                                                  ),
-                                              decoration: BoxDecoration(
-                                                color: Colors.green.shade50,
-                                                borderRadius:
-                                                    const BorderRadius.vertical(
-                                                      bottom: Radius.circular(
-                                                        7,
-                                                      ),
-                                                    ),
-                                                border: Border(
-                                                  top: BorderSide(
-                                                    color:
-                                                        Colors.green.shade200,
-                                                    width: 2,
-                                                  ),
-                                                ),
-                                              ),
-                                              child: Row(
-                                                children: [
-                                                  const Expanded(
-                                                    flex: 4,
-                                                    child: Text(
-                                                      'TOTAL',
-                                                      style: TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 13,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  Expanded(
-                                                    flex: 2,
-                                                    child: Text(
-                                                      '${_totalPaymentAmount.toStringAsFixed(2)} DA',
-                                                      textAlign:
-                                                          TextAlign.right,
-                                                      style: TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 13,
-                                                        color: Colors
-                                                            .blue
-                                                            .shade800,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  Expanded(
-                                                    flex: 2,
-                                                    child: Text(
-                                                      '${_totalDoctorCommission.toStringAsFixed(2)} DA',
-                                                      textAlign:
-                                                          TextAlign.right,
-                                                      style: TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 13,
-                                                        color: Colors
-                                                            .orange
-                                                            .shade800,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
+                                              ],
+                                            ],
                                           ],
                                         ),
                                       ),
-                                      const SizedBox(height: 12),
-                                      TextFormField(
-                                        controller: _paymentNoteController,
-                                        decoration: const InputDecoration(
-                                          labelText: 'Payment Note (Optional)',
-                                          border: OutlineInputBorder(),
-                                          isDense: true,
+                                      const SizedBox(height: 16),
+
+                                      // --- 3. RECAPITULATIF FINANCIER & TABLEAU DETAILLE ---
+                                      if (hasSelection) ...[
+                                        Container(
+                                          decoration: BoxDecoration(
+                                            border: Border.all(color: Colors.grey.shade300),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Column(
+                                            children: [
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.grey.shade100,
+                                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(7)),
+                                                ),
+                                                child: const Row(
+                                                  children: [
+                                                    Expanded(flex: 2, child: Text('Type', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                                    Expanded(flex: 4, child: Text('Désignation', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                                    Expanded(flex: 2, child: Text('Prix (DA)', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                                    Expanded(flex: 2, child: Text('Com. Dr', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                                  ],
+                                                ),
+                                              ),
+                                              // Actes rows
+                                              ..._selectedServices.map((service) => Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                    decoration: BoxDecoration(
+                                                      border: Border(top: BorderSide(color: Colors.grey.shade200)),
+                                                    ),
+                                                    child: Row(
+                                                      children: [
+                                                        Expanded(
+                                                          flex: 2,
+                                                          child: Text(
+                                                            'Acte',
+                                                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.blue.shade800),
+                                                          ),
+                                                        ),
+                                                        Expanded(flex: 4, child: Text(service.serviceName, style: const TextStyle(fontSize: 12))),
+                                                        Expanded(flex: 2, child: Text('${service.price.toStringAsFixed(0)} DA', textAlign: TextAlign.right, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))),
+                                                        Expanded(flex: 2, child: Text('${service.doctorCommission.toStringAsFixed(0)} DA', textAlign: TextAlign.right, style: TextStyle(fontSize: 12, color: Colors.orange.shade800))),
+                                                      ],
+                                                    ),
+                                                  )),
+                                              // Soins rows
+                                              ..._selectedPaymentSoins.map((soin) => Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                    decoration: BoxDecoration(
+                                                      border: Border(top: BorderSide(color: Colors.grey.shade200)),
+                                                    ),
+                                                    child: Row(
+                                                      children: [
+                                                        Expanded(
+                                                          flex: 2,
+                                                          child: Text(
+                                                            'Soin/Inj.',
+                                                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.teal.shade800),
+                                                          ),
+                                                        ),
+                                                        Expanded(flex: 4, child: Text(soin.nom, style: const TextStyle(fontSize: 12))),
+                                                        Expanded(flex: 2, child: Text('${soin.price.toStringAsFixed(0)} DA', textAlign: TextAlign.right, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))),
+                                                        Expanded(flex: 2, child: Text('${soin.doctorCommission.toStringAsFixed(0)} DA', textAlign: TextAlign.right, style: TextStyle(fontSize: 12, color: Colors.orange.shade800))),
+                                                      ],
+                                                    ),
+                                                  )),
+                                              // Subtotals & Total row
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.green.shade50,
+                                                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(7)),
+                                                  border: Border(top: BorderSide(color: Colors.green.shade300, width: 1.5)),
+                                                ),
+                                                child: Column(
+                                                  children: [
+                                                    if (_totalActsAmount > 0 && _totalSoinsAmount > 0) ...[
+                                                      Row(
+                                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                        children: [
+                                                          Text('Sous-total Actes: ${_totalActsAmount.toStringAsFixed(0)} DA', style: TextStyle(fontSize: 11, color: Colors.grey[700])),
+                                                          Text('Sous-total Soins: ${_totalSoinsAmount.toStringAsFixed(0)} DA', style: TextStyle(fontSize: 11, color: Colors.grey[700])),
+                                                        ],
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                    ],
+                                                    if (_discountAmount > 0) ...[
+                                                      Row(
+                                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                        children: [
+                                                          Text('Total Brut: ${_subtotalBeforeDiscount.toStringAsFixed(0)} DA', style: TextStyle(fontSize: 11, color: Colors.grey[600], decoration: TextDecoration.lineThrough)),
+                                                          Text(
+                                                            'Remise: - ${_discountAmount.toStringAsFixed(0)} DA ${_discountType == "percentage" ? "(-${_discountController.text}%)" : ""}',
+                                                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      const SizedBox(height: 6),
+                                                    ],
+                                                    Row(
+                                                      children: [
+                                                        const Expanded(
+                                                          flex: 4,
+                                                          child: Text(
+                                                            'TOTAL NET À PAYER',
+                                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.green),
+                                                          ),
+                                                        ),
+                                                        Expanded(
+                                                          flex: 3,
+                                                          child: Text(
+                                                            '${_totalPaymentAmount.toStringAsFixed(0)} DA',
+                                                            textAlign: TextAlign.right,
+                                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.green.shade800),
+                                                          ),
+                                                        ),
+                                                        Expanded(
+                                                          flex: 3,
+                                                          child: Column(
+                                                            crossAxisAlignment: CrossAxisAlignment.end,
+                                                            children: [
+                                                              Text(
+                                                                'Com: ${_totalDoctorCommission.toStringAsFixed(0)} DA',
+                                                                textAlign: TextAlign.right,
+                                                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.orange.shade900),
+                                                              ),
+                                                              if (_discountCommissionAmount > 0)
+                                                                Text(
+                                                                  '(-${_discountCommissionAmount.toStringAsFixed(0)} DA)',
+                                                                  textAlign: TextAlign.right,
+                                                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange.shade700),
+                                                                ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
-                                      ),
+                                        const SizedBox(height: 12),
+                                        TextFormField(
+                                          controller: _paymentNoteController,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Note de paiement (Optionnel)',
+                                            border: OutlineInputBorder(),
+                                            isDense: true,
+                                          ),
+                                        ),
+                                      ],
                                     ],
-                                  ],
-                                );
-                              }
-                              return const Text('Loading services...');
+                                  );
+                                },
+                              );
                             },
                           ),
                         ],
@@ -4638,7 +5418,7 @@ class _MedicalRecordFormDialogForPatientState
   // ── adaptive footer ──────────────────────────────────────────────────────────
 
   Widget _buildFooter(BuildContext context) {
-    final small = MediaQuery.of(context).size.width < 600;
+    final small = context.isMobile;
 
     final previewBtn = OutlinedButton.icon(
       onPressed: () {

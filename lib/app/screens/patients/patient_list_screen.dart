@@ -1,6 +1,8 @@
+﻿import 'package:chifa/app/cubits/auth_cubit.dart';
 import 'package:chifa/app/cubits/medical_record_cubit.dart';
 import 'package:chifa/app/cubits/patient_cubit.dart';
 import 'package:chifa/app/cubits/workspace_cubit.dart';
+import 'package:chifa/app/utils/role_permissions.dart';
 import 'package:chifa/app/screens/medical_records/medical_record_form_dialog_for_patient.dart';
 import 'package:chifa/app/screens/medical_records/patient_medical_records_list_dialog.dart';
 import 'package:chifa/app/screens/patients/patient_form_dialog.dart';
@@ -8,6 +10,7 @@ import 'package:chifa/services/db/models/patient.dart';
 import 'package:chifa/services/db/repositories/medical_record_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:chifa/app/utils/responsive.dart';
 
 class PatientListScreen extends StatefulWidget {
   const PatientListScreen({super.key});
@@ -36,7 +39,7 @@ class _PatientListScreenState extends State<PatientListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 800;
+    final isMobile = context.isMobile;
     return BlocBuilder<PatientCubit, PatientState>(
       builder: (context, state) {
         return Column(
@@ -336,7 +339,7 @@ class _PatientListScreenState extends State<PatientListScreen> {
   }
 
   Widget _buildPatientList(List<Patient> patients) {
-    final isMobile = MediaQuery.of(context).size.width < 800;
+    final isMobile = context.isMobile;
 
     return ListView.builder(
       padding: const EdgeInsets.all(16),
@@ -395,7 +398,7 @@ class _PatientListScreenState extends State<PatientListScreen> {
                         children: [
                           _buildInfoBadge(
                             Icons.cake_outlined,
-                            '${patient.age} yrs',
+                            patient.formattedAge,
                           ),
                           _buildInfoBadge(
                             patient.gender.name == 'Male'
@@ -470,7 +473,7 @@ class _PatientListScreenState extends State<PatientListScreen> {
                               children: [
                                 _buildInfoBadge(
                                   Icons.cake_outlined,
-                                  '${patient.age} yrs',
+                                  patient.formattedAge,
                                 ),
                                 _buildInfoBadge(
                                   patient.gender.name == 'Male'
@@ -499,14 +502,18 @@ class _PatientListScreenState extends State<PatientListScreen> {
                             onPressed: () =>
                                 _showPatientRecordsDialog(context, patient),
                           ),
-                          const SizedBox(width: 4),
-                          _buildActionButton(
-                            icon: Icons.note_add_outlined,
-                            color: Colors.teal,
-                            tooltip: 'Add Record',
-                            onPressed: () =>
-                                _showAddRecordDialog(context, patient),
-                          ),
+                          if (RolePermissions.canCreateMedicalRecord(
+                            context.watch<AuthCubit>().currentRole,
+                          )) ...[
+                            const SizedBox(width: 4),
+                            _buildActionButton(
+                              icon: Icons.note_add_outlined,
+                              color: Colors.teal,
+                              tooltip: 'Add Record',
+                              onPressed: () =>
+                                  _showAddRecordDialog(context, patient),
+                            ),
+                          ],
                           const SizedBox(width: 4),
                           _buildActionButton(
                             icon: Icons.edit_outlined,
@@ -595,13 +602,16 @@ class _PatientListScreenState extends State<PatientListScreen> {
             title: Text('View Records'),
           ),
         ),
-        const PopupMenuItem(
-          value: 'add_record',
-          child: ListTile(
-            leading: Icon(Icons.note_add_outlined, color: Colors.teal),
-            title: Text('Add Record'),
+        if (RolePermissions.canCreateMedicalRecord(
+          context.read<AuthCubit>().currentRole,
+        ))
+          const PopupMenuItem(
+            value: 'add_record',
+            child: ListTile(
+              leading: Icon(Icons.note_add_outlined, color: Colors.teal),
+              title: Text('Add Record'),
+            ),
           ),
-        ),
         const PopupMenuItem(
           value: 'edit',
           child: ListTile(

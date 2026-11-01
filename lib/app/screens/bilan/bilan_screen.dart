@@ -1,3 +1,4 @@
+﻿import 'package:chifa/services/pdf_generation_service.dart';
 import 'dart:typed_data';
 
 import 'package:chifa/app/printing/bilan.dart';
@@ -18,8 +19,10 @@ import 'package:chifa/services/db/repositories/bilan_repository.dart';
 import 'package:chifa/services/db/repositories/medical_record_repository.dart';
 import 'package:chifa/services/db/repositories/patient_repository.dart';
 import 'package:chifa/app/theme/app_theme.dart';
+import 'package:chifa/app/utils/role_permissions.dart';
 
 import '../../../services/db/repositories/base_repository.dart';
+import 'package:chifa/app/utils/responsive.dart';
 
 /// Lab Orders (Bilan) Screen
 class BilanScreen extends StatefulWidget {
@@ -49,6 +52,18 @@ class _BilanScreenState extends State<BilanScreen> {
   }
 
   void _showBilanDialog([Bilan? bilan]) {
+    final role = context.read<AuthCubit>().currentRole;
+    if (!RolePermissions.canManageLabTests(role)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Accès non autorisé : Vous ne pouvez pas créer ou modifier un bilan.',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -57,6 +72,8 @@ class _BilanScreenState extends State<BilanScreen> {
   }
 
   void _deleteBilan(Bilan bilan) {
+    final role = context.read<AuthCubit>().currentRole;
+    if (!RolePermissions.canManageLabTests(role)) return;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -90,7 +107,9 @@ class _BilanScreenState extends State<BilanScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 800;
+    final isMobile = context.isMobile;
+    final role = context.watch<AuthCubit>().currentRole;
+    final canManageLabTests = RolePermissions.canManageLabTests(role);
 
     return BlocListener<BilanCubit, BilanState>(
       listener: (context, state) {
@@ -158,12 +177,14 @@ class _BilanScreenState extends State<BilanScreen> {
                               onChanged: _onSearchChanged,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          ElevatedButton.icon(
-                            onPressed: () => _showBilanDialog(),
-                            icon: const Icon(Icons.add),
-                            label: const Text('New Lab Order'),
-                          ),
+                          if (canManageLabTests) ...[
+                            const SizedBox(width: 8),
+                            ElevatedButton.icon(
+                              onPressed: () => _showBilanDialog(),
+                              icon: const Icon(Icons.add),
+                              label: const Text('New Lab Order'),
+                            ),
+                          ],
                           const SizedBox(width: 4),
                           IconButton(
                             onPressed: () {
@@ -234,8 +255,12 @@ class _BilanScreenState extends State<BilanScreen> {
                         return _BilanCard(
                           bilan: bilan,
                           onPrint: () => _showPrintDialog(bilan),
-                          onEdit: () => _showBilanDialog(bilan),
-                          onDelete: () => _deleteBilan(bilan),
+                          onEdit: canManageLabTests
+                              ? () => _showBilanDialog(bilan)
+                              : null,
+                          onDelete: canManageLabTests
+                              ? () => _deleteBilan(bilan)
+                              : null,
                         );
                       },
                     );
@@ -255,19 +280,19 @@ class _BilanScreenState extends State<BilanScreen> {
 class _BilanCard extends StatelessWidget {
   final Bilan bilan;
   final VoidCallback onPrint;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   const _BilanCard({
     required this.bilan,
     required this.onPrint,
-    required this.onEdit,
-    required this.onDelete,
+    this.onEdit,
+    this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 800;
+    final isMobile = context.isMobile;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -311,8 +336,8 @@ class _BilanCard extends StatelessWidget {
                     icon: const Icon(Icons.more_vert),
                     onSelected: (value) {
                       if (value == 'print') onPrint();
-                      if (value == 'edit') onEdit();
-                      if (value == 'delete') onDelete();
+                      if (value == 'edit') onEdit?.call();
+                      if (value == 'delete') onDelete?.call();
                     },
                     itemBuilder: (context) => [
                       const PopupMenuItem(
@@ -322,20 +347,22 @@ class _BilanCard extends StatelessWidget {
                           title: Text('Print'),
                         ),
                       ),
-                      const PopupMenuItem(
-                        value: 'edit',
-                        child: ListTile(
-                          leading: Icon(Icons.edit, color: Colors.orange),
-                          title: Text('Edit'),
+                      if (onEdit != null)
+                        const PopupMenuItem(
+                          value: 'edit',
+                          child: ListTile(
+                            leading: Icon(Icons.edit, color: Colors.orange),
+                            title: Text('Edit'),
+                          ),
                         ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: ListTile(
-                          leading: Icon(Icons.delete, color: Colors.red),
-                          title: Text('Delete'),
+                      if (onDelete != null)
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: ListTile(
+                            leading: Icon(Icons.delete, color: Colors.red),
+                            title: Text('Delete'),
+                          ),
                         ),
-                      ),
                     ],
                   )
                 else
@@ -346,16 +373,18 @@ class _BilanCard extends StatelessWidget {
                         onPressed: onPrint,
                         tooltip: 'Print',
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.orange),
-                        onPressed: onEdit,
-                        tooltip: 'Edit',
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: onDelete,
-                        tooltip: 'Delete',
-                      ),
+                      if (onEdit != null)
+                        IconButton(
+                          icon: const Icon(Icons.edit, color: Colors.orange),
+                          onPressed: onEdit,
+                          tooltip: 'Edit',
+                        ),
+                      if (onDelete != null)
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: onDelete,
+                          tooltip: 'Delete',
+                        ),
                     ],
                   ),
               ],
@@ -705,7 +734,7 @@ class _BilanFormDialogState extends State<_BilanFormDialog> {
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.bilan != null;
-    final isMobile = MediaQuery.of(context).size.width < 800;
+    final isMobile = context.isMobile;
 
     return AlertDialog(
       title: Text(isEditing ? 'Edit Lab Order' : 'New Lab Order'),
@@ -1108,7 +1137,7 @@ class _BilanPrintDialogState extends State<_BilanPrintDialog> {
   Future<void> _printPdf() async {
     if (_patient == null) return;
     final pdfBytes = await _generatePdf();
-    await Printing.layoutPdf(onLayout: (format) async => pdfBytes);
+    await PdfGenerationService().printPdfBytes(pdfBytes, name: 'Ordonnance.pdf', context: context);
   }
 
   @override
@@ -1128,7 +1157,7 @@ class _BilanPrintDialogState extends State<_BilanPrintDialog> {
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
-                Text('Age: ${_patient!.age} ans'),
+                Text('Age: ${_patient!.formattedAge}'),
                 const SizedBox(height: 16),
                 const Divider(),
                 const SizedBox(height: 8),

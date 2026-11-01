@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 /// Chifa Clinic — Premium Medical Theme
@@ -8,9 +9,11 @@ import 'package:flutter/material.dart';
 class AppTheme {
   AppTheme._();
 
+  static bool get _isLinux => !kIsWeb && Platform.isLinux;
+
   // ─── Platform-specific font scaling ─────────────────────────────────
   static double get _fontScale {
-    if (Platform.isLinux) {
+    if (_isLinux) {
       return 1.3; // Increase font size on Linux by 15%
     }
     return 1.0; // Default scale for other platforms
@@ -58,6 +61,7 @@ class AppTheme {
   static Color get sidebarTextActive => _sidebarTextActive;
   static Color get primary => _primary;
   static Color get primaryLight => _primaryLight;
+  static Color get primaryDark => _primaryDark;
   static Color get secondary => _secondary;
   static Color get textTertiary => _textTertiary;
   static Color get divider => _dividerColor;
@@ -133,8 +137,8 @@ class AppTheme {
           backgroundColor: _primary,
           foregroundColor: Colors.white,
           padding: EdgeInsets.symmetric(
-            horizontal: Platform.isLinux ? 20 : (24 * _fontScale),
-            vertical: Platform.isLinux ? 10 : (14 * _fontScale),
+            horizontal: _isLinux ? 20 : (24 * _fontScale),
+            vertical: _isLinux ? 10 : (14 * _fontScale),
           ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -154,8 +158,8 @@ class AppTheme {
           foregroundColor: _primary,
           side: const BorderSide(color: _dividerColor, width: 1.5),
           padding: EdgeInsets.symmetric(
-            horizontal: Platform.isLinux ? 20 : (24 * _fontScale),
-            vertical: Platform.isLinux ? 10 : (14 * _fontScale),
+            horizontal: _isLinux ? 20 : (24 * _fontScale),
+            vertical: _isLinux ? 10 : (14 * _fontScale),
           ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -173,8 +177,8 @@ class AppTheme {
         style: TextButton.styleFrom(
           foregroundColor: _primary,
           padding: EdgeInsets.symmetric(
-            horizontal: Platform.isLinux ? 12 : (16 * _fontScale),
-            vertical: Platform.isLinux ? 8 : (10 * _fontScale),
+            horizontal: _isLinux ? 12 : (16 * _fontScale),
+            vertical: _isLinux ? 8 : (10 * _fontScale),
           ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
@@ -200,8 +204,8 @@ class AppTheme {
         filled: true,
         fillColor: _surfaceVariant,
         contentPadding: EdgeInsets.symmetric(
-          horizontal: Platform.isLinux ? 14 : (16 * _fontScale),
-          vertical: Platform.isLinux ? 10 : (14 * _fontScale),
+          horizontal: _isLinux ? 14 : (16 * _fontScale),
+          vertical: _isLinux ? 10 : (14 * _fontScale),
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -244,8 +248,8 @@ class AppTheme {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         side: BorderSide.none,
         padding: EdgeInsets.symmetric(
-          horizontal: Platform.isLinux ? 10 : (12 * _fontScale),
-          vertical: Platform.isLinux ? 6 : (8 * _fontScale),
+          horizontal: _isLinux ? 10 : (12 * _fontScale),
+          vertical: _isLinux ? 6 : (8 * _fontScale),
         ),
       ),
 

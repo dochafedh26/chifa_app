@@ -1,6 +1,5 @@
 import "package:chifa/services/db/repositories/repositories.dart";
 import "package:chifa/services/db/models/models.dart";
-import "package:dartz/dartz.dart";
 import "package:equatable/equatable.dart";
 import "package:flutter_bloc/flutter_bloc.dart";
 
@@ -96,9 +95,23 @@ class AppointmentOperationSuccess extends AppointmentState {
   List<Object?> get props => [message];
 }
 
+/// Date range filtering modes for appointments
+enum AppointmentDateFilterMode {
+  day,
+  month,
+  year,
+  allTime,
+}
+
 // Appointment Cubit
 class AppointmentCubit extends Cubit<AppointmentState> {
   final AppointmentRepository _repository;
+
+  AppointmentDateFilterMode _currentFilterMode = AppointmentDateFilterMode.day;
+  DateTime _currentDate = DateTime.now();
+
+  AppointmentDateFilterMode get currentFilterMode => _currentFilterMode;
+  DateTime get currentDate => _currentDate;
 
   AppointmentCubit(this._repository) : super(AppointmentInitial());
 
@@ -106,7 +119,26 @@ class AppointmentCubit extends Cubit<AppointmentState> {
     await _repository.autoCancelPastAppointments();
   }
 
+  /// Reload appointments according to the currently active filter mode and date
+  Future<void> reloadCurrentAppointments() async {
+    switch (_currentFilterMode) {
+      case AppointmentDateFilterMode.day:
+        await loadAppointmentsByDate(_currentDate);
+        break;
+      case AppointmentDateFilterMode.month:
+        await loadAppointmentsByMonth(_currentDate);
+        break;
+      case AppointmentDateFilterMode.year:
+        await loadAppointmentsByYear(_currentDate.year);
+        break;
+      case AppointmentDateFilterMode.allTime:
+        await loadAllAppointments();
+        break;
+    }
+  }
+
   Future<void> loadAppointments() async {
+    _currentFilterMode = AppointmentDateFilterMode.allTime;
     emit(AppointmentLoading());
     await _autoCancel();
     final result = await _repository.getAll();
@@ -115,6 +147,10 @@ class AppointmentCubit extends Cubit<AppointmentState> {
     ) {
       emit(AppointmentsLoaded(appointments));
     });
+  }
+
+  Future<void> loadAllAppointments() async {
+    await loadAppointments();
   }
 
   Future<void> loadAppointmentById(int id) async {
@@ -132,7 +168,7 @@ class AppointmentCubit extends Cubit<AppointmentState> {
       emit(
         const AppointmentOperationSuccess('Appointment created successfully'),
       );
-      loadAppointments();
+      reloadCurrentAppointments();
     });
   }
 
@@ -145,7 +181,7 @@ class AppointmentCubit extends Cubit<AppointmentState> {
         emit(
           const AppointmentOperationSuccess('Appointment updated successfully'),
         );
-        loadAppointments();
+        reloadCurrentAppointments();
       }
     });
   }
@@ -159,7 +195,7 @@ class AppointmentCubit extends Cubit<AppointmentState> {
         emit(
           const AppointmentOperationSuccess('Appointment deleted successfully'),
         );
-        loadAppointments();
+        reloadCurrentAppointments();
       }
     });
   }
@@ -171,15 +207,47 @@ class AppointmentCubit extends Cubit<AppointmentState> {
     ) {
       if (success) {
         emit(const AppointmentOperationSuccess('Status updated'));
-        loadAppointments();
+        reloadCurrentAppointments();
       }
     });
   }
 
   Future<void> loadAppointmentsByDate(DateTime date) async {
+    _currentFilterMode = AppointmentDateFilterMode.day;
+    _currentDate = date;
     emit(AppointmentLoading());
     await _autoCancel();
     final result = await _repository.getByDate(date);
+    result.fold(
+      (failure) => emit(AppointmentError(failure.message)),
+      (appointments) => emit(AppointmentsLoaded(appointments)),
+    );
+  }
+
+  /// Load all appointments for the entire month of [date]
+  Future<void> loadAppointmentsByMonth(DateTime date) async {
+    _currentFilterMode = AppointmentDateFilterMode.month;
+    _currentDate = date;
+    emit(AppointmentLoading());
+    await _autoCancel();
+    final startOfMonth = DateTime(date.year, date.month, 1);
+    final endOfMonth = DateTime(date.year, date.month + 1, 0, 23, 59, 59);
+    final result = await _repository.getByDateRange(startOfMonth, endOfMonth);
+    result.fold(
+      (failure) => emit(AppointmentError(failure.message)),
+      (appointments) => emit(AppointmentsLoaded(appointments)),
+    );
+  }
+
+  /// Load all appointments for the entire year [year]
+  Future<void> loadAppointmentsByYear(int year) async {
+    _currentFilterMode = AppointmentDateFilterMode.year;
+    _currentDate = DateTime(year, _currentDate.month, _currentDate.day);
+    emit(AppointmentLoading());
+    await _autoCancel();
+    final startOfYear = DateTime(year, 1, 1);
+    final endOfYear = DateTime(year, 12, 31, 23, 59, 59);
+    final result = await _repository.getByDateRange(startOfYear, endOfYear);
     result.fold(
       (failure) => emit(AppointmentError(failure.message)),
       (appointments) => emit(AppointmentsLoaded(appointments)),
@@ -197,6 +265,8 @@ class AppointmentCubit extends Cubit<AppointmentState> {
   }
 
   Future<void> loadTodayAppointments() async {
+    _currentFilterMode = AppointmentDateFilterMode.day;
+    _currentDate = DateTime.now();
     emit(AppointmentLoading());
     await _autoCancel();
     final result = await _repository.getTodayAppointments();

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -5,9 +6,12 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:uuid/uuid.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 import '../services/tunnel_service.dart';
 import '../services/settings_service.dart';
 import '../models/tunnel_config.dart';
+import '../widgets/add_tunnel_dialog.dart';
 
 class DevicesScreen extends StatefulWidget {
   final Function(int)? onTabChange;
@@ -18,7 +22,7 @@ class DevicesScreen extends StatefulWidget {
   State<DevicesScreen> createState() => _DevicesScreenState();
 }
 
-class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProviderStateMixin {
+class _DevicesScreenState extends State<TcpTunnelDevicesScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _loading = false;
   String? _error;
@@ -36,10 +40,19 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
   List<Map<String, dynamic>> _rdpSessions = [];
   bool _loadingRdpSessions = false;
 
+  // ── Network Scan State ───────────────────────────────────────────────────
+  List<Map<String, dynamic>> _networkMachines = [];
+  Map<String, dynamic>? _networkInfo;
+  bool _scanningNetwork = false;
+  String? _networkError;
+  String _networkSearchQuery = '';
+  String _networkFilterType = 'All';
+  bool _deepNetworkScan = false;
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkLocalUsbip();
       _refreshDevices();
@@ -53,6 +66,7 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
   }
 
   Future<void> _checkLocalUsbip() async {
+    if (!mounted) return;
     final service = context.read<TunnelService>();
     final installed = await service.isLocalUsbipInstalled();
     if (mounted) {
@@ -96,13 +110,20 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
       }
     }
 
+    if (!mounted) return;
     _checkRdpWrapperStatus(service);
+    if (!mounted) return;
     _refreshRdpSessions(service);
+    if (!mounted) return;
+    if (_networkMachines.isEmpty && !_scanningNetwork) {
+      _scanNetwork(deepScan: false);
+    }
   }
 
   Future<void> _checkRdpWrapperStatus(TunnelService service) async {
+    if (!mounted) return;
     try {
-      setState(() => _checkingRdpWrapper = true);
+      if (mounted) setState(() => _checkingRdpWrapper = true);
       final installed = await service.checkRemoteRdpWrapperInstalled().timeout(const Duration(seconds: 10));
       if (mounted) setState(() => _rdpWrapperInstalled = installed);
     } catch (_) {
@@ -113,8 +134,9 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
   }
 
   Future<void> _refreshRdpSessions(TunnelService service) async {
+    if (!mounted) return;
     try {
-      setState(() => _loadingRdpSessions = true);
+      if (mounted) setState(() => _loadingRdpSessions = true);
       final sessions = await service.fetchRemoteRdpSessions().timeout(const Duration(seconds: 10));
       if (mounted) setState(() => _rdpSessions = sessions);
     } catch (_) {
@@ -128,7 +150,12 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
   Widget build(BuildContext context) {
     final service = context.watch<TunnelService>();
 
+    final settings = context.watch<SettingsService>();
+    final currentProfile = settings.selectedProfile;
+    final rdpToken = currentProfile.rdpToken;
+
     if (!service.isConnected || !service.peerConnected) {
+      final hasRdpFallback = rdpToken != null && rdpToken.isNotEmpty;
       return Scaffold(
         backgroundColor: const Color(0xFF0A0E1A),
         body: Center(
@@ -140,19 +167,46 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: const Color(0xFF1A2340)),
             ),
-            child: const Column(
+            child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.cloud_off_outlined, color: Colors.orangeAccent, size: 48),
-                SizedBox(height: 16),
-                Text('Work Agent Offline',
+                const Icon(Icons.cloud_off_outlined, color: Colors.orangeAccent, size: 48),
+                const SizedBox(height: 16),
+                const Text('Main Work Agent Offline',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                SizedBox(height: 8),
-                Text(
-                  'To manage remote USB & printers, connect to the relay server and ensure the work agent is online.',
+                const SizedBox(height: 8),
+                const Text(
+                  'The main work agent is offline. USB, Printer, and File management require the main agent to be online.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Color(0xFF8892A4), height: 1.4),
                 ),
+                if (hasRdpFallback) ...[
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: const Icon(Icons.desktop_windows_rounded),
+                    label: const Text('Connect via RDP Safety Agent', style: TextStyle(fontWeight: FontWeight.bold)),
+                    onPressed: () async {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Connecting via Dedicated RDP Safety Agent...'),
+                          backgroundColor: Colors.orange,
+                        ),
+                      );
+                      await service.launchRdpWithFallbackToken(
+                        relayUrl: currentProfile.relayUrl,
+                        rdpToken: rdpToken,
+                        port: 13390,
+                        context: context,
+                      );
+                    },
+                  ),
+                ],
               ],
             ),
           ),
@@ -168,6 +222,8 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
           color: const Color(0xFF0D1120),
           child: TabBar(
             controller: _tabController,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
             indicatorColor: const Color(0xFF00BFA5),
             labelColor: const Color(0xFF00BFA5),
             unselectedLabelColor: const Color(0xFF8892A4),
@@ -212,6 +268,16 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
                   ],
                 ),
               ),
+              Tab(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.lan_outlined, size: 18),
+                    SizedBox(width: 6),
+                    Text('Network'),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -235,10 +301,16 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
                         const SizedBox(height: 16),
                         Text(_error!, style: const TextStyle(color: Colors.white70), textAlign: TextAlign.center),
                         const SizedBox(height: 16),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00BFA5)),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00BFA5),
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
                           onPressed: _refreshDevices,
-                          child: const Text('Retry'),
+                          icon: const Icon(Icons.refresh_rounded, size: 18),
+                          label: const Text('Retry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                         )
                       ],
                     ),
@@ -251,6 +323,7 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
                     _buildPrintersTab(service),
                     _buildComPortsTab(),
                     _buildRdpTab(service),
+                    _buildNetworkTab(service),
                   ],
                 ),
     );
@@ -370,8 +443,6 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
                                   ),
                                 ),
                               if (isAttachedLocally && busId != null && service.isTemporarilyAttached(busId))
-                                const SizedBox(width: 6),
-                              if (isAttachedLocally && busId != null && service.isTemporarilyAttached(busId))
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
@@ -419,8 +490,10 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
                   _buildCapacityBar(device),
                 ],
                 const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.end,
                   children: [
                     if (isStorage && driveLetter != null) ...[
                       _actionButton(
@@ -432,7 +505,6 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
                           widget.onTabChange?.call(1);
                         },
                       ),
-                      const SizedBox(width: 8),
                       _actionButton(
                         icon: isShared ? Icons.link_off_rounded : Icons.share_rounded,
                         label: isShared ? 'Unshare' : 'Share',
@@ -441,7 +513,6 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
                             ? _unshareDrive(service, 'usb_share')
                             : _shareDrive(service, device),
                       ),
-                      const SizedBox(width: 8),
                       _actionButton(
                         icon: Icons.eject_rounded,
                         label: 'Eject',
@@ -461,7 +532,6 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
                               _detachUsbipDevice(service, busId, localPort);
                             },
                           ),
-                          const SizedBox(width: 8),
                         ],
                         _actionButton(
                           icon: Icons.power_settings_new_rounded,
@@ -476,22 +546,19 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
                           color: const Color(0xFF00BFA5),
                           onPressed: () => _attachUsbipDevice(service, busId, temporary: false),
                         ),
-                        const SizedBox(width: 8),
                         _actionButton(
                           icon: Icons.timer_outlined,
                           label: 'Attach (Temp)',
                           color: const Color(0xFF78909C),
                           onPressed: () => _attachUsbipDevice(service, busId, temporary: true),
                         ),
-                        if (device['status'] == 'Shared') ...[
-                          const SizedBox(width: 8),
+                        if (device['status'] == 'Shared')
                           _actionButton(
                             icon: Icons.link_off_rounded,
                             label: 'Unbind Remote',
                             color: Colors.orange,
                             onPressed: () => _unbindRemoteDevice(service, busId),
                           ),
-                        ],
                       ],
                     ] else
                       Container(
@@ -894,10 +961,73 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _printers.length,
-      itemBuilder: (context, index) {
+    return Column(
+      children: [
+        FutureBuilder<String?>(
+          future: SharedPreferences.getInstance().then((p) => p.getString('selected_remote_printer')),
+          builder: (context, snapshot) {
+            final selectedPrinter = snapshot.data;
+            if (selectedPrinter == null || selectedPrinter.isEmpty) {
+              return const SizedBox.shrink();
+            }
+            return Container(
+              margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00BFA5).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF00BFA5)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.print_rounded, color: Color(0xFF00BFA5), size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Remote Printing Active Target:',
+                          style: TextStyle(fontSize: 11, color: Color(0xFF8892A4)),
+                        ),
+                        Text(
+                          selectedPrinter,
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF00BFA5)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.redAccent,
+                      side: const BorderSide(color: Colors.redAccent),
+                    ),
+                    onPressed: () async {
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.remove('selected_remote_printer');
+                      if (context.mounted) {
+                        setState(() {});
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Target printer cleared. App will now print using local printer.'),
+                            backgroundColor: Color(0xFFE53935),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.clear_rounded, size: 16),
+                    label: const Text('Unselect (Use Local Printer)', style: TextStyle(fontSize: 12)),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: _printers.length,
+            itemBuilder: (context, index) {
         final printer = _printers[index];
         final isDefault = printer['isDefault'] as bool? ?? false;
 
@@ -966,16 +1096,54 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
                   ],
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.end,
                   children: [
+                    FutureBuilder<String?>(
+                      future: SharedPreferences.getInstance().then((p) => p.getString('selected_remote_printer')),
+                      builder: (context, snapshot) {
+                        final isSelectedTarget = snapshot.data == printer['name'];
+                        return _actionButton(
+                          icon: isSelectedTarget ? Icons.check_circle_rounded : Icons.print_outlined,
+                          label: isSelectedTarget ? 'Target Selected (Unselect)' : 'Set as App Printer',
+                          color: isSelectedTarget ? const Color(0xFF00BFA5) : const Color(0xFF4A90E2),
+                          onPressed: () async {
+                            final prefs = await SharedPreferences.getInstance();
+                            if (isSelectedTarget) {
+                              await prefs.remove('selected_remote_printer');
+                              if (context.mounted) {
+                                setState(() {});
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Impression à distance désactivée. Passage à l\'imprimante locale.'),
+                                    backgroundColor: Color(0xFFE53935),
+                                  ),
+                                );
+                              }
+                            } else {
+                              await prefs.setString('selected_remote_printer', printer['name'] ?? '');
+                              if (context.mounted) {
+                                setState(() {});
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Imprimante de destination définie : ${printer['name']}'),
+                                    backgroundColor: const Color(0xFF00BFA5),
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                        );
+                      },
+                    ),
                     _actionButton(
                       icon: Icons.folder_outlined,
                       label: 'Print Remote File',
                       color: const Color(0xFF8892A4),
                       onPressed: () => _selectAndPrintFile(service, printer['name']),
                     ),
-                    const SizedBox(width: 8),
                     _actionButton(
                       icon: Icons.upload_file_rounded,
                       label: 'Print Local File',
@@ -989,8 +1157,11 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
           ),
         );
       },
-    );
-  }
+    ),
+  ),
+],
+);
+}
 
   Widget _buildComPortsTab() {
     if (_comPorts.isEmpty) {
@@ -1086,12 +1257,125 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
 
   void _selectAndPrintLocalFile(TunnelService service, String printerName) async {
     try {
-      final result = await FilePicker.platform.pickFiles();
-      if (result == null || result.files.single.path == null) return;
-      final localPath = result.files.single.path!;
-      final filename = result.files.single.name;
+      final result = await FilePicker.platform.pickFiles(withData: true);
+      if (result == null || result.files.isEmpty) return;
+      final file = result.files.first;
+      final localPath = file.path;
+      final bytes = file.bytes;
+      final filename = file.name;
+      
+      if (bytes == null && localPath == null) {
+        throw Exception('Impossible de lire le fichier.');
+      }
+
+      String selectedPaperSize = 'A4';
+      String selectedOrientation = 'portrait';
+
+      if (!mounted) return;
+      final startPrint = await showDialog<bool>(
+        context: context,
+                builder: (dialogCtx) => StatefulBuilder(
+          builder: (context, setOptionState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF0F1629),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: Color(0xFF1A2340)),
+              ),
+              title: Row(
+                children: [
+                  const Icon(Icons.print_rounded, color: Colors.blueAccent),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Print Settings - $printerName',
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Document: $filename', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                  const SizedBox(height: 16),
+                  const Text('Paper Size:', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF161F38),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF263359)),
+                    ),
+                    child: DropdownButton<String>(
+                      value: selectedPaperSize,
+                      isExpanded: true,
+                      dropdownColor: const Color(0xFF161F38),
+                      underline: const SizedBox(),
+                      style: const TextStyle(color: Colors.white),
+                      items: ['A4', 'A5', 'Letter', 'Legal'].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                      onChanged: (val) {
+                        if (val != null) setOptionState(() => selectedPaperSize = val);
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Orientation:', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ChoiceChip(
+                          label: const Center(child: Text('Portrait', style: TextStyle(color: Colors.white, fontSize: 12))),
+                          selected: selectedOrientation == 'portrait',
+                          selectedColor: Colors.blueAccent,
+                          backgroundColor: const Color(0xFF161F38),
+                          onSelected: (_) => setOptionState(() => selectedOrientation = 'portrait'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ChoiceChip(
+                          label: const Center(child: Text('Paysage', style: TextStyle(color: Colors.white, fontSize: 12))),
+                          selected: selectedOrientation == 'landscape',
+                          selectedColor: Colors.blueAccent,
+                          backgroundColor: const Color(0xFF161F38),
+                          onSelected: (_) => setOptionState(() => selectedOrientation = 'landscape'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogCtx, false),
+                  child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
+                  onPressed: () => Navigator.pop(dialogCtx, true),
+                  icon: const Icon(Icons.print_rounded, color: Colors.white, size: 18),
+                  label: const Text('Print Now', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+
+      if (startPrint != true) return;
+      
       final tempDestPath = 'temp_print_${DateTime.now().millisecondsSinceEpoch}_$filename';
-      if (mounted) _showLocalPrintingProgress(service, localPath, tempDestPath, printerName);
+      if (mounted) {
+        _showLocalPrintingProgress(
+          service, localPath, bytes, filename, tempDestPath, printerName,
+          pageSize: selectedPaperSize, orientation: selectedOrientation,
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1102,7 +1386,8 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
   }
 
   void _showLocalPrintingProgress(
-      TunnelService service, String localPath, String tempDestPath, String printerName) {
+      TunnelService service, String? localPath, Uint8List? localBytes, String filename, String tempDestPath, String printerName,
+      {String pageSize = 'A4', String orientation = 'portrait'}) {
     double uploadProgress = 0.0;
     String statusText = 'Uploading local file...';
     bool isUploading = true;
@@ -1117,27 +1402,56 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
           builder: (context, setDialogState) {
             Future<void> runProcess() async {
               try {
-                await service.uploadLocalFile(localPath, tempDestPath,
-                    onProgress: (progress) {
+                await service.uploadLocalFile(
+                  localPath,
+                  tempDestPath,
+                  localBytes: localBytes,
+                  onProgress: (progress) {
+                    try {
+                      setDialogState(() {
+                        uploadProgress = progress;
+                        statusText = 'Uploading: ${(progress * 100).toStringAsFixed(0)}%';
+                      });
+                    } catch (_) {}
+                  },
+                );
+                try {
                   setDialogState(() {
-                    uploadProgress = progress;
-                    statusText = 'Uploading: ${(progress * 100).toStringAsFixed(0)}%';
+                    isUploading = false;
+                    statusText = 'Spooling print job on remote agent...';
                   });
-                });
-                setDialogState(() {
-                  isUploading = false;
-                  statusText = 'Spooling print job on remote agent...';
-                });
-                await service.triggerRemotePrint(tempDestPath, printerName, deleteAfter: true);
-                setDialogState(() {
-                  isFinished = true;
-                  statusText = 'Print job completed successfully!';
-                });
+                } catch (_) {}
+                await service.triggerRemotePrint(
+                  tempDestPath,
+                  printerName,
+                  deleteAfter: true,
+                  pageSize: pageSize,
+                  orientation: orientation,
+                  onProgress: (progress, currentPage, totalPages, status) {
+                    try {
+                      setDialogState(() {
+                        uploadProgress = progress;
+                        statusText = status.isNotEmpty
+                            ? status
+                            : 'Printing: ${(progress * 100).toStringAsFixed(0)}%';
+                      });
+                    } catch (_) {}
+                  },
+                );
+                try {
+                  setDialogState(() {
+                    uploadProgress = 1.0;
+                    isFinished = true;
+                    statusText = 'Print job completed successfully!';
+                  });
+                } catch (_) {}
               } catch (e) {
-                setDialogState(() {
-                  errorMessage = e.toString().replaceAll('Exception: ', '');
-                  isFinished = true;
-                });
+                try {
+                  setDialogState(() {
+                    errorMessage = e.toString().replaceAll('Exception: ', '');
+                    isFinished = true;
+                  });
+                } catch (_) {}
               }
             }
 
@@ -1155,11 +1469,10 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
             }
 
             if (isFinished) {
-              final fileName = localPath.split(Platform.isWindows ? '\\' : '/').last;
               return AlertDialog(
                 backgroundColor: const Color(0xFF0F1629),
                 title: const Text('Success'),
-                content: Text('"$fileName" sent to "$printerName" successfully.',
+                content: Text('"$filename" sent to "$printerName" successfully.',
                     style: const TextStyle(color: Colors.white70)),
                 actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
               );
@@ -1346,12 +1659,6 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
       if (!unbindSuccess) {
         throw Exception('Failed to unbind USB device on remote agent.');
       }
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('USB device unbound from remote sharing.'),
-          backgroundColor: Colors.green,
-        ));
-      }
     } finally {
       _refreshDevices();
     }
@@ -1372,6 +1679,7 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
 
     final isRdpAllowed = _rdpStatus?['enabled'] as bool? ?? false;
     final isRdpServiceRunning = _rdpStatus?['running'] as bool? ?? false;
+    final isRdpPortListening = _rdpStatus?['listening'] as bool? ?? true;
     final concurrentSessions = _rdpStatus?['concurrentSessions'] as bool? ?? false;
 
     return ListView(
@@ -1421,6 +1729,16 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
                 ),
                 const Divider(color: Color(0xFF1A2340), height: 24),
                 _buildStatusRow(
+                  label: 'RDP Port (3389 Listener)',
+                  value: _rdpStatus == null
+                      ? 'Unknown'
+                      : (isRdpPortListening ? 'Listening (Ready)' : 'Not Listening (Fix Required)'),
+                  status: _rdpStatus == null
+                      ? 'unknown'
+                      : (isRdpPortListening ? 'ok' : 'error'),
+                ),
+                const Divider(color: Color(0xFF1A2340), height: 24),
+                _buildStatusRow(
                   label: 'Concurrent Sessions',
                   value: _rdpStatus == null
                       ? 'Unknown'
@@ -1429,7 +1747,7 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
                       ? 'unknown'
                       : (concurrentSessions ? 'ok' : 'error'),
                 ),
-                if (!isRdpAllowed || !isRdpServiceRunning) ...[
+                if (!isRdpAllowed || !isRdpServiceRunning || !isRdpPortListening) ...[
                   const SizedBox(height: 20),
                   SizedBox(
                     width: double.infinity,
@@ -1450,8 +1768,8 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
                                       content: Text(ok
-                                          ? 'Successfully configured RDP on the remote PC!'
-                                          : 'Failed to configure RDP. Make sure the agent has administrator privileges.'),
+                                          ? 'RDP configured with concurrent sessions enabled!'
+                                          : 'Failed to configure RDP.'),
                                       backgroundColor: ok ? Colors.green : Colors.redAccent,
                                     ),
                                   );
@@ -1792,17 +2110,72 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
-                      onPressed: () async {
+                                            onPressed: () async {
                         try {
-                          if (!rdpTunnel!.enabled) {
-                            final updated = rdpTunnel.copyWith(enabled: true);
+                          final currentProfile = settings.selectedProfile;
+                          final rdpToken = currentProfile.rdpToken;
+
+                          if (!service.isConnected) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Relais non connecté. Veuillez vous connecter d'abord."),
+                                backgroundColor: Colors.redAccent,
+                              ),
+                            );
+                            return;
+                          }
+
+                          if (!service.peerConnected && (rdpToken == null || rdpToken.isEmpty)) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("L'agent distant (ordinateur du bureau) n'est pas en ligne."),
+                                backgroundColor: Colors.orange,
+                              ),
+                            );
+                            return;
+                          }
+
+                          // If Main agent is offline/updating but RDP safety token exists, launch fallback RDP
+                          if (!service.peerConnected && rdpToken != null && rdpToken.isNotEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Agent principal hors-ligne. Connexion via l'agent RDP de secours..."),
+                                backgroundColor: Colors.orange,
+                              ),
+                            );
+                            await service.launchRdpWithFallbackToken(
+                              relayUrl: currentProfile.relayUrl,
+                              rdpToken: rdpToken,
+                              port: rdpTunnel?.localPort ?? 13390,
+                              context: context,
+                            );
+                            return;
+                          }
+
+                          // Auto-create RDP tunnel config if missing
+                          if (rdpTunnel == null) {
+                            final newRdp = TunnelConfig(
+                              id: const Uuid().v4(),
+                              profileId: profileId,
+                              name: 'RDP Work PC',
+                              localPort: 13389,
+                              remoteHost: '127.0.0.1',
+                              remotePort: 3389,
+                              enabled: true,
+                            );
+                            service.addTunnel(newRdp);
+                            await settings.saveTunnelsForProfile(profileId, service.tunnels);
+                            await Future.delayed(const Duration(milliseconds: 600));
+                            rdpTunnel = newRdp;
+                          } else if (!rdpTunnel!.enabled) {
+                            final updated = rdpTunnel!.copyWith(enabled: true);
                             service.updateTunnel(updated);
                             await settings.saveTunnelsForProfile(profileId, service.tunnels);
-                            // Give local port a moment to bind
                             await Future.delayed(const Duration(milliseconds: 600));
                           }
+
                           if (mounted) {
-                            await service.launchRdp('127.0.0.1', rdpTunnel.localPort, context);
+                            await service.launchRdp('127.0.0.1', rdpTunnel!.localPort, context);
                           }
                         } catch (e) {
                           if (mounted) {
@@ -1836,7 +2209,6 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
                       ),
                       onPressed: () async {
                         try {
-                          // Automatically find a free port starting at 13389
                           int localPort = 13389;
                           while (service.tunnels.any((t) => t.localPort == localPort)) {
                             localPort++;
@@ -1862,7 +2234,6 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
                                 backgroundColor: Colors.green,
                               ),
                             );
-                            // Trigger build update
                             setState(() {});
                           }
                         } catch (e) {
@@ -1917,6 +2288,761 @@ class _DevicesScreenState extends State<DevicesScreen> with SingleTickerProvider
         ),
       ],
     );
+  }
+
+  // ── Network Discovery & LAN Machines Tab ─────────────────────────────────
+
+  Future<void> _scanNetwork({bool deepScan = false}) async {
+    if (!mounted) return;
+    final service = context.read<TunnelService>();
+    if (!service.isConnected || !service.peerConnected) return;
+
+    if (mounted) {
+      setState(() {
+        _scanningNetwork = true;
+        _networkError = null;
+      });
+    }
+
+    try {
+      final result = await service.scanRemoteNetwork(deepScan: deepScan);
+      if (mounted) {
+        setState(() {
+          _networkInfo = result;
+          _networkMachines = List<Map<String, dynamic>>.from(result['machines'] ?? []);
+          _scanningNetwork = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _networkError = e.toString().replaceAll('Exception: ', '');
+          _scanningNetwork = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildNetworkTab(TunnelService service) {
+    final filtered = _networkMachines.where((m) {
+      final ip = (m['ip'] as String? ?? '').toLowerCase();
+      final host = (m['hostname'] as String? ?? '').toLowerCase();
+      final vendor = (m['vendor'] as String? ?? '').toLowerCase();
+      final type = (m['deviceType'] as String? ?? '').toLowerCase();
+      final mac = (m['mac'] as String? ?? '').toLowerCase();
+      final q = _networkSearchQuery.trim().toLowerCase();
+
+      final matchesQuery = q.isEmpty ||
+          ip.contains(q) ||
+          host.contains(q) ||
+          vendor.contains(q) ||
+          type.contains(q) ||
+          mac.contains(q);
+
+      if (!matchesQuery) return false;
+
+      if (_networkFilterType == 'All') return true;
+      if (_networkFilterType == 'Windows' && type.contains('windows')) return true;
+      if (_networkFilterType == 'Printers' && type.contains('printer')) return true;
+      if (_networkFilterType == 'Servers' && (type.contains('server') || type.contains('linux') || type.contains('ssh') || type.contains('nas'))) return true;
+      if (_networkFilterType == 'Routers' && (type.contains('gateway') || type.contains('router'))) return true;
+      if (_networkFilterType == 'Other' && !type.contains('windows') && !type.contains('printer') && !type.contains('server') && !type.contains('gateway') && !type.contains('router')) return true;
+
+      return false;
+    }).toList();
+
+    return RefreshIndicator(
+      color: const Color(0xFF00BFA5),
+      backgroundColor: const Color(0xFF0F1629),
+      onRefresh: () => _scanNetwork(deepScan: _deepNetworkScan),
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _buildNetworkHeaderCard(service),
+          const SizedBox(height: 16),
+          _buildNetworkFilterBar(),
+          const SizedBox(height: 16),
+          if (_scanningNetwork && _networkMachines.isEmpty) ...[
+            const SizedBox(height: 48),
+            const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(color: Color(0xFF00BFA5)),
+                  SizedBox(height: 16),
+                  Text('Scanning Agent local network (ARP & Subnet sweep)...',
+                      style: TextStyle(color: Color(0xFF8892A4), fontSize: 13)),
+                ],
+              ),
+            ),
+          ] else if (_networkError != null) ...[
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.redAccent.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _networkError!,
+                          style: const TextStyle(color: Colors.redAccent, fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent.withValues(alpha: 0.2),
+                        foregroundColor: Colors.redAccent,
+                        elevation: 0,
+                      ),
+                      onPressed: () => _scanNetwork(deepScan: _deepNetworkScan),
+                      icon: const Icon(Icons.refresh_rounded, size: 16),
+                      label: const Text('Retry Scan'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else if (_networkMachines.isEmpty) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F1629),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF1A2340)),
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00BFA5).withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.lan_outlined, color: Color(0xFF00BFA5), size: 40),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('No Network Scan Performed Yet',
+                        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Scan the local network where the Agent is installed to discover connected computers, printers, and servers.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Color(0xFF8892A4), fontSize: 13, height: 1.4),
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00BFA5),
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () => _scanNetwork(deepScan: false),
+                      icon: const Icon(Icons.radar_rounded, size: 18),
+                      label: const Text('Scan Local Network', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ] else ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'DISCOVERED MACHINES (${filtered.length}/${_networkMachines.length})',
+                  style: const TextStyle(
+                    color: Color(0xFF8892A4),
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1,
+                  ),
+                ),
+                if (_scanningNetwork)
+                  const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00BFA5)),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ...filtered.map((m) => _buildMachineCard(context, m, service)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNetworkHeaderCard(TunnelService service) {
+    final agentIp = _networkInfo?['agentIp'] as String? ?? 'N/A';
+    final subnet = _networkInfo?['subnet'] as String? ?? 'Local Subnet';
+    final gateway = _networkInfo?['gateway'] as String? ?? 'N/A';
+    final interfaceName = _networkInfo?['interfaceName'] as String? ?? 'LAN';
+    final scanDuration = _networkInfo?['scanDurationMs'] as int?;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F1629),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF1A2340)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00BFA5).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.lan_outlined, color: Color(0xFF00BFA5), size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Agent LAN Network',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Subnet: $subnet · Gateway: $gateway · Interface: $interfaceName',
+                      style: const TextStyle(color: Color(0xFF8892A4), fontSize: 12),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00BFA5).withValues(alpha: 0.15),
+                  foregroundColor: const Color(0xFF00BFA5),
+                  side: const BorderSide(color: Color(0xFF00BFA5), width: 0.5),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  elevation: 0,
+                ),
+                onPressed: _scanningNetwork ? null : () => _scanNetwork(deepScan: _deepNetworkScan),
+                icon: _scanningNetwork
+                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00BFA5)))
+                    : const Icon(Icons.refresh_rounded, size: 16),
+                label: Text(_scanningNetwork ? 'Scanning...' : 'Scan LAN'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Divider(color: Color(0xFF1A2340), height: 1),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _buildNetworkStatBadge(Icons.computer_rounded, 'Agent Host IP', agentIp, const Color(0xFF00BFA5)),
+              const SizedBox(width: 8),
+              _buildNetworkStatBadge(Icons.router_rounded, 'Gateway', gateway, const Color(0xFF3B82F6)),
+              const SizedBox(width: 8),
+              _buildNetworkStatBadge(
+                Icons.devices_other_rounded,
+                'Active Devices',
+                '${_networkMachines.length}',
+                Colors.amber,
+              ),
+              if (scanDuration != null) ...[
+                const SizedBox(width: 8),
+                _buildNetworkStatBadge(Icons.speed_rounded, 'Scan Time', '${scanDuration}ms', Colors.purpleAccent),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Checkbox(
+                value: _deepNetworkScan,
+                activeColor: const Color(0xFF00BFA5),
+                onChanged: (v) => setState(() => _deepNetworkScan = v ?? false),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+              ),
+              const SizedBox(width: 4),
+              const Text('Deep Service Scan (Check all 15 common ports)',
+                  style: TextStyle(color: Color(0xFF8892A4), fontSize: 12)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNetworkFilterBar() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          style: const TextStyle(color: Colors.white, fontSize: 13),
+          decoration: InputDecoration(
+            hintText: 'Search machines by Name, IP, MAC, Type...',
+            hintStyle: const TextStyle(color: Color(0xFF8892A4), fontSize: 13),
+            prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF00BFA5), size: 20),
+            suffixIcon: _networkSearchQuery.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.clear_rounded, color: Color(0xFF8892A4), size: 18),
+                    onPressed: () => setState(() => _networkSearchQuery = ''),
+                  )
+                : null,
+            filled: true,
+            fillColor: const Color(0xFF0F1629),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF1A2340))),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF1A2340))),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF00BFA5))),
+          ),
+          onChanged: (val) => setState(() => _networkSearchQuery = val),
+        ),
+        const SizedBox(height: 10),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: ['All', 'Windows', 'Printers', 'Servers', 'Routers', 'Other'].map((f) {
+              final isSelected = _networkFilterType == f;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8.0),
+                child: FilterChip(
+                  label: Text(f, style: TextStyle(color: isSelected ? Colors.black : Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold)),
+                  selected: isSelected,
+                  selectedColor: const Color(0xFF00BFA5),
+                  backgroundColor: const Color(0xFF0F1629),
+                  checkmarkColor: Colors.black,
+                  side: BorderSide(color: isSelected ? const Color(0xFF00BFA5) : const Color(0xFF1A2340)),
+                  onSelected: (_) => setState(() => _networkFilterType = f),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNetworkStatBadge(IconData icon, String label, String value, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0A0E1A),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFF1A2340)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 12, color: color),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMachineCard(BuildContext context, Map<String, dynamic> machine, TunnelService service) {
+    final ip = machine['ip'] as String? ?? '';
+    final hostname = machine['hostname'] as String? ?? ip;
+    final mac = machine['mac'] as String? ?? 'N/A';
+    final vendor = machine['vendor'] as String? ?? 'Generic Device';
+    final deviceType = machine['deviceType'] as String? ?? 'Network Device';
+    final isSelf = machine['isSelf'] == true;
+    final isGateway = machine['isGateway'] == true;
+    final responseTime = machine['responseTimeMs'] as int? ?? 0;
+    final openPorts = List<int>.from(machine['openPorts'] as List? ?? []);
+    final services = List<String>.from(machine['services'] as List? ?? []);
+
+    IconData typeIcon;
+    Color typeColor;
+
+    if (isSelf) {
+      typeIcon = Icons.stars_rounded;
+      typeColor = const Color(0xFF00BFA5);
+    } else if (isGateway) {
+      typeIcon = Icons.router_rounded;
+      typeColor = Colors.orangeAccent;
+    } else if (deviceType.contains('Printer')) {
+      typeIcon = Icons.print_rounded;
+      typeColor = const Color(0xFF00E5FF);
+    } else if (deviceType.contains('Server') || deviceType.contains('Linux') || deviceType.contains('SSH')) {
+      typeIcon = Icons.dns_rounded;
+      typeColor = Colors.purpleAccent;
+    } else if (deviceType.contains('Windows') || deviceType.contains('PC')) {
+      typeIcon = Icons.desktop_windows_rounded;
+      typeColor = const Color(0xFF3B82F6);
+    } else {
+      typeIcon = Icons.devices_other_rounded;
+      typeColor = const Color(0xFF8892A4);
+    }
+
+    final hasRdp = openPorts.contains(3389);
+    final hasSmb = openPorts.contains(445) || openPorts.contains(139);
+    final hasWeb = openPorts.contains(80) || openPorts.contains(8080) || openPorts.contains(443);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F1629),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isSelf
+              ? const Color(0xFF00BFA5).withValues(alpha: 0.5)
+              : const Color(0xFF1A2340),
+          width: isSelf ? 1.5 : 1.0,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: typeColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: typeColor.withValues(alpha: 0.3), width: 1),
+                ),
+                child: Icon(typeIcon, color: typeColor, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            hostname,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (isSelf) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00BFA5).withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text('THIS AGENT',
+                                style: TextStyle(color: Color(0xFF00BFA5), fontSize: 9, fontWeight: FontWeight.bold)),
+                          ),
+                        ] else if (isGateway) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text('GATEWAY',
+                                style: TextStyle(color: Colors.orange, fontSize: 9, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$deviceType · $vendor',
+                      style: const TextStyle(color: Color(0xFF8892A4), fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00BFA5).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.circle, size: 8, color: Color(0xFF00BFA5)),
+                    const SizedBox(width: 4),
+                    Text(
+                      responseTime > 0 ? '${responseTime}ms' : 'Active',
+                      style: const TextStyle(color: Color(0xFF00BFA5), fontSize: 11, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // IP & MAC row
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0A0E1A),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFF1A2340)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.link_rounded, size: 14, color: Color(0xFF8892A4)),
+                const SizedBox(width: 6),
+                Text('IP: $ip', style: const TextStyle(color: Colors.white70, fontSize: 12, fontFamily: 'monospace')),
+                IconButton(
+                  icon: const Icon(Icons.copy_rounded, size: 13, color: Color(0xFF8892A4)),
+                  tooltip: 'Copy IP',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: ip));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Copied $ip to clipboard'), duration: const Duration(seconds: 1)),
+                    );
+                  },
+                ),
+                const SizedBox(width: 12),
+                const Text('·', style: TextStyle(color: Color(0xFF8892A4))),
+                const SizedBox(width: 12),
+                const Icon(Icons.fingerprint_rounded, size: 14, color: Color(0xFF8892A4)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'MAC: $mac',
+                    style: const TextStyle(color: Color(0xFF8892A4), fontSize: 12, fontFamily: 'monospace'),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (mac != 'N/A' && mac != 'Local Machine')
+                  IconButton(
+                    icon: const Icon(Icons.copy_rounded, size: 13, color: Color(0xFF8892A4)),
+                    tooltip: 'Copy MAC',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: mac));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Copied $mac to clipboard'), duration: const Duration(seconds: 1)),
+                      );
+                    },
+                  ),
+              ],
+            ),
+          ),
+          if (services.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: services.map((s) {
+                Color chipColor = const Color(0xFF3B82F6);
+                if (s.contains('RDP')) chipColor = const Color(0xFF3B82F6);
+                if (s.contains('SMB')) chipColor = const Color(0xFF00BFA5);
+                if (s.contains('HTTP')) chipColor = Colors.greenAccent.shade400;
+                if (s.contains('Printer')) chipColor = const Color(0xFF00E5FF);
+                if (s.contains('SSH')) chipColor = Colors.purpleAccent;
+                if (s.contains('SQL') || s.contains('DB')) chipColor = Colors.orangeAccent;
+
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: chipColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(5),
+                    border: Border.all(color: chipColor.withValues(alpha: 0.3), width: 0.5),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.bolt_rounded, size: 11, color: chipColor),
+                      const SizedBox(width: 3),
+                      Text(
+                        s,
+                        style: TextStyle(color: chipColor, fontSize: 10.5, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _actionButton(
+                icon: Icons.add_rounded,
+                label: 'Add Tunnel',
+                color: const Color(0xFF00BFA5),
+                onPressed: () => _addTunnelForMachine(
+                  context,
+                  machine,
+                  defaultPort: hasRdp ? 3389 : (hasWeb ? 80 : 3389),
+                  defaultName: hasRdp ? 'RDP' : (hasWeb ? 'Web' : 'LAN'),
+                ),
+              ),
+              if (hasRdp)
+                _actionButton(
+                  icon: Icons.desktop_windows_rounded,
+                  label: 'Launch RDP',
+                  color: const Color(0xFF3B82F6),
+                  onPressed: () => _launchRdpDirectToMachine(context, service, machine),
+                ),
+              if (hasSmb || deviceType.contains('Windows'))
+                _actionButton(
+                  icon: Icons.folder_shared_rounded,
+                  label: 'Browse Shares',
+                  color: const Color(0xFF00E5FF),
+                  onPressed: () => _browseNetworkFiles(ip),
+                ),
+              if (hasWeb)
+                _actionButton(
+                  icon: Icons.open_in_browser_rounded,
+                  label: 'Open Web UI',
+                  color: Colors.greenAccent.shade400,
+                  onPressed: () {
+                    final port = openPorts.contains(80) ? 80 : (openPorts.contains(443) ? 443 : 8080);
+                    _openWebUi(ip, port);
+                  },
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _addTunnelForMachine(
+    BuildContext context,
+    Map<String, dynamic> machine, {
+    int defaultPort = 3389,
+    String defaultName = 'RDP',
+  }) async {
+    final settings = context.read<SettingsService>();
+    final svc = context.read<TunnelService>();
+    final ip = machine['ip'] as String? ?? '127.0.0.1';
+    final hostname = machine['hostname'] as String? ?? ip;
+    final currentProfileId = settings.selectedProfileId;
+
+    final initialConfig = TunnelConfig(
+      id: const Uuid().v4(),
+      name: '$defaultName - $hostname',
+      localPort: defaultPort == 3389 ? 13389 : (defaultPort == 80 ? 18080 : defaultPort),
+      remoteHost: ip,
+      remotePort: defaultPort,
+      enabled: true,
+      profileId: currentProfileId,
+    );
+
+    final result = await showDialog<TunnelConfig>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.7),
+      builder: (_) => AddTunnelDialog(existing: initialConfig, defaultProfileId: currentProfileId),
+    );
+
+    if (result != null) {
+      svc.addTunnel(result);
+      await settings.saveTunnelsForProfile(currentProfileId, svc.tunnels);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Tunnel "${result.name}" added successfully!'),
+            backgroundColor: const Color(0xFF00BFA5),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _launchRdpDirectToMachine(
+    BuildContext context,
+    TunnelService service,
+    Map<String, dynamic> machine,
+  ) async {
+    final ip = machine['ip'] as String? ?? '127.0.0.1';
+
+    final existingTunnel = service.tunnels.firstWhere(
+      (t) => t.remoteHost == ip && t.remotePort == 3389,
+      orElse: () => const TunnelConfig(
+        id: '',
+        name: '',
+        localPort: 0,
+        remoteHost: '',
+        remotePort: 0,
+        enabled: false,
+        profileId: '',
+      ),
+    );
+
+    if (existingTunnel.id.isNotEmpty) {
+      if (!existingTunnel.enabled) {
+        service.updateTunnel(existingTunnel.copyWith(enabled: true));
+      }
+      await service.launchRdp('127.0.0.1', existingTunnel.localPort, context);
+    } else {
+      await _addTunnelForMachine(context, machine, defaultPort: 3389, defaultName: 'RDP');
+    }
+  }
+
+  void _browseNetworkFiles(String hostOrIp) {
+    final service = context.read<TunnelService>();
+    final uncPath = '\\\\$hostOrIp';
+    service.requestedBrowsePath = uncPath;
+    widget.onTabChange?.call(1);
+  }
+
+  Future<void> _openWebUi(String ip, int port) async {
+    final scheme = (port == 443 || port == 8443) ? 'https' : 'http';
+    final url = '$scheme://$ip${(port == 80 || port == 443) ? '' : ':$port'}';
+    try {
+      await launchUrlString(url, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open $url: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
   }
 }
 
@@ -2042,3 +3168,8 @@ class _RemoteFilePickerDialogState extends State<_RemoteFilePickerDialog> {
     );
   }
 }
+
+
+
+
+typedef TcpTunnelDevicesScreen = DevicesScreen;

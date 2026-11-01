@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clinique Chifa — Écran Salle d'Attente</title>
+  <style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  user-select: none;
+}
+
+body {
+  font-family: 'Montserrat', sans-serif;
+  background-color: #080e21;
+  color: #f8fafc;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+.tv-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Header */
+.top-bar {
+  background: #0f1c3d;
+  padding: 1.2rem 2.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid #1e3a78;
+  height: 12vh;
+}
+
+.clinic-brand {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+}
+
+.clinic-icon {
+  width: 54px;
+  height: 54px;
+  background: #0284c7;
+  color: white;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 900;
+  box-shadow: 0 0 20px rgba(2, 132, 199, 0.6);
+}
+
+.clinic-text h1 {
+  font-size: 1.9rem;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: white;
+}
+
+.cabinet-badge {
+  color: #38bdf8;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.btn-audio, .btn-fs {
+  background: #1e293b;
+  color: #94a3b8;
+  border: 1px solid #334155;
+  padding: 0.6rem 1rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-audio:hover, .btn-fs:hover {
+  background: #0284c7;
+  color: white;
+}
+
+.clock-card {
+  background: #080e21;
+  border: 1.5px solid #1e3a78;
+  padding: 0.6rem 1.6rem;
+  border-radius: 14px;
+  text-align: right;
+}
+
+.clock-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 2rem;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: white;
+}
+
+.clock-date {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+/* Main Grid */
+.main-content {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 2rem;
+  padding: 2rem 2.5rem;
+  height: 81vh;
+}
+
+/* Left: Called Section */
+.called-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.called-card {
+  background: linear-gradient(135deg, #0f355c 0%, #081a38 100%);
+  border: 3px solid #38bdf8;
+  border-radius: 28px;
+  padding: 3.5rem 3rem;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 50px rgba(56, 189, 248, 0.25);
+  animation: pulse 2.5s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); box-shadow: 0 0 35px rgba(56, 189, 248, 0.2); }
+  50% { transform: scale(1.015); box-shadow: 0 0 55px rgba(56, 189, 248, 0.4); }
+  100% { transform: scale(1); box-shadow: 0 0 35px rgba(56, 189, 248, 0.2); }
+}
+
+.called-header {
+  background: #22c55e;
+  color: white;
+  padding: 0.6rem 2rem;
+  border-radius: 40px;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  font-weight: 900;
+  letter-spacing: 2px;
+  font-size: 1.2rem;
+  box-shadow: 0 0 20px rgba(34, 197, 94, 0.6);
+  margin-bottom: 2rem;
+}
+
+.pulsing-dot {
+  width: 12px;
+  height: 12px;
+  background: white;
+  border-radius: 50%;
+  animation: blink 1s infinite alternate;
+}
+
+@keyframes blink {
+  from { opacity: 0.3; }
+  to { opacity: 1; }
+}
+
+.ticket-display {
+  color: #38bdf8;
+  font-size: 2.4rem;
+  font-weight: 900;
+  letter-spacing: 3px;
+  margin-bottom: 0.8rem;
+}
+
+.patient-name-display {
+  font-size: 3.6rem;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: white;
+  text-align: center;
+  margin-bottom: 2.5rem;
+  line-height: 1.2;
+}
+
+.cabinet-target-box {
+  background: #0f1c3d;
+  border: 2px solid rgba(56, 189, 248, 0.4);
+  border-radius: 20px;
+  padding: 1.2rem 2.2rem;
+  display: flex;
+  align-items: center;
+  gap: 1.4rem;
+}
+
+.arrow-icon {
+  font-size: 2.2rem;
+  color: #38bdf8;
+}
+
+.target-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.target-label {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.target-cabinet {
+  font-size: 1.7rem;
+  font-weight: 900;
+  color: white;
+  letter-spacing: 1px;
+}
+
+/* Right: Queue Section */
+.queue-section {
+  background: #0f1c3d;
+  border: 1.5px solid #1e3a78;
+  border-radius: 24px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.queue-header {
+  background: #172a5a;
+  padding: 1.2rem 1.8rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1.5px solid #1e3a78;
+}
+
+.queue-title {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.queue-title h2 {
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+
+.queue-badge {
+  background: #0284c7;
+  color: white;
+  padding: 0.35rem 0.9rem;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.queue-list {
+  padding: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.queue-item {
+  background: #08152e;
+  border: 1px solid #1e3a78;
+  border-radius: 16px;
+  padding: 1rem 1.4rem;
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  transition: all 0.2s;
+}
+
+.queue-item.active {
+  border-color: #38bdf8;
+  background: #0f355c;
+}
+
+.queue-ticket {
+  width: 44px;
+  height: 44px;
+  background: #172a5a;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 1.1rem;
+}
+
+.queue-item.active .queue-ticket {
+  background: #38bdf8;
+  color: #080e21;
+}
+
+.queue-patient-info {
+  flex: 1;
+}
+
+.queue-name {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #f1f5f9;
+}
+
+.queue-time {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.empty-queue {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #64748b;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+/* Bottom Ticker */
+.bottom-ticker {
+  background: #091226;
+  border-top: 1.5px solid #1e3a78;
+  height: 7vh;
+  padding: 0 2.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.ticker-tag {
+  background: #0284c7;
+  color: white;
+  padding: 0.35rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
+.ticker-content {
+  flex: 1;
+  font-size: 1.05rem;
+  color: #cbd5e1;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.portal-link {
+  color: #38bdf8;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="tv-container">
+    <!-- Top Bar -->
+    <header class="top-bar">
+      <div class="clinic-brand">
+        <div class="clinic-icon">✚</div>
+        <div class="clinic-text">
+          <h1>CLINIQUE CHIFA</h1>
+          <span class="cabinet-badge" id="cabinetName">SALLE D'ATTENTE • ACCUEIL GÉNÉRAL</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <button id="btnAudioToggle" class="btn-audio" title="Activer / Couper l'annonce sonore">🔔 Sonnerie Activée</button>
+        <button id="btnFullscreen" class="btn-fs" title="Plein Écran">⛶ Plein Écran</button>
+        <div class="clock-card">
+          <div class="clock-time" id="clockTime">--:--:--</div>
+          <div class="clock-date" id="clockDate">-- --- ----</div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="main-content">
+      <!-- Left: Called Patient Big Panel -->
+      <section class="called-section">
+        <div class="called-card" id="calledCard">
+          <div class="called-header">
+            <span class="pulsing-dot"></span>
+            <span class="called-label">PATIENT APPELÉ</span>
+          </div>
+
+          <div class="ticket-display" id="ticketNumber">TICKET N° --</div>
+          <div class="patient-name-display" id="patientName">AUCUN PATIENT APPELÉ</div>
+
+          <div class="cabinet-target-box">
+            <span class="arrow-icon">➔</span>
+            <div class="target-text">
+              <span class="target-label">VEUILLEZ VOUS PRÉSENTER AU :</span>
+              <span class="target-cabinet" id="targetCabinet">CABINET DE CONSULTATION</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right: Waiting Queue List -->
+      <section class="queue-section">
+        <div class="queue-header">
+          <div class="queue-title">
+            <span class="queue-icon">👥</span>
+            <h2>PROCHAINS PATIENTS</h2>
+          </div>
+          <div class="queue-badge" id="queueCount">0 en attente</div>
+        </div>
+
+        <div class="queue-list" id="queueList">
+          <div class="empty-queue">File d'attente vide</div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Bottom Ticker -->
+    <footer class="bottom-ticker">
+      <div class="ticker-tag">INFO CLINIQUE</div>
+      <div class="ticker-content" id="tickerText">
+        Bienvenue à la Clinique Chifa • Merci de préparer votre carte d'assuré et vos examens médicaux récents • Espace patient en ligne sur medevsync.com/chifa
+      </div>
+      <div class="portal-link">medevsync.com/chifa</div>
+    </footer>
+  </div>
+
+  <script>
+// TV Waiting Room Display Script - Clinique Chifa
+let lastCalledId = null;
+let isAudioEnabled = true;
+
+const clockTimeEl = document.getElementById('clockTime');
+const clockDateEl = document.getElementById('clockDate');
+const ticketNumberEl = document.getElementById('ticketNumber');
+const patientNameEl = document.getElementById('patientName');
+const targetCabinetEl = document.getElementById('targetCabinet');
+const queueCountEl = document.getElementById('queueCount');
+const queueListEl = document.getElementById('queueList');
+const tickerTextEl = document.getElementById('tickerText');
+const btnFullscreen = document.getElementById('btnFullscreen');
+const btnAudioToggle = document.getElementById('btnAudioToggle');
+
+// 1. Live Clock
+function updateClock() {
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+  const dateStr = now.toLocaleDateString('fr-FR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+
+  if (clockTimeEl) clockTimeEl.textContent = timeStr;
+  if (clockDateEl) clockDateEl.textContent = dateStr.toUpperCase();
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// 2. Health Tips Ticker
+const tips = [
+  'Bienvenue à la Clinique Chifa • Nous prenons soin de votre santé.',
+  'Merci de préparer votre carte d\'assuré et vos ordonnances récentes.',
+  'En cas d\'urgence médicale signalée, veuillez avertir l\'accueil immédiatement.',
+  'Veuillez respecter le calme et couper la sonnerie de votre téléphone.',
+  'Le port du masque reste recommandé en cas de symptômes respiratoires.',
+  'Consultez vos bilans et ordonnances en ligne sur medevsync.com/chifa',
+];
+let tipIndex = 0;
+setInterval(() => {
+  tipIndex = (tipIndex + 1) % tips.length;
+  if (tickerTextEl) {
+    tickerTextEl.style.opacity = '0';
+    setTimeout(() => {
+      tickerTextEl.textContent = tips[tipIndex];
+      tickerTextEl.style.opacity = '1';
+    }, 400);
+  }
+}, 12000);
+
+// 3. Audio Chime (Synthesized Ding-Dong using Web Audio API)
+function playChime() {
+  if (!isAudioEnabled) return;
+
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    // Note 1: High tone
+    const osc1 = audioCtx.createOscillator();
+    const gain1 = audioCtx.createGain();
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(659.25, audioCtx.currentTime); // E5
+    gain1.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gain1.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
+    osc1.connect(gain1);
+    gain1.connect(audioCtx.destination);
+    osc1.start();
+    osc1.stop(audioCtx.currentTime + 0.8);
+
+    // Note 2: Chime resolve (Ding - Dong)
+    setTimeout(() => {
+      const osc2 = audioCtx.createOscillator();
+      const gain2 = audioCtx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+      gain2.gain.setValueAtTime(0.35, audioCtx.currentTime);
+      gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.2);
+      osc2.connect(gain2);
+      gain2.connect(audioCtx.destination);
+      osc2.start();
+      osc2.stop(audioCtx.currentTime + 1.2);
+    }, 300);
+  } catch (e) {
+    console.warn('Audio Context error:', e);
+  }
+}
+
+// 4. API Fetching
+async function fetchQueue() {
+  const candidates = [
+    '/chifa/api/tv/waiting-room',
+    '/api/tv/waiting-room',
+    '/tv/api/waiting-room',
+    '/chifa/tv/waiting-room',
+  ];
+
+  let data = null;
+  for (const url of candidates) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        data = await res.json();
+        break;
+      }
+    } catch (_) {}
+  }
+
+  if (!data) return;
+
+  // Update Called Patient
+  if (data.called_patient) {
+    const p = data.called_patient;
+    ticketNumberEl.textContent = `TICKET N° ${String(p.ticket).padStart(2, '0')}`;
+    patientNameEl.textContent = p.masked_name;
+    targetCabinetEl.textContent = p.cabinet ? p.cabinet.toUpperCase() : 'CABINET N° 1';
+
+    // Play chime if patient changed
+    if (lastCalledId !== p.id) {
+      if (lastCalledId !== null) {
+        playChime();
+      }
+      lastCalledId = p.id;
+    }
+  } else {
+    ticketNumberEl.textContent = 'TICKET N° --';
+    patientNameEl.textContent = 'AUCUN PATIENT APPELÉ';
+    targetCabinetEl.textContent = 'CABINET DE CONSULTATION';
+    lastCalledId = null;
+  }
+
+  // Update Queue List
+  const queue = data.waiting_queue || [];
+  queueCountEl.textContent = `${queue.length} en attente`;
+
+  if (queue.length === 0) {
+    queueListEl.innerHTML = '<div class="empty-queue">Aucun patient en file d\'attente</div>';
+  } else {
+    queueListEl.innerHTML = queue
+      .map((item) => {
+        const isActive = data.called_patient && data.called_patient.id === item.id;
+        return `
+          <div class="queue-item ${isActive ? 'active' : ''}">
+            <div class="queue-ticket">#${item.ticket}</div>
+            <div class="queue-patient-info">
+              <div class="queue-name">${item.masked_name}</div>
+              <div class="queue-time">Arrivé à ${item.time}</div>
+            </div>
+            ${isActive ? '<span style="color:#22c55e;font-weight:900;font-size:0.85rem">APPELÉ</span>' : ''}
+          </div>
+        `;
+      })
+      .join('');
+  }
+}
+
+// 5. Poll every 3.5s
+setInterval(fetchQueue, 3500);
+fetchQueue();
+
+// 6. Audio Toggle & Fullscreen Controls
+if (btnAudioToggle) {
+  btnAudioToggle.addEventListener('click', () => {
+    isAudioEnabled = !isAudioEnabled;
+    btnAudioToggle.textContent = isAudioEnabled ? '🔔 Sonnerie Activée' : '🔕 Sonnerie Coupée';
+    btnAudioToggle.style.color = isAudioEnabled ? '#38bdf8' : '#ef4444';
+  });
+}
+
+if (btnFullscreen) {
+  btnFullscreen.addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  });
+}
+
+
+  </script>
+</body>
+</html>
+

@@ -7,6 +7,8 @@ import 'package:chifa/services/db/models/patient.dart';
 import 'package:chifa/services/db/models/payment.dart';
 import 'package:chifa/services/db/models/payment_service.dart';
 import 'package:chifa/services/db/models/service.dart';
+import 'package:chifa/services/db/models/soins_service.dart';
+import 'package:chifa/app/cubits/soins_service_cubit.dart';
 
 import 'package:chifa/services/db/repositories/payment_repository.dart';
 
@@ -33,6 +35,8 @@ class _InvoiceFormDialogState extends State<InvoiceFormDialog> {
   final _totalAmountController = TextEditingController();
   final _selectedServices = <Service>[];
   final _serviceSearchController = TextEditingController();
+  final _selectedSoins = <SoinsService>[];
+  final _soinSearchController = TextEditingController();
   PaymentMethod _paymentMethod = PaymentMethod.cash;
   DateTime _paymentDate = DateTime.now();
   final _notesController = TextEditingController();
@@ -41,11 +45,28 @@ class _InvoiceFormDialogState extends State<InvoiceFormDialog> {
   String? _patientSurname;
   List<Service> _allServices = [];
   List<Service> _filteredServices = [];
+  List<SoinsService> _allSoins = [];
+  List<SoinsService> _filteredSoins = [];
+
+  // Remise (Discount)
+  String _discountType = 'money'; // 'money' (DA) or 'percentage' (%)
+  final _discountController = TextEditingController();
+  double _discountAmount = 0.0;
+  double _subtotalBeforeDiscount = 0.0;
+
+  // Remise Commission Medecin
+  bool _applyDoctorDiscount = true;
+  String _discountCommissionType = 'proportional'; // 'proportional', 'percentage', 'money'
+  final _discountCommissionController = TextEditingController();
+  double _discountCommissionAmount = 0.0;
+  double _grossDoctorCommission = 0.0;
+  double _totalDoctorCommission = 0.0;
 
   @override
   void initState() {
     super.initState();
     context.read<BillingCubit>().loadServices();
+    context.read<SoinsServiceCubit>().loadServices();
 
     if (widget.payment != null) {
       _patientIdController.text = widget.payment!.patientId?.toString() ?? '';
@@ -58,6 +79,17 @@ class _InvoiceFormDialogState extends State<InvoiceFormDialog> {
         (e) => e.name == widget.payment!.paymentMethod,
         orElse: () => PaymentMethod.cash,
       );
+      _discountType = widget.payment!.discountType;
+      _discountAmount = widget.payment!.discountAmount;
+      _discountController.text = widget.payment!.discountValue > 0
+          ? widget.payment!.discountValue.toStringAsFixed(widget.payment!.discountType == 'percentage' ? 1 : 0)
+          : '';
+      _applyDoctorDiscount = widget.payment!.applyCommissionDiscount;
+      _discountCommissionType = widget.payment!.discountCommissionType;
+      _discountCommissionController.text = widget.payment!.discountCommissionValue > 0
+          ? widget.payment!.discountCommissionValue.toStringAsFixed(widget.payment!.discountCommissionType == 'percentage' ? 1 : 0)
+          : '';
+      _discountCommissionAmount = widget.payment!.discountCommissionAmount;
       _loadPaymentServices();
     } else {
       // For new payments, focus on patient search
@@ -78,20 +110,34 @@ class _InvoiceFormDialogState extends State<InvoiceFormDialog> {
       );
       result.fold((_) {}, (services) {
         if (!mounted) return;
+        final acts = <Service>[];
+        final soins = <SoinsService>[];
+        for (final ps in services) {
+          if (ps.serviceType == 'soin') {
+            soins.add(
+              SoinsService(
+                id: ps.serviceId,
+                nom: ps.serviceName,
+                price: ps.servicePrice,
+                doctorCommission: ps.doctorCommission,
+              ),
+            );
+          } else {
+            acts.add(
+              Service(
+                serviceId: ps.serviceId,
+                serviceName: ps.serviceName,
+                price: ps.servicePrice,
+                doctorCommission: ps.doctorCommission,
+              ),
+            );
+          }
+        }
         setState(() {
           _selectedServices.clear();
-          _selectedServices.addAll(
-            services
-                .map(
-                  (ps) => Service(
-                    serviceId: ps.serviceId,
-                    serviceName: ps.serviceName,
-                    price: ps.servicePrice,
-                    doctorCommission: ps.doctorCommission,
-                  ),
-                )
-                .toList(),
-          );
+          _selectedServices.addAll(acts);
+          _selectedSoins.clear();
+          _selectedSoins.addAll(soins);
           _recalculateTotal();
         });
       });
@@ -99,8 +145,82 @@ class _InvoiceFormDialogState extends State<InvoiceFormDialog> {
   }
 
   void _recalculateTotal() {
-    final total = _selectedServices.fold(0.0, (sum, s) => sum + s.price);
+    final actsTotal = _selectedServices.fold(0.0, (sum, s) => sum + s.price);
+    final soinsTotal = _selectedSoins.fold(0.0, (sum, s) => sum + s.price);
+    _subtotalBeforeDiscount = actsTotal + soinsTotal;
+
+    final discVal = double.tryParse(_discountController.text.trim()) ?? 0.0;
+    if (discVal > 0 && _subtotalBeforeDiscount > 0) {
+      if (_discountType == 'percentage') {
+        _discountAmount = (_subtotalBeforeDiscount * discVal / 100.0).clamp(0.0, _subtotalBeforeDiscount);
+      } else {
+        _discountAmount = discVal.clamp(0.0, _subtotalBeforeDiscount);
+      }
+    } else {
+      _discountAmount = 0.0;
+    }
+
+    final total = (_subtotalBeforeDiscount - _discountAmount).clamp(0.0, double.infinity);
     _totalAmountController.text = total.toStringAsFixed(2);
+
+    final actsCommission = _selectedServices.fold(0.0, (sum, s) => sum + s.doctorCommission);
+    final soinsCommission = _selectedSoins.fold(0.0, (sum, s) => sum + s.doctorCommission);
+    _grossDoctorCommission = actsCommission + soinsCommission;
+
+    if (_applyDoctorDiscount && _grossDoctorCommission > 0 && _discountAmount > 0) {
+      if (_discountCommissionType == 'proportional') {
+        final rate = _subtotalBeforeDiscount > 0 ? (_discountAmount / _subtotalBeforeDiscount) : 0.0;
+        _discountCommissionAmount = (_grossDoctorCommission * rate).clamp(0.0, _grossDoctorCommission);
+      } else if (_discountCommissionType == 'percentage') {
+        final customVal = double.tryParse(_discountCommissionController.text.trim()) ?? 0.0;
+        _discountCommissionAmount = (_grossDoctorCommission * customVal / 100.0).clamp(0.0, _grossDoctorCommission);
+      } else {
+        final customVal = double.tryParse(_discountCommissionController.text.trim()) ?? 0.0;
+        _discountCommissionAmount = customVal.clamp(0.0, _grossDoctorCommission);
+      }
+    } else {
+      _discountCommissionAmount = 0.0;
+    }
+
+    _totalDoctorCommission = (_grossDoctorCommission - _discountCommissionAmount).clamp(0.0, double.infinity);
+  }
+
+  void _addSoin(SoinsService soin) {
+    setState(() {
+      _selectedSoins.add(soin);
+      _recalculateTotal();
+    });
+  }
+
+  void _removeSoin(SoinsService soin) {
+    setState(() {
+      _selectedSoins.remove(soin);
+      _recalculateTotal();
+      _filterSoins(_soinSearchController.text);
+    });
+  }
+
+  void _filterSoins(String query) {
+    if (_allSoins.isEmpty) return;
+    setState(() {
+      if (query.isEmpty) {
+        _filteredSoins = _allSoins
+            .where(
+              (s) => !_selectedSoins.any(
+                (selected) => selected.id == s.id,
+              ),
+            )
+            .toList();
+      } else {
+        _filteredSoins = _allSoins
+            .where(
+              (s) =>
+                  !_selectedSoins.any((selected) => selected.id == s.id) &&
+                  s.nom.toLowerCase().contains(query.toLowerCase()),
+            )
+            .toList();
+      }
+    });
   }
 
   void _filterServices(String query) {
@@ -135,6 +255,8 @@ class _InvoiceFormDialogState extends State<InvoiceFormDialog> {
     _appointmentIdController.dispose();
     _totalAmountController.dispose();
     _serviceSearchController.dispose();
+    _soinSearchController.dispose();
+    _discountController.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -188,6 +310,14 @@ class _InvoiceFormDialogState extends State<InvoiceFormDialog> {
       return;
     }
 
+    final actsText = _selectedServices.map((s) => s.serviceName).join(', ');
+    final soinsText = _selectedSoins.map((s) => s.nom).join(', ');
+    final servicesText = actsText.isNotEmpty && soinsText.isNotEmpty
+        ? 'Actes: $actsText | Soins: $soinsText'
+        : (actsText.isNotEmpty ? actsText : soinsText);
+
+    final discVal = double.tryParse(_discountController.text.trim()) ?? 0.0;
+    final discComVal = double.tryParse(_discountCommissionController.text.trim()) ?? 0.0;
     final payment = Payment(
       paymentId: widget.payment?.paymentId,
       patientId: int.parse(_patientIdController.text),
@@ -197,28 +327,53 @@ class _InvoiceFormDialogState extends State<InvoiceFormDialog> {
       paymentMethod: _paymentMethod.name,
       paymentDate: _paymentDate,
       notes: _notesController.text,
-      servicesText: _selectedServices.map((s) => s.serviceName).join(', '),
+      servicesText: servicesText,
       recordId: widget.payment?.recordId,
+      discountAmount: _discountAmount,
+      discountType: _discountType,
+      discountValue: discVal,
+      discountCommissionAmount: _discountCommissionAmount,
+      discountCommissionType: _discountCommissionType,
+      discountCommissionValue: discComVal,
+      applyCommissionDiscount: _applyDoctorDiscount,
     );
 
+    final commissionRatio = (_grossDoctorCommission > 0 && _discountCommissionAmount > 0)
+        ? (1.0 - (_discountCommissionAmount / _grossDoctorCommission)).clamp(0.0, 1.0)
+        : 1.0;
+
+    final paymentServices = [
+      ..._selectedServices.map(
+        (s) => PaymentService(
+          serviceId: s.serviceId,
+          serviceName: s.serviceName,
+          servicePrice: s.price,
+          doctorCommission: (s.doctorCommission * commissionRatio).clamp(0.0, s.price),
+          serviceType: 'act',
+        ),
+      ),
+      ..._selectedSoins.map(
+        (s) => PaymentService(
+          serviceId: s.id,
+          serviceName: s.nom,
+          servicePrice: s.price,
+          doctorCommission: (s.doctorCommission * commissionRatio).clamp(0.0, s.price),
+          serviceType: 'soin',
+        ),
+      ),
+    ];
+
     if (widget.payment != null) {
-      final paymentServices = _selectedServices
-          .map(
-            (s) => PaymentService(
-              serviceId: s.serviceId,
-              serviceName: s.serviceName,
-              servicePrice: s.price,
-              doctorCommission: s.doctorCommission,
-            ),
-          )
-          .toList();
       context.read<BillingCubit>().updatePaymentWithServices(
         widget.payment!.paymentId!,
         payment,
         paymentServices,
       );
     } else {
-      context.read<BillingCubit>().createPayment(payment);
+      context.read<BillingCubit>().createPaymentWithServices(
+        payment,
+        paymentServices,
+      );
     }
   }
 
@@ -564,6 +719,371 @@ class _InvoiceFormDialogState extends State<InvoiceFormDialog> {
 
                   const SizedBox(height: 16),
 
+                  // Soins & Injections Section
+                  Text(
+                    'Soins & Injections (Administrés)',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.teal.shade800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  if (_selectedSoins.isNotEmpty) ...[
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _selectedSoins.map((soin) {
+                        return Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.teal.shade50,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: Colors.teal.shade200),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    soin.nom,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${soin.price.toStringAsFixed(2)} DA',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Positioned(
+                              top: -4,
+                              right: -4,
+                              child: InkWell(
+                                onTap: () => _removeSoin(soin),
+                                child: Container(
+                                  width: 16,
+                                  height: 16,
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.close,
+                                    size: 10,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  BlocBuilder<SoinsServiceCubit, SoinsServiceState>(
+                    builder: (context, state) {
+                      if (_allSoins.isEmpty && state.services.isNotEmpty) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          _allSoins = state.services;
+                          _filterSoins(_soinSearchController.text);
+                        });
+                      }
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          TextField(
+                            controller: _soinSearchController,
+                            decoration: InputDecoration(
+                              labelText: 'Rechercher un soin / médicament...',
+                              border: const OutlineInputBorder(),
+                              prefixIcon: const Icon(Icons.vaccines_outlined, size: 18),
+                              suffixIcon: _soinSearchController.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear, size: 18),
+                                      onPressed: () {
+                                        _soinSearchController.clear();
+                                        _filterSoins('');
+                                      },
+                                    )
+                                  : null,
+                              isDense: true,
+                            ),
+                            onChanged: (value) => _filterSoins(value),
+                          ),
+                          const SizedBox(height: 8),
+
+                          if (_filteredSoins.isNotEmpty &&
+                              _soinSearchController.text.isNotEmpty)
+                            Container(
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: Colors.grey.shade300,
+                                ),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              constraints: const BoxConstraints(
+                                maxHeight: 200,
+                              ),
+                              child: ListView.builder(
+                                shrinkWrap: true,
+                                itemCount: _filteredSoins.length,
+                                itemBuilder: (context, index) {
+                                  final soin = _filteredSoins[index];
+                                  return ListTile(
+                                    dense: true,
+                                    title: Text(soin.nom),
+                                    subtitle: Text(
+                                      '${soin.price.toStringAsFixed(2)} DA | Commission: ${soin.doctorCommission.toStringAsFixed(2)} DA',
+                                    ),
+                                    onTap: () => _addSoin(soin),
+                                  );
+                                },
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Remise / Discount Section
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade50.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.amber.shade200),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.discount_outlined, size: 18, color: Colors.amber.shade900),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Remise / Réduction (Optionnel)',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amber.shade900),
+                                ),
+                              ],
+                            ),
+                            if (_discountAmount > 0)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.shade100,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  '- ${_discountAmount.toStringAsFixed(0)} DA ${_discountType == "percentage" ? "(-${_discountController.text}%)" : ""}',
+                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            SegmentedButton<String>(
+                              segments: const [
+                                ButtonSegment<String>(
+                                  value: 'money',
+                                  label: Text('DA'),
+                                ),
+                                ButtonSegment<String>(
+                                  value: 'percentage',
+                                  label: Text('%'),
+                                ),
+                              ],
+                              selected: {_discountType},
+                              onSelectionChanged: (val) {
+                                setState(() {
+                                  _discountType = val.first;
+                                  _recalculateTotal();
+                                });
+                              },
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextField(
+                                controller: _discountController,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                decoration: InputDecoration(
+                                  labelText: _discountType == 'percentage'
+                                      ? 'Pourcentage de remise (%)'
+                                      : 'Montant de remise (DA)',
+                                  hintText: _discountType == 'percentage' ? 'Ex: 10 pour 10%' : 'Ex: 100 pour 100 DA',
+                                  suffixText: _discountType == 'percentage' ? '%' : 'DA',
+                                  isDense: true,
+                                  border: const OutlineInputBorder(),
+                                  prefixIcon: const Icon(Icons.percent, size: 18),
+                                  suffixIcon: _discountController.text.isNotEmpty
+                                      ? IconButton(
+                                          icon: const Icon(Icons.clear, size: 16),
+                                          onPressed: () {
+                                            _discountController.clear();
+                                            setState(() {
+                                              _recalculateTotal();
+                                            });
+                                          },
+                                        )
+                                      : null,
+                                ),
+                                onChanged: (val) {
+                                  setState(() {
+                                    _recalculateTotal();
+                                  });
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (_discountAmount > 0 || _discountController.text.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          const Divider(height: 1),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.medical_information_outlined, size: 16, color: Colors.orange.shade800),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Réduire la commission médecin',
+                                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Colors.orange.shade900),
+                                  ),
+                                ],
+                              ),
+                              Switch(
+                                value: _applyDoctorDiscount,
+                                activeColor: Colors.orange.shade800,
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                onChanged: (val) {
+                                  setState(() {
+                                    _applyDoctorDiscount = val;
+                                    _recalculateTotal();
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                          if (_applyDoctorDiscount) ...[
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                SegmentedButton<String>(
+                                  segments: const [
+                                    ButtonSegment<String>(
+                                      value: 'proportional',
+                                      label: Text('Proportionnelle', style: TextStyle(fontSize: 11)),
+                                    ),
+                                    ButtonSegment<String>(
+                                      value: 'custom',
+                                      label: Text('Personnalisée', style: TextStyle(fontSize: 11)),
+                                    ),
+                                  ],
+                                  selected: {_discountCommissionType == 'proportional' ? 'proportional' : 'custom'},
+                                  onSelectionChanged: (val) {
+                                    setState(() {
+                                      if (val.first == 'proportional') {
+                                        _discountCommissionType = 'proportional';
+                                      } else {
+                                        _discountCommissionType = 'percentage';
+                                      }
+                                      _recalculateTotal();
+                                    });
+                                  },
+                                ),
+                                if (_discountCommissionAmount > 0) ...[
+                                  const Spacer(),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.shade100,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      '- ${_discountCommissionAmount.toStringAsFixed(0)} DA',
+                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.orange.shade900),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            if (_discountCommissionType != 'proportional') ...[
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  SegmentedButton<String>(
+                                    segments: const [
+                                      ButtonSegment<String>(value: 'money', label: Text('DA', style: TextStyle(fontSize: 11))),
+                                      ButtonSegment<String>(value: 'percentage', label: Text('%', style: TextStyle(fontSize: 11))),
+                                    ],
+                                    selected: {_discountCommissionType},
+                                    onSelectionChanged: (val) {
+                                      setState(() {
+                                        _discountCommissionType = val.first;
+                                        _recalculateTotal();
+                                      });
+                                    },
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _discountCommissionController,
+                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                      decoration: InputDecoration(
+                                        labelText: _discountCommissionType == 'percentage' ? 'Remise com. (%)' : 'Remise com. (DA)',
+                                        hintText: _discountCommissionType == 'percentage' ? 'Ex: 10' : 'Ex: 50',
+                                        suffixText: _discountCommissionType == 'percentage' ? '%' : 'DA',
+                                        isDense: true,
+                                        border: const OutlineInputBorder(),
+                                        suffixIcon: _discountCommissionController.text.isNotEmpty
+                                            ? IconButton(
+                                                icon: const Icon(Icons.clear, size: 14),
+                                                onPressed: () {
+                                                  _discountCommissionController.clear();
+                                                  setState(() {
+                                                    _recalculateTotal();
+                                                  });
+                                                },
+                                              )
+                                            : null,
+                                      ),
+                                      onChanged: (val) {
+                                        setState(() {
+                                          _recalculateTotal();
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
                   // Total Amount
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -573,24 +1093,75 @@ class _InvoiceFormDialogState extends State<InvoiceFormDialog> {
                       ),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    child: Column(
                       children: [
-                        Text(
-                          'Total Amount',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                        if (_discountAmount > 0) ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Total Brut: ${_subtotalBeforeDiscount.toStringAsFixed(2)} DA',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                  decoration: TextDecoration.lineThrough,
+                                ),
+                              ),
+                              Text(
+                                'Remise: - ${_discountAmount.toStringAsFixed(2)} DA ${_discountType == "percentage" ? "(-${_discountController.text}%)" : ""}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.amber.shade900,
+                                ),
+                              ),
+                            ],
                           ),
+                          const SizedBox(height: 6),
+                        ],
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Total Net à Payer',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            Text(
+                              '${_totalAmountController.text} DA',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ],
                         ),
-                        Text(
-                          '${_totalAmountController.text} DA',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                            color: theme.colorScheme.primary,
+                        if (_selectedServices.isNotEmpty || _selectedSoins.isNotEmpty) ...[
+                          const Divider(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Commission Médecin Nette',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[700],
+                                ),
+                              ),
+                              Text(
+                                '${_totalDoctorCommission.toStringAsFixed(2)} DA ${_discountCommissionAmount > 0 ? "(-${_discountCommissionAmount.toStringAsFixed(0)} DA)" : ""}',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.orange.shade800,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ),

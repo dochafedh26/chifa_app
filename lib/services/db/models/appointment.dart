@@ -1,6 +1,21 @@
 import "package:equatable/equatable.dart";
 
-enum AppointmentStatus { scheduled, cancelled, completed }
+enum AppointmentStatus { scheduled, waitingRoom, completed, cancelled }
+
+extension AppointmentStatusX on AppointmentStatus {
+  String get label {
+    switch (this) {
+      case AppointmentStatus.scheduled:
+        return 'Programmé';
+      case AppointmentStatus.waitingRoom:
+        return 'En salle d\'attente';
+      case AppointmentStatus.completed:
+        return 'Terminé';
+      case AppointmentStatus.cancelled:
+        return 'Annulé';
+    }
+  }
+}
 
 class Appointment extends Equatable {
   final int? appointmentId;
@@ -49,7 +64,12 @@ class Appointment extends Equatable {
           ? map['appointment_date'] as DateTime
           : DateTime.parse(map['appointment_date'] as String),
       status: AppointmentStatus.values.firstWhere(
-        (e) => e.name == map['status'],
+        (e) =>
+            e.name.toLowerCase() ==
+            (map['status'] as String?)
+                ?.toLowerCase()
+                .replaceAll('_', '')
+                .replaceAll(' ', ''),
         orElse: () => AppointmentStatus.scheduled,
       ),
       notes: map['notes'] as String?,

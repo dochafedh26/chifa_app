@@ -1,4 +1,7 @@
+import 'package:chifa/app/cubits/auth_cubit.dart';
 import 'package:chifa/app/cubits/workspace_cubit.dart';
+import 'package:chifa/app/utils/role_permissions.dart';
+import 'package:chifa/services/db/models/employee.dart';
 import 'package:chifa/app/screens/appointments/appointment_list_screen.dart';
 import 'package:chifa/app/screens/bilan/bilan_screen.dart';
 import 'package:chifa/app/screens/billing/billing_screen.dart';
@@ -12,8 +15,10 @@ import 'package:chifa/app/screens/ai_search/ai_search_screen.dart';
 import 'package:chifa/app/screens/settings/settings_screen.dart';
 import 'package:chifa/app/screens/workspace/workspace_screen.dart';
 import 'package:chifa/app/theme/app_theme.dart';
+import 'package:chifa/app/widgets/notification_bell_widget.dart';
 import 'package:chifa/app/widgets/sync_indicator.dart';
 import 'package:chifa/app/widgets/xampp_connection_dialog.dart';
+import 'package:chifa/app/utils/responsive.dart';
 import 'package:chifa/services/db/sync_manager.dart';
 import 'package:chifa/tunnel/screens/tunnel_shell.dart';
 import 'package:flutter/material.dart';
@@ -30,30 +35,55 @@ class _MainShellState extends State<MainShell> {
   int _selectedIndex = 0;
   bool _hasShownXamppDialog = false;
 
-  static const _navItems = <_NavItem>[
-    _NavItem(Icons.dashboard_outlined, Icons.dashboard, 'Dashboard'),
+  static const _allNavItems = <_NavItem>[
+    _NavItem('dashboard', Icons.dashboard_outlined, Icons.dashboard, 'Dashboard'),
     _NavItem(
+      'appointments',
       Icons.calendar_today_outlined,
       Icons.calendar_today,
       'Appointments',
     ),
-    _NavItem(Icons.people_outline, Icons.people, 'Patients'),
-    _NavItem(Icons.folder_shared_outlined, Icons.folder_shared, 'Records'),
-    _NavItem(Icons.receipt_long_outlined, Icons.receipt_long, 'Billing'),
-    _NavItem(Icons.medication_outlined, Icons.medication, 'Prescriptions'),
-    _NavItem(Icons.inventory_2_outlined, Icons.inventory_2, 'Inventory'),
-    _NavItem(Icons.biotech_outlined, Icons.biotech, 'Bilan'),
-    _NavItem(Icons.description_outlined, Icons.description, 'Certifs'),
-    _NavItem(Icons.auto_awesome_outlined, Icons.auto_awesome, 'IA Clinique'),
-    _NavItem(Icons.lan_outlined, Icons.lan, 'Tunnel'),
-    _NavItem(Icons.settings_outlined, Icons.settings, 'Settings'),
+    _NavItem('patients', Icons.people_outline, Icons.people, 'Patients'),
+    _NavItem('medical_records', Icons.folder_shared_outlined, Icons.folder_shared, 'Records'),
+    _NavItem('billing', Icons.receipt_long_outlined, Icons.receipt_long, 'Billing'),
+    _NavItem('prescriptions', Icons.medication_outlined, Icons.medication, 'Prescriptions'),
+    _NavItem('inventory', Icons.inventory_2_outlined, Icons.inventory_2, 'Inventory'),
+    _NavItem('bilan', Icons.biotech_outlined, Icons.biotech, 'Bilan'),
+    _NavItem('certificates', Icons.description_outlined, Icons.description, 'Certifs'),
+    _NavItem('ai_search', Icons.auto_awesome_outlined, Icons.auto_awesome, 'IA Clinique'),
+    _NavItem('tunnel', Icons.lan_outlined, Icons.lan, 'Tunnel'),
+    _NavItem('settings', Icons.settings_outlined, Icons.settings, 'Settings'),
   ];
+
+  List<_NavItem> _buildVisibleNavItems(EmployeeRole? role) {
+    return _allNavItems
+        .where((item) => RolePermissions.canAccessTab(role, item.id))
+        .map((item) {
+          if (item.id == 'billing' && role == EmployeeRole.nurse) {
+            return const _NavItem(
+              'billing',
+              Icons.point_of_sale_outlined,
+              Icons.point_of_sale,
+              'Caisse',
+            );
+          }
+          return item;
+        })
+        .toList();
+  }
+
+  List<_NavItem> _getVisibleNavItems() {
+    final role = context.watch<AuthCubit>().currentRole;
+    return _buildVisibleNavItems(role);
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _onDestinationSelected(0);
+      final role = context.read<AuthCubit>().currentRole;
+      final visible = _buildVisibleNavItems(role);
+      _onDestinationSelected(0, visible);
       _listenToSyncErrors();
     });
   }
@@ -95,7 +125,8 @@ class _MainShellState extends State<MainShell> {
     super.dispose();
   }
 
-  void _onDestinationSelected(int index) {
+  void _onDestinationSelected(int index, List<_NavItem> items) {
+    if (index < 0 || index >= items.length) return;
     setState(() => _selectedIndex = index);
 
     final workspaceCubit = context.read<WorkspaceCubit>();
@@ -114,24 +145,32 @@ class _MainShellState extends State<MainShell> {
       'settings': const SettingsScreen(),
     };
 
-    final keys = screens.keys.toList();
-    final id = keys[index];
-    final title = _navItems[index].label;
-    workspaceCubit.openTab(
-      WorkspaceTab(id: id, title: title, content: screens[id]!),
-    );
+    final item = items[index];
+    final id = item.id;
+    final title = item.label;
+    if (screens.containsKey(id)) {
+      workspaceCubit.openTab(
+        WorkspaceTab(id: id, title: title, content: screens[id]!),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final navItems = _getVisibleNavItems();
+    if (_selectedIndex >= navItems.length && navItems.isNotEmpty) {
+      _selectedIndex = 0;
+    }
+
     return Builder(
       builder: (context) {
-        final width = MediaQuery.of(context).size.width;
-        final isMobile = width < 800;
+        final isMobile = context.isMobile;
+        final isLandscapePhone = context.isPhoneLandscape;
 
         if (isMobile) {
           return Scaffold(
             appBar: AppBar(
+              toolbarHeight: isLandscapePhone ? 46 : 56,
               backgroundColor: Colors.white,
               elevation: 0,
               centerTitle: true,
@@ -139,18 +178,18 @@ class _MainShellState extends State<MainShell> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    width: 32,
-                    height: 32,
+                    width: isLandscapePhone ? 26 : 32,
+                    height: isLandscapePhone ? 26 : 32,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [AppTheme.primaryLight, AppTheme.primary],
                       ),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.local_hospital_rounded,
                       color: Colors.white,
-                      size: 18,
+                      size: isLandscapePhone ? 14 : 18,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -158,33 +197,28 @@ class _MainShellState extends State<MainShell> {
                     'CHIFA',
                     style: TextStyle(
                       color: AppTheme.primary,
-                      fontSize: 16,
+                      fontSize: isLandscapePhone ? 14 : 16,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1,
                     ),
                   ),
                 ],
               ),
-              actions: [
-                IconButton(
-                  icon: Icon(
-                    Icons.notifications_none_rounded,
-                    color: AppTheme.textSecondary,
-                  ),
-                  onPressed: () {},
-                ),
+              actions: const [
+                NotificationBellWidget(),
+                SizedBox(width: 8),
               ],
             ),
-            drawer: _buildDrawer(),
+            drawer: _buildDrawer(navItems),
             body: const WorkspaceScreen(),
-            bottomNavigationBar: _buildBottomNav(),
+            bottomNavigationBar: isLandscapePhone ? null : _buildBottomNav(navItems),
           );
         }
 
         return Scaffold(
           body: Row(
             children: [
-              _buildSidebar(),
+              _buildSidebar(navItems),
               const Expanded(child: WorkspaceScreen()),
             ],
           ),
@@ -195,9 +229,9 @@ class _MainShellState extends State<MainShell> {
 
   // ─── Mobile Navigation ──────────────────────────────────────────────
 
-  Widget _buildBottomNav() {
-    // Show only the first 5 items on bottom nav
-    final items = _navItems.take(5).toList();
+  Widget _buildBottomNav(List<_NavItem> items) {
+    // Show only up to first 5 items on bottom nav
+    final bottomItems = items.take(5).toList();
 
     return Container(
       decoration: BoxDecoration(
@@ -211,8 +245,8 @@ class _MainShellState extends State<MainShell> {
         ],
       ),
       child: BottomNavigationBar(
-        currentIndex: _selectedIndex < 5 ? _selectedIndex : 0,
-        onTap: _onDestinationSelected,
+        currentIndex: _selectedIndex < bottomItems.length ? _selectedIndex : 0,
+        onTap: (i) => _onDestinationSelected(i, items),
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
         selectedItemColor: AppTheme.primary,
@@ -223,7 +257,7 @@ class _MainShellState extends State<MainShell> {
         ),
         unselectedLabelStyle: const TextStyle(fontSize: 11),
         elevation: 0,
-        items: items
+        items: bottomItems
             .map(
               (item) => BottomNavigationBarItem(
                 icon: Icon(item.icon),
@@ -236,7 +270,7 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  Widget _buildDrawer() {
+  Widget _buildDrawer(List<_NavItem> items) {
     return Drawer(
       backgroundColor: AppTheme.sidebarBackground,
       child: Column(
@@ -278,9 +312,9 @@ class _MainShellState extends State<MainShell> {
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: _navItems.length,
+              itemCount: items.length,
               itemBuilder: (context, i) {
-                final item = _navItems[i];
+                final item = items[i];
                 final isSelected = _selectedIndex == i;
                 return ListTile(
                   leading: Icon(
@@ -301,7 +335,7 @@ class _MainShellState extends State<MainShell> {
                   selected: isSelected,
                   onTap: () {
                     Navigator.pop(context);
-                    _onDestinationSelected(i);
+                    _onDestinationSelected(i, items);
                   },
                 );
               },
@@ -315,7 +349,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   // ─── Premium Dark Sidebar (Desktop Only) ───────────────────────────
-  Widget _buildSidebar() {
+  Widget _buildSidebar(List<_NavItem> items) {
     return Container(
       width: 180,
       decoration: BoxDecoration(
@@ -379,9 +413,10 @@ class _MainShellState extends State<MainShell> {
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Column(
-                children: List.generate(_navItems.length, (i) {
-                  // Insert a divider before Settings
-                  if (i == _navItems.length - 1) {
+                children: List.generate(items.length, (i) {
+                  final item = items[i];
+                  // Insert a divider before Settings if present
+                  if (item.id == 'settings') {
                     return Column(
                       children: [
                         const SizedBox(height: 8),
@@ -391,11 +426,11 @@ class _MainShellState extends State<MainShell> {
                           color: AppTheme.sidebarSurface,
                         ),
                         const SizedBox(height: 8),
-                        _buildNavItem(i),
+                        _buildNavItem(i, items),
                       ],
                     );
                   }
-                  return _buildNavItem(i);
+                  return _buildNavItem(i, items);
                 }),
               ),
             ),
@@ -407,8 +442,8 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  Widget _buildNavItem(int index) {
-    final item = _navItems[index];
+  Widget _buildNavItem(int index, List<_NavItem> items) {
+    final item = items[index];
     final isSelected = _selectedIndex == index;
 
     return Padding(
@@ -417,7 +452,7 @@ class _MainShellState extends State<MainShell> {
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
-          onTap: () => _onDestinationSelected(index),
+          onTap: () => _onDestinationSelected(index, items),
           borderRadius: BorderRadius.circular(14),
           splashColor: AppTheme.primary.withValues(alpha: 0.15),
           hoverColor: AppTheme.sidebarSurface.withValues(alpha: 0.6),
@@ -453,8 +488,8 @@ class _MainShellState extends State<MainShell> {
                   isSelected ? item.activeIcon : item.icon,
                   size: 22,
                   color: isSelected
-                      ? AppTheme.primaryLight
-                      : AppTheme.sidebarText,
+                        ? AppTheme.primaryLight
+                        : AppTheme.sidebarText,
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -479,8 +514,9 @@ class _MainShellState extends State<MainShell> {
 }
 
 class _NavItem {
+  final String id;
   final IconData icon;
   final IconData activeIcon;
   final String label;
-  const _NavItem(this.icon, this.activeIcon, this.label);
+  const _NavItem(this.id, this.icon, this.activeIcon, this.label);
 }

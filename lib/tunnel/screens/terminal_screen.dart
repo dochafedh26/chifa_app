@@ -456,3 +456,6 @@ class _TerminalScreenState extends State<TerminalScreen> {
     }
   }
 }
+
+
+typedef TcpTunnelTerminalScreen = TerminalScreen;

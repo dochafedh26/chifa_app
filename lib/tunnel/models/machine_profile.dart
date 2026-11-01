@@ -5,12 +5,14 @@ class MachineProfile {
   final String name;
   final String relayUrl;
   final String token;
+  final String? rdpToken;
 
   const MachineProfile({
     required this.id,
     required this.name,
     required this.relayUrl,
     required this.token,
+    this.rdpToken,
   });
 
   MachineProfile copyWith({
@@ -18,12 +20,14 @@ class MachineProfile {
     String? name,
     String? relayUrl,
     String? token,
+    String? rdpToken,
   }) {
     return MachineProfile(
       id: id ?? this.id,
       name: name ?? this.name,
       relayUrl: relayUrl ?? this.relayUrl,
       token: token ?? this.token,
+      rdpToken: rdpToken ?? this.rdpToken,
     );
   }
 
@@ -32,6 +36,7 @@ class MachineProfile {
         'name': name,
         'relayUrl': relayUrl,
         'token': token,
+        'rdpToken': rdpToken,
       };
 
   factory MachineProfile.fromJson(Map<String, dynamic> json) => MachineProfile(
@@ -39,6 +44,7 @@ class MachineProfile {
         name: json['name'] as String,
         relayUrl: json['relayUrl'] as String,
         token: json['token'] as String,
+        rdpToken: json['rdpToken'] as String?,
       );
 
   String toJsonString() => jsonEncode(toJson());

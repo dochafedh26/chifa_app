@@ -163,7 +163,7 @@ class RemoteDatabaseService {
       result = await callback(ctx);
     });
 
-    return result!;
+    return result as T;
   }
 
   /// Insert and return the last inserted ID

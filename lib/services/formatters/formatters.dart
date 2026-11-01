@@ -104,4 +104,72 @@ class Formatters {
       return '$minDoseStr - $maxDoseStr mg/jour';
     }
   }
+
+  static ({int years, int months, int days}) calculateAgeComponents(
+    DateTime birthDate, {
+    DateTime? now,
+  }) {
+    final current = now ?? DateTime.now();
+    int years = current.year - birthDate.year;
+    int months = current.month - birthDate.month;
+    int days = current.day - birthDate.day;
+
+    if (days < 0) {
+      months--;
+      final prevMonthLastDay = DateTime(current.year, current.month, 0);
+      days += prevMonthLastDay.day;
+    }
+
+    if (months < 0) {
+      years--;
+      months += 12;
+    }
+
+    if (years < 0) {
+      return (years: 0, months: 0, days: 0);
+    }
+
+    return (years: years, months: months, days: days);
+  }
+
+  static String formatAge(DateTime birthDate, {DateTime? now}) {
+    if (birthDate.year <= 1900) {
+      return 'N/A';
+    }
+
+    final (:years, :months, :days) = calculateAgeComponents(birthDate, now: now);
+
+    if (years >= 15) {
+      return '$years ans';
+    } else if (years >= 3) {
+      if (months > 0) {
+        return '$years ans $months mois';
+      }
+      return '$years ans';
+    } else if (years >= 1) {
+      final yStr = years == 1 ? '1 an' : '$years ans';
+      final parts = <String>[yStr];
+      if (months > 0) {
+        parts.add('$months mois');
+      }
+      if (days > 0) {
+        parts.add('$days jour${days > 1 ? 's' : ''}');
+      }
+      return parts.join(' ');
+    } else {
+      // Under 1 year: months and days
+      final parts = <String>[];
+      if (months > 0) {
+        parts.add('$months mois');
+      }
+      if (days > 0) {
+        parts.add('$days jour${days > 1 ? 's' : ''}');
+      }
+      if (parts.isEmpty) {
+        return '0 jour';
+      }
+      return parts.join(' ');
+    }
+  }
 }
+

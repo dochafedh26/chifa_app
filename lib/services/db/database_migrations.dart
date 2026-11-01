@@ -213,6 +213,46 @@ class DatabaseMigrations {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
       ''');
 
+      // ── certificat_aptitude_sport: ensure table exists ───────────────────
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS `certificat_aptitude_sport` (
+          `id` int(11) NOT NULL AUTO_INCREMENT,
+          `patient_id` int(11) NOT NULL,
+          `doctor_id` int(11) DEFAULT NULL,
+          `sport` varchar(255) DEFAULT 'Toutes disciplines sportives',
+          `type_pratique` varchar(100) DEFAULT 'Entraînement et Loisir',
+          `examen_clinique` text DEFAULT NULL,
+          `remarques` text DEFAULT NULL,
+          `created_at` datetime DEFAULT current_timestamp(),
+          `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+          PRIMARY KEY (`id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      ''');
+
+      // ── interpretation_ecg: ensure table exists ──────────────────────────
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS `interpretation_ecg` (
+          `id` int(11) NOT NULL AUTO_INCREMENT,
+          `patient_id` int(11) NOT NULL,
+          `doctor_id` int(11) DEFAULT NULL,
+          `motif` varchar(255) DEFAULT 'Bilan systématique',
+          `rythme` varchar(100) DEFAULT 'Sinusal régulier',
+          `frequence_cardiaque` int(11) DEFAULT 75,
+          `axe_qrs` varchar(100) DEFAULT 'Normal (~60°)',
+          `onde_p` varchar(100) DEFAULT 'Normale',
+          `espace_pr` varchar(100) DEFAULT 'Normal (120-200 ms)',
+          `complexe_qrs` varchar(150) DEFAULT 'Fin (< 100 ms)',
+          `segment_st` varchar(100) DEFAULT 'Isoélectrique',
+          `onde_t` varchar(100) DEFAULT 'Positive et normale',
+          `intervalle_qt` varchar(100) DEFAULT 'Normal',
+          `conclusion` text NOT NULL,
+          `remarques` text DEFAULT NULL,
+          `created_at` datetime DEFAULT current_timestamp(),
+          `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+          PRIMARY KEY (`id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      ''');
+
       // ── bilans: add medicalrecord_id column ──────────────────────────────
       if (!await db.columnExists('bilans', 'medicalrecord_id')) {
         await db.execute(
