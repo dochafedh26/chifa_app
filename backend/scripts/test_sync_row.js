@@ -2,7 +2,7 @@ const mysql = require('mysql2/promise');
 
 async function testSyncRow() {
   const local = await mysql.createConnection({ host: '127.0.0.1', user: 'root', password: '', database: 'clinic' });
-  const remote = await mysql.createConnection({ host: 'srv50.octenium.net', user: 'rnhgnubg_chifa', password: 'MyNetPass@2026', database: 'rnhgnubg_chifa' });
+  const remote = await mysql.createConnection({ host: 'srv50.octenium.net', user: 'rnhgnubg_chifa', password: process.env.REMOTE_DB_PASS, database: 'rnhgnubg_chifa' });
 
   // Find a row in local payment_services that is not in remote
   const [missing] = await local.query(`

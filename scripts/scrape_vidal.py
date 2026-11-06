@@ -186,7 +186,7 @@ def main():
         connection = pymysql.connect(
             host='127.0.0.1',
             user='chiffa',
-            password='MyNewPass@2025',
+            password=os.getenv('LOCAL_DB_PASSWORD', ''),
             database='clinic',
             charset='utf8mb4',
             cursorclass=pymysql.cursors.DictCursor

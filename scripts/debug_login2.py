@@ -29,7 +29,7 @@ print(f"   OTP value before: '{otp.get_attribute('value')}'")
 user.clear()
 user.send_keys("herhourm")
 pwd.clear()
-pwd.send_keys("Cnas26med@+")
+pwd.send_keys(os.getenv("CNAS_PASS", ""))
 
 print("4. Filled credentials, clicking login...")
 btn.click()

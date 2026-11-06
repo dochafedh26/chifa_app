@@ -24,7 +24,7 @@ btn = driver.find_element(By.ID, "form1:btn_login")
 user.clear()
 user.send_keys("herhourm")
 pwd.clear()
-pwd.send_keys("Cnas26med@+")
+pwd.send_keys(os.getenv("CNAS_PASS", ""))
 btn.click()
 time.sleep(5)
 

@@ -5,7 +5,7 @@ header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
 
 // Security key - must match the one sent by the Flutter app
-$API_KEY = 'chifa_secret_key_2026';
+$API_KEY = getenv('API_KEY') ?: 'chifa_secret_key_2026';
 
 if (!isset($_POST['api_key']) || $_POST['api_key'] !== $API_KEY) {
     http_response_code(401);
@@ -13,12 +13,12 @@ if (!isset($_POST['api_key']) || $_POST['api_key'] !== $API_KEY) {
     exit;
 }
 
-// Your Octenium Database Credentials
-$host = 'srv50.octenium.net';
-$user = 'rnhgnubg_chifa';
-$pass = 'MyNetPass@2026';
-$db = 'rnhgnubg_chifa';
-$port = 3306;
+// Database Credentials
+$host = getenv('DB_HOST') ?: 'localhost';
+$user = getenv('DB_USER') ?: 'root';
+$pass = getenv('DB_PASSWORD') ?: '';
+$db = getenv('DB_NAME') ?: 'chifa';
+$port = (int)(getenv('DB_PORT') ?: 3306);
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 

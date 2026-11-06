@@ -11,7 +11,7 @@ async function main() {
   const remote = await mysql.createConnection({
     host: 'srv50.octenium.net',
     user: 'rnhgnubg_chifa',
-    password: 'MyNetPass@2026',
+    password: process.env.REMOTE_DB_PASS,
     database: 'rnhgnubg_chifa',
   });
 

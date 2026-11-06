@@ -73,9 +73,9 @@ def login(driver):
     button = driver.find_element(By.ID, "form1:btn_login")
     
     username.clear()
-    username.send_keys("herhourm")
+    username.send_keys(os.getenv("CNAS_USER", ""))
     password.clear()
-    password.send_keys("Cnas26med@+")
+    password.send_keys(os.getenv("CNAS_PASS", ""))
     button.click()
     time.sleep(5)
 

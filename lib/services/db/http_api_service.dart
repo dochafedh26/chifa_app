@@ -18,7 +18,7 @@ class ApiConfig {
     return 'https://srv50.octenium.net/chifa/api';
   }
 
-  static const String syncKey = 'chifa_sync_secure_key_2026';
+  static String get syncKey => dotenv.env['SYNC_KEY'] ?? 'chifa_sync_secure_key_2026';
   static const Duration timeout = Duration(seconds: 30);
 }
 

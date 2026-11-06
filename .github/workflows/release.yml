@@ -28,6 +28,9 @@ jobs:
         with:
           channel: 'stable'
 
+      - name: Prepare environment file
+        run: cp .env.example .env
+
       - name: Install Dependencies
         run: flutter pub get
 
@@ -56,6 +59,9 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+
+      - name: Prepare environment file
+        run: cp .env.example .env
 
       - name: Install Dependencies
         run: flutter pub get

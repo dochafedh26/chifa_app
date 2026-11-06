@@ -22,7 +22,9 @@ def get_session():
     })
     return session
 
-def login_vidal(session, email="doc.hafedh14@gmail.com", password="MyNewPass@2024"):
+def login_vidal(session, email=None, password=None):
+    email = email or os.getenv("VIDAL_EMAIL", "")
+    password = password or os.getenv("VIDAL_PASSWORD", "")
     try:
         login_init_url = "https://www.vidal.fr/login.html?redirect=https%3A%2F%2Fwww.vidal.fr%2Fmedicaments%2Findication.html"
         res_init = session.get(login_init_url, timeout=10)

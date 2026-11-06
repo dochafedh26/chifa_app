@@ -51,7 +51,7 @@ print("Password pre-filled:", repr(pwd.get_attribute("value")))
 user.clear()
 user.send_keys("herhourm")
 pwd.clear()
-pwd.send_keys("Cnas26med@+")
+pwd.send_keys(os.getenv("CNAS_PASS", ""))
 btn.click()
 time.sleep(6)
 

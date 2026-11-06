@@ -1,22 +1,23 @@
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 const mysql = require('../node_modules/mysql2/promise');
 const { Pool } = require('../node_modules/pg');
 
 const mysqlConfig = {
-  host: 'srv50.octenium.net',
-  port: 3306,
-  user: 'rnhgnubg_chifa',
-  password: 'MyNetPass@2026',
-  database: 'rnhgnubg_chifa',
+  host: process.env.MYSQL_HOST || 'srv50.octenium.net',
+  port: parseInt(process.env.MYSQL_PORT || '3306'),
+  user: process.env.MYSQL_USER || 'rnhgnubg_chifa',
+  password: process.env.MYSQL_PASSWORD,
+  database: process.env.MYSQL_DATABASE || 'rnhgnubg_chifa',
   connectTimeout: 20000,
   dateStrings: true,
 };
 
 const pgConfig = {
-  host: 'aws-0-eu-west-3.pooler.supabase.com',
-  port: 6543,
-  user: 'chifa_admin.orvdwwuzmcfrbtkwsosc',
-  password: 'ChifaSupabasePass2026!',
-  database: 'postgres',
+  host: process.env.DB_HOST || 'aws-0-eu-west-3.pooler.supabase.com',
+  port: parseInt(process.env.DB_PORT || '6543'),
+  user: process.env.DB_USER || 'chifa_admin.orvdwwuzmcfrbtkwsosc',
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME || 'postgres',
   ssl: { rejectUnauthorized: false },
   max: 10,
 };

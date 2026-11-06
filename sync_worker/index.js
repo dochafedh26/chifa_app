@@ -70,7 +70,7 @@ const localConfig = {
     host: process.env.LOCAL_DB_HOST || '127.0.0.1',
     port: parseInt(process.env.LOCAL_DB_PORT) || 3306,
     user: process.env.LOCAL_DB_USER || 'chiffa',
-    password: process.env.LOCAL_DB_PASS || 'MyNewPass@2025',
+    password: process.env.LOCAL_DB_PASS || '',
     database: process.env.LOCAL_DB_NAME || 'clinic',
 };
 
@@ -78,7 +78,7 @@ const remoteConfig = {
     host: process.env.REMOTE_DB_HOST || 'srv50.octenium.net',
     port: parseInt(process.env.REMOTE_DB_PORT) || 3306,
     user: process.env.REMOTE_DB_USER || 'rnhgnubg_chifa',
-    password: process.env.REMOTE_DB_PASS || 'MyNetPass@2026',
+    password: process.env.REMOTE_DB_PASS || '',
     database: process.env.REMOTE_DB_NAME || 'rnhgnubg_chifa',
 };
 

@@ -11,7 +11,7 @@ const pool = new Pool({
   host: process.env.DB_HOST || 'aws-0-eu-west-3.pooler.supabase.com',
   port: parseInt(process.env.DB_PORT || '6543'),
   user: process.env.DB_USER || 'chifa_admin.orvdwwuzmcfrbtkwsosc',
-  password: process.env.DB_PASSWORD || 'ChifaSupabasePass2026!',
+  password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME || 'postgres',
   ssl: { rejectUnauthorized: false },
   max: 20,

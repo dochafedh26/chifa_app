@@ -2,24 +2,25 @@ import 'package:chifa/services/db/database_migrations.dart';
 import 'package:chifa/services/db/http_api_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:mysql_client/mysql_client.dart';
 
 /// Database configuration for XAMPP MySQL (Local)
 class XamppDatabaseConfig {
-  static const String host = 'localhost';
-  static const int port = 3306;
-  static const String database = 'clinic';
-  static const String user = 'chiffa';
-  static const String password = 'MyNewPass@2025';
+  static String get host => dotenv.env['LOCAL_DB_HOST'] ?? 'localhost';
+  static int get port => int.tryParse(dotenv.env['LOCAL_DB_PORT'] ?? '') ?? 3306;
+  static String get database => dotenv.env['LOCAL_DB_NAME'] ?? 'clinic';
+  static String get user => dotenv.env['LOCAL_DB_USER'] ?? 'chiffa';
+  static String get password => dotenv.env['LOCAL_DB_PASSWORD'] ?? '';
 }
 
 /// Database configuration for Octenium MySQL (Remote)
 class OcteniumDatabaseConfig {
-  static const String host = 'srv50.octenium.net';
-  static const int port = 3306;
-  static const String database = 'rnhgnubg_chifa';
-  static const String user = 'rnhgnubg_chifa';
-  static const String password = 'MyNetPass@2026';
+  static String get host => dotenv.env['REMOTE_DB_HOST'] ?? 'srv50.octenium.net';
+  static int get port => int.tryParse(dotenv.env['REMOTE_DB_PORT'] ?? '') ?? 3306;
+  static String get database => dotenv.env['REMOTE_DB_NAME'] ?? 'rnhgnubg_chifa';
+  static String get user => dotenv.env['REMOTE_DB_USER'] ?? 'rnhgnubg_chifa';
+  static String get password => dotenv.env['REMOTE_DB_PASSWORD'] ?? '';
 }
 
 class RemoteDatabaseService {

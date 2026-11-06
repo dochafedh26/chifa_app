@@ -122,7 +122,7 @@ async function main() {
   await migrateDatabase({ host: '127.0.0.1', user: 'root', password: '', database: 'clinic' }, 'LOCAL_XAMPP');
 
   // Migrate Remote Octenium
-  await migrateDatabase({ host: 'srv50.octenium.net', user: 'rnhgnubg_chifa', password: 'MyNetPass@2026', database: 'rnhgnubg_chifa' }, 'OCTENIUM_CLOUD');
+  await migrateDatabase({ host: 'srv50.octenium.net', user: 'rnhgnubg_chifa', password: process.env.REMOTE_DB_PASS, database: 'rnhgnubg_chifa' }, 'OCTENIUM_CLOUD');
 }
 
 main().catch(console.error);

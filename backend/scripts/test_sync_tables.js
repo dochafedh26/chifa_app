@@ -2,7 +2,7 @@ const mysql = require('mysql2/promise');
 
 async function testPush() {
   const local = await mysql.createConnection({ host: '127.0.0.1', user: 'root', password: '', database: 'clinic' });
-  const remote = await mysql.createConnection({ host: 'srv50.octenium.net', user: 'rnhgnubg_chifa', password: 'MyNetPass@2026', database: 'rnhgnubg_chifa' });
+  const remote = await mysql.createConnection({ host: 'srv50.octenium.net', user: 'rnhgnubg_chifa', password: process.env.REMOTE_DB_PASS, database: 'rnhgnubg_chifa' });
 
   // Check payment_services differences
   const [localPS] = await local.query('SELECT * FROM payment_services ORDER BY updated_at DESC LIMIT 5');
