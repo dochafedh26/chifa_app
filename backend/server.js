@@ -18,11 +18,11 @@ const notificationRoutes = require('./routes/notifications');
 const tvRoutes = require('./routes/tv');
 const db = require('./db');
 
-// Auto-migrate appointments.status in MySQL to VARCHAR(50) to support waitingRoom
+// Auto-migrate appointments.status to VARCHAR(50) to support waitingRoom
 (async () => {
   try {
-    await db.query('ALTER TABLE `appointments` MODIFY COLUMN `status` VARCHAR(50) DEFAULT "Scheduled"');
-    console.log('[Chifa Backend] Migrated appointments.status to VARCHAR(50)');
+    await db.query('ALTER TABLE "appointments" ALTER COLUMN "status" TYPE VARCHAR(50)');
+    console.log('[Chifa Backend] Ensured appointments.status is VARCHAR(50)');
   } catch (_) {}
 })();
 

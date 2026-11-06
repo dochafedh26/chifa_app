@@ -1,13 +1,19 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+
 class ApiConfig {
-  // Octenium cloud API base URL
+  // Supabase cloud backend API base URL
   static String get baseUrl {
     if (kIsWeb) {
       // In browser, dynamically use the current host origin (e.g. https://medevsync.com)
       final currentOrigin = Uri.base.origin;
       return '$currentOrigin/chifa/api';
+    }
+    final envUrl = dotenv.env['BACKEND_API_URL'];
+    if (envUrl != null && envUrl.isNotEmpty) {
+      return envUrl;
     }
     return 'https://srv50.octenium.net/chifa/api';
   }
@@ -72,6 +78,56 @@ class HttpApiService {
     debugPrint('[HttpApiService] SQL query relay error: $lastError');
     return {'error': lastError, 'success': false};
   }
+
+  Future<Map<String, dynamic>> pushChanges({
+    required String sourceId,
+    required Map<String, List<Map<String, dynamic>>> changes,
+  }) async {
+    final candidateUris = <Uri>[
+      Uri.parse('${ApiConfig.baseUrl}/sync/push'),
+    ];
+
+    for (final uri in candidateUris) {
+      try {
+        final response = await http.post(
+          uri,
+          headers: _headers,
+          body: jsonEncode({
+            'source_id': sourceId,
+            'changes': changes,
+          }),
+        ).timeout(ApiConfig.timeout);
+
+        if (response.statusCode == 200) {
+          return jsonDecode(response.body) as Map<String, dynamic>;
+        }
+      } catch (e) {
+        debugPrint('[HttpApiService] pushChanges error: $e');
+      }
+    }
+    return {'success': false};
+  }
+
+  Future<Map<String, dynamic>> pullChanges({
+    required String since,
+    String? sourceId,
+  }) async {
+    final candidateUris = <Uri>[
+      Uri.parse('${ApiConfig.baseUrl}/sync/pull?since=${Uri.encodeComponent(since)}&source_id=${Uri.encodeComponent(sourceId ?? "")}'),
+    ];
+
+    for (final uri in candidateUris) {
+      try {
+        final response = await http.get(uri, headers: _headers).timeout(ApiConfig.timeout);
+        if (response.statusCode == 200) {
+          return jsonDecode(response.body) as Map<String, dynamic>;
+        }
+      } catch (e) {
+        debugPrint('[HttpApiService] pullChanges error: $e');
+      }
+    }
+    return {'changes': {}};
+  }
 }
 
 class ApiDatabaseService {
@@ -108,8 +164,14 @@ class ApiDatabaseService {
     return 0;
   }
   
-  Future<int> execute(String sql, [List<dynamic>? params]) async {
-    final res = await _api.postQuery(sql: sql, params: params, isInsert: false);
+  Future<int> execute(String sql, [dynamic params]) async {
+    List<dynamic>? paramList;
+    if (params is List) {
+      paramList = params;
+    } else if (params is Map) {
+      paramList = params.values.toList();
+    }
+    final res = await _api.postQuery(sql: sql, params: paramList, isInsert: false);
     final affected = res['affectedRows'];
     if (affected is int) return affected;
     if (affected is String) return int.tryParse(affected) ?? 0;

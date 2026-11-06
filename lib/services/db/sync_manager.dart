@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:chifa/app/widgets/xampp_connection_dialog.dart';
 import 'package:chifa/services/db/database_manager.dart';
+import 'package:chifa/services/db/http_api_service.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -54,7 +55,7 @@ class SyncManager {
   );
 
   RemoteDatabaseService get _localDb => DatabaseManager.instance;
-  RemoteDatabaseService? get _remoteDb => DatabaseManager.secondary;
+  dynamic get _remoteDb => DatabaseManager.secondary;
   final Uuid _uuid = const Uuid();
 
   SyncManager._internal();
@@ -295,6 +296,14 @@ class SyncManager {
   ) async {
     if (rows.isEmpty) return;
 
+    if (_remoteDb is ApiDatabaseService) {
+      await HttpApiService().pushChanges(
+        sourceId: currentSourceId,
+        changes: {tableName: rows},
+      );
+      return;
+    }
+
     await _remoteDb!.transaction((conn) async {
       for (final row in rows) {
         final data = Map<String, dynamic>.from(row);
@@ -405,7 +414,11 @@ class SyncManager {
     } catch (e) {
       try {
         _logWarn('Remote connection lost. Attempting to reconnect...');
-        await _remoteDb!.connectToOctenium();
+        if (_remoteDb is RemoteDatabaseService) {
+          await (_remoteDb as RemoteDatabaseService).connectToOctenium();
+        } else if (_remoteDb is ApiDatabaseService) {
+          await (_remoteDb as ApiDatabaseService).connect();
+        }
       } catch (e2) {
         _logError('Reconnection failed: $e2');
         syncProgress.value = SyncProgress(

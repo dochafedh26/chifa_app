@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:chifa/services/db/database_migrations.dart';
 import 'package:chifa/services/db/http_api_service.dart';
 import 'package:flutter/foundation.dart';
@@ -331,22 +329,19 @@ class RemoteDatabaseService {
 
 class DatabaseManager {
   static RemoteDatabaseService? _primary;
-  static RemoteDatabaseService? _secondary;
+  static dynamic _secondary;
   static ApiDatabaseService? _webApi;
 
   static Future<void> initialize({String? databaseType}) async {
-    final isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
     final isWeb = kIsWeb;
 
     // Logic:
-    // - If web: Use HTTP API
-    // - If mobile: Connect to Octenium directly
-    // - If desktop (non-web): XAMPP as primary, Octenium as sync
-    bool useOcteniumAsPrimary = isMobile || databaseType == 'octenium';
-    bool useWebApi = isWeb;
+    // - If web or explicit supabase/webApi: Use HTTP API to Supabase backend
+    // - If mobile/desktop: XAMPP as local primary, Supabase API as background sync
+    bool useWebApi = isWeb || databaseType == 'supabase' || databaseType == 'web';
 
     if (useWebApi) {
-      debugPrint('Initializing Web API service...');
+      debugPrint('Initializing Supabase Cloud API service...');
       _webApi = ApiDatabaseService();
       await _webApi!.connect();
       return;
@@ -354,29 +349,30 @@ class DatabaseManager {
 
     _primary = RemoteDatabaseService();
 
-    if (useOcteniumAsPrimary) {
-      debugPrint('Connecting to Octenium as primary database...');
+    if (databaseType == 'octenium') {
+      debugPrint('Connecting to legacy Octenium as primary database...');
       await _primary!.connectToOctenium();
       await _primary!.checkAndBootstrap();
-      _secondary = null; // Direct connection, no sync needed
+      _secondary = null;
     } else {
-      debugPrint('Connecting to XAMPP as primary database...');
+      debugPrint('Connecting to local database as primary...');
       try {
         await _primary!.connectToXampp();
         await _primary!.checkAndBootstrap();
 
-        // Setup background sync connection on Desktop
-        _secondary = RemoteDatabaseService();
+        // Setup background sync connection to Supabase cloud backend on Desktop
+        final apiService = ApiDatabaseService();
         try {
-          debugPrint('Setting up background sync connection to Octenium...');
-          await _secondary!.connectToOctenium();
-          debugPrint('Background sync connection established.');
+          debugPrint('Setting up background sync connection to Supabase Cloud...');
+          await apiService.connect();
+          _secondary = apiService;
+          debugPrint('Supabase background sync connection established.');
         } catch (e) {
-          debugPrint('Background sync connection failed (Offline): $e');
+          debugPrint('Supabase background sync connection failed (Offline): $e');
           _secondary = null;
         }
       } catch (e) {
-        debugPrint('XAMPP connection failed: $e');
+        debugPrint('Local database connection failed: $e');
         _primary = null;
         rethrow;
       }
@@ -386,7 +382,7 @@ class DatabaseManager {
     await _primary!.runMigrations();
 
     // Run migrations on secondary (Cloud) if it exists
-    if (_secondary != null) {
+    if (_secondary != null && _secondary is RemoteDatabaseService) {
       debugPrint('Running migrations on secondary database...');
       await _secondary!.runMigrations();
     }
@@ -401,5 +397,5 @@ class DatabaseManager {
 
   static ApiDatabaseService? get webApi => _webApi;
   static RemoteDatabaseService? get remote => _primary;
-  static RemoteDatabaseService? get secondary => _secondary;
+  static dynamic get secondary => _secondary;
 }

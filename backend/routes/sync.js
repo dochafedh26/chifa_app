@@ -77,7 +77,7 @@ async function getTableColumns(tableName) {
        WHERE table_schema = DATABASE() AND table_name = ?`,
       [tableName]
     );
-    const cols = new Set(rows.map(r => r.COLUMN_NAME));
+    const cols = new Set(rows.map(r => r.column_name || r.COLUMN_NAME));
     tableColumnsCache.set(tableName, cols);
     return cols;
   } catch (err) {
