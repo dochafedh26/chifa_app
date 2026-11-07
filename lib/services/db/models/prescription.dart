@@ -1,3 +1,4 @@
+import "package:chifa/services/db/utils/db_utils.dart";
 import "package:equatable/equatable.dart";
 
 class Prescription extends Equatable {
@@ -27,11 +28,11 @@ class Prescription extends Equatable {
 
   factory Prescription.fromMap(Map<String, dynamic> map) {
     return Prescription(
-      id: map['id'] as int?,
-      uuid: map['uuid'] as String?,
-      prescription: map['prescription'] as String,
-      needsSync: (map['needs_sync'] == 1),
-      isDeleted: (map['is_deleted'] == 1),
+      id: DbUtils.toInt(map['id']),
+      uuid: map['uuid']?.toString(),
+      prescription: DbUtils.toStringValue(map['prescription']),
+      needsSync: DbUtils.toBool(map['needs_sync']),
+      isDeleted: DbUtils.toBool(map['is_deleted']),
     );
   }
 

@@ -33,27 +33,24 @@ class RemoteDatabaseService {
   String? _directPassword;
   String? _directDatabase;
   bool _directSecure = true;
-  Future<void>? _lock;
+  Future<void> _lock = Future.value();
   ApiDatabaseService? _fallbackApi;
 
   bool get isConnected => _connection?.connected ?? false;
 
-  /// Serialize operations on the single MySQLConnection socket to prevent
-  /// concurrent packet interleaving or unexpected socket closure.
-  Future<T> _synchronized<T>(Future<T> Function() action) async {
-    while (_lock != null) {
+  /// Serialize operations on the single MySQLConnection socket in strict FIFO
+  /// order to prevent concurrent packet interleaving or deadlocks.
+  Future<T> _synchronized<T>(Future<T> Function() action) {
+    final completer = Completer<T>();
+    _lock = _lock.whenComplete(() async {
       try {
-        await _lock;
-      } catch (_) {}
-    }
-    final completer = Completer<void>();
-    _lock = completer.future;
-    try {
-      return await action();
-    } finally {
-      _lock = null;
-      completer.complete();
-    }
+        final res = await action();
+        completer.complete(res);
+      } catch (e, st) {
+        completer.completeError(e, st);
+      }
+    });
+    return completer.future;
   }
 
   bool _isConnectionClosedError(Object e) {
@@ -64,6 +61,8 @@ class RemoteDatabaseService {
         msg.contains('socket') ||
         msg.contains('broken pipe') ||
         msg.contains('connection reset') ||
+        msg.contains('timeout') ||
+        msg.contains('timed out') ||
         msg.contains('closed');
   }
 
@@ -110,7 +109,7 @@ class RemoteDatabaseService {
       debugPrint(
         'Attempting to connect to ${XamppDatabaseConfig.host}:${XamppDatabaseConfig.port} as ${XamppDatabaseConfig.user}...',
       );
-      await _connection!.connect(timeoutMs: 60000);
+      await _connection!.connect(timeoutMs: 15000);
       debugPrint('Connected to XAMPP database');
     } catch (e) {
       final errorStr = e.toString().toLowerCase();
@@ -137,7 +136,7 @@ class RemoteDatabaseService {
         secure: false, // Set to true if Octenium supports SSL
       );
 
-      await _connection!.connect(timeoutMs: 60000);
+      await _connection!.connect(timeoutMs: 15000);
       debugPrint('Connected directly to Octenium database');
     } catch (e) {
       debugPrint('Connection to Octenium failed: $e');
@@ -170,7 +169,7 @@ class RemoteDatabaseService {
         databaseName: database,
         secure: secure,
       );
-      await _connection!.connect(timeoutMs: 60000);
+      await _connection!.connect(timeoutMs: 15000);
       debugPrint('Connected directly to MySQL database');
     } catch (e) {
       debugPrint('Error connecting directly to MySQL: $e');
@@ -195,24 +194,30 @@ class RemoteDatabaseService {
   }
 
   /// Internal helper that serializes execution, ensures an active connection,
-  /// and automatically reconnects + retries once if the MySQL socket was closed.
+  /// and automatically reconnects + retries once if the MySQL socket was closed
+  /// or silently stalled (half-open TCP timeout).
   Future<IResultSet> _executeWithReconnect(
     String processedSql,
     Map<String, dynamic> namedParams,
   ) async {
+    final effectiveParams = namedParams.isEmpty ? null : namedParams;
     return _synchronized(() async {
       await _ensureConnected();
       try {
-        return await _connection!.execute(processedSql, namedParams);
+        return await _connection!
+            .execute(processedSql, effectiveParams)
+            .timeout(const Duration(seconds: 12));
       } catch (e) {
         if (_isConnectionClosedError(e)) {
-          debugPrint('⚠️ MySQL connection lost ($e). Reconnecting and retrying...');
+          debugPrint('⚠️ MySQL connection lost or timed out ($e). Reconnecting and retrying...');
           try {
             await _connection?.close();
           } catch (_) {}
           _connection = null;
           await _ensureConnected();
-          return await _connection!.execute(processedSql, namedParams);
+          return await _connection!
+              .execute(processedSql, effectiveParams)
+              .timeout(const Duration(seconds: 12));
         }
         rethrow;
       }

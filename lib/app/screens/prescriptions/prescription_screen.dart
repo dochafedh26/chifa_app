@@ -555,10 +555,7 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
                     const SizedBox(height: 16),
                     BlocBuilder<PrescriptionCubit, PrescriptionState>(
                       builder: (context, state) {
-                        List<PrescriptionType> types = [];
-                        if (state is PrescriptionTypesLoaded) {
-                          types = state.types;
-                        }
+                        final types = state.types;
 
                         return DropdownButtonFormField<PrescriptionType>(
                           decoration: const InputDecoration(
@@ -771,43 +768,40 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
                     const SizedBox(height: 16),
                     BlocBuilder<PrescriptionCubit, PrescriptionState>(
                       builder: (context, state) {
-                        if (state is PrescriptionLoading) {
+                        if (state is PrescriptionLoading &&
+                            state.prescriptions.isEmpty) {
                           return const Center(
                             child: CircularProgressIndicator(),
                           );
                         }
 
-                        if (state is PrescriptionsLoaded) {
-                          if (state.prescriptions.isEmpty) {
-                            return const Center(
-                              child: Text('No templates found'),
-                            );
-                          }
-
-                          return ListView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: state.prescriptions.length,
-                            itemBuilder: (context, index) {
-                              final template = state.prescriptions[index];
-                              return ListTile(
-                                leading: const Icon(Icons.article),
-                                title: Text(
-                                  template.prescription.length > 60
-                                      ? '${template.prescription.substring(0, 60)}...'
-                                      : template.prescription,
-                                ),
-                                trailing: IconButton(
-                                  icon: const Icon(Icons.add_circle_outline),
-                                  onPressed: () => _insertTemplate(template),
-                                  tooltip: 'Use this template',
-                                ),
-                              );
-                            },
+                        if (state.prescriptions.isEmpty) {
+                          return const Center(
+                            child: Text('No templates found'),
                           );
                         }
 
-                        return const SizedBox.shrink();
+                        return ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: state.prescriptions.length,
+                          itemBuilder: (context, index) {
+                            final template = state.prescriptions[index];
+                            return ListTile(
+                              leading: const Icon(Icons.article),
+                              title: Text(
+                                template.prescription.length > 60
+                                    ? '${template.prescription.substring(0, 60)}...'
+                                    : template.prescription,
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.add_circle_outline),
+                                onPressed: () => _insertTemplate(template),
+                                tooltip: 'Use this template',
+                              ),
+                            );
+                          },
+                        );
                       },
                     ),
                   ],

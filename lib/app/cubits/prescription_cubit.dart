@@ -63,106 +63,155 @@ class LoadCommonPrescriptions extends PrescriptionEvent {}
 
 // Prescription States
 abstract class PrescriptionState extends Equatable {
-  const PrescriptionState();
+  final List<Prescription> prescriptions;
+  final List<PrescriptionType> types;
+
+  const PrescriptionState({
+    this.prescriptions = const [],
+    this.types = const [],
+  });
 
   @override
-  List<Object?> get props => [];
+  List<Object?> get props => [prescriptions, types];
 }
 
-class PrescriptionInitial extends PrescriptionState {}
+class PrescriptionInitial extends PrescriptionState {
+  const PrescriptionInitial({super.prescriptions, super.types});
+}
 
-class PrescriptionLoading extends PrescriptionState {}
+class PrescriptionLoading extends PrescriptionState {
+  const PrescriptionLoading({super.prescriptions, super.types});
+}
 
 class PrescriptionsLoaded extends PrescriptionState {
-  final List<Prescription> prescriptions;
-
-  const PrescriptionsLoaded(this.prescriptions);
-
-  @override
-  List<Object?> get props => [prescriptions];
+  const PrescriptionsLoaded(
+    List<Prescription> prescriptions, {
+    super.types,
+  }) : super(prescriptions: prescriptions);
 }
 
 class PrescriptionLoaded extends PrescriptionState {
   final Prescription prescription;
 
-  const PrescriptionLoaded(this.prescription);
+  const PrescriptionLoaded(
+    this.prescription, {
+    super.prescriptions,
+    super.types,
+  });
 
   @override
-  List<Object?> get props => [prescription];
+  List<Object?> get props => [prescription, prescriptions, types];
 }
 
 class PrescriptionError extends PrescriptionState {
   final String message;
 
-  const PrescriptionError(this.message);
+  const PrescriptionError(
+    this.message, {
+    super.prescriptions,
+    super.types,
+  });
 
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [message, prescriptions, types];
 }
 
 class PrescriptionOperationSuccess extends PrescriptionState {
   final String message;
 
-  const PrescriptionOperationSuccess(this.message);
+  const PrescriptionOperationSuccess(
+    this.message, {
+    super.prescriptions,
+    super.types,
+  });
 
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [message, prescriptions, types];
 }
 
 class PrescriptionTypesLoaded extends PrescriptionState {
-  final List<PrescriptionType> types;
-
-  const PrescriptionTypesLoaded(this.types);
-
-  @override
-  List<Object?> get props => [types];
+  const PrescriptionTypesLoaded(
+    List<PrescriptionType> types, {
+    super.prescriptions,
+  }) : super(types: types);
 }
-
 
 // Prescription Cubit
 class PrescriptionCubit extends Cubit<PrescriptionState> {
   final PrescriptionRepository _repository;
+  List<Prescription> _cachedPrescriptions = const [];
+  List<PrescriptionType> _cachedTypes = const [];
 
-  PrescriptionCubit(this._repository) : super(PrescriptionInitial());
+  PrescriptionCubit(this._repository) : super(const PrescriptionInitial());
 
   /// Load all prescriptions
   Future<void> loadPrescriptions() async {
-    emit(PrescriptionLoading());
+    emit(PrescriptionLoading(
+      prescriptions: _cachedPrescriptions,
+      types: _cachedTypes,
+    ));
 
     final result = await _repository.getAll();
 
     result.fold(
-      (failure) => emit(PrescriptionError(failure.message)),
-      (prescriptions) => emit(PrescriptionsLoaded(prescriptions)),
+      (failure) => emit(PrescriptionError(
+        failure.message,
+        prescriptions: _cachedPrescriptions,
+        types: _cachedTypes,
+      )),
+      (prescriptions) {
+        _cachedPrescriptions = prescriptions;
+        emit(PrescriptionsLoaded(prescriptions, types: _cachedTypes));
+      },
     );
   }
 
   /// Load prescription by ID
   Future<void> loadPrescriptionById(int id) async {
-    emit(PrescriptionLoading());
+    emit(PrescriptionLoading(
+      prescriptions: _cachedPrescriptions,
+      types: _cachedTypes,
+    ));
 
     final result = await _repository.getById(id);
 
     result.fold(
-      (failure) => emit(PrescriptionError(failure.message)),
-      (prescription) => emit(PrescriptionLoaded(prescription)),
+      (failure) => emit(PrescriptionError(
+        failure.message,
+        prescriptions: _cachedPrescriptions,
+        types: _cachedTypes,
+      )),
+      (prescription) => emit(PrescriptionLoaded(
+        prescription,
+        prescriptions: _cachedPrescriptions,
+        types: _cachedTypes,
+      )),
     );
   }
 
   /// Search prescriptions
   Future<void> searchPrescriptions(String query) async {
-    if (query.isEmpty) {
+    if (query.trim().isEmpty) {
       await loadCommonPrescriptions();
       return;
     }
 
-    emit(PrescriptionLoading());
+    emit(PrescriptionLoading(
+      prescriptions: const [],
+      types: _cachedTypes,
+    ));
 
-    final result = await _repository.search(query);
+    final result = await _repository.search(query.trim());
 
     result.fold(
-      (failure) => emit(PrescriptionError(failure.message)),
-      (prescriptions) => emit(PrescriptionsLoaded(prescriptions)),
+      (failure) => emit(PrescriptionError(
+        failure.message,
+        prescriptions: _cachedPrescriptions,
+        types: _cachedTypes,
+      )),
+      (prescriptions) {
+        emit(PrescriptionsLoaded(prescriptions, types: _cachedTypes));
+      },
     );
   }
 
@@ -171,9 +220,17 @@ class PrescriptionCubit extends Cubit<PrescriptionState> {
     final result = await _repository.create(prescription);
 
     result.fold(
-      (failure) => emit(PrescriptionError(failure.message)),
+      (failure) => emit(PrescriptionError(
+        failure.message,
+        prescriptions: _cachedPrescriptions,
+        types: _cachedTypes,
+      )),
       (id) async {
-        emit(const PrescriptionOperationSuccess('Prescription created successfully'));
+        emit(PrescriptionOperationSuccess(
+          'Prescription created successfully',
+          prescriptions: _cachedPrescriptions,
+          types: _cachedTypes,
+        ));
         await loadCommonPrescriptions();
       },
     );
@@ -184,13 +241,25 @@ class PrescriptionCubit extends Cubit<PrescriptionState> {
     final result = await _repository.update(id, prescription);
 
     result.fold(
-      (failure) => emit(PrescriptionError(failure.message)),
+      (failure) => emit(PrescriptionError(
+        failure.message,
+        prescriptions: _cachedPrescriptions,
+        types: _cachedTypes,
+      )),
       (success) async {
         if (success) {
-          emit(const PrescriptionOperationSuccess('Prescription updated successfully'));
+          emit(PrescriptionOperationSuccess(
+            'Prescription updated successfully',
+            prescriptions: _cachedPrescriptions,
+            types: _cachedTypes,
+          ));
           await loadCommonPrescriptions();
         } else {
-          emit(const PrescriptionError('Failed to update prescription'));
+          emit(PrescriptionError(
+            'Failed to update prescription',
+            prescriptions: _cachedPrescriptions,
+            types: _cachedTypes,
+          ));
         }
       },
     );
@@ -201,13 +270,25 @@ class PrescriptionCubit extends Cubit<PrescriptionState> {
     final result = await _repository.delete(id);
 
     result.fold(
-      (failure) => emit(PrescriptionError(failure.message)),
+      (failure) => emit(PrescriptionError(
+        failure.message,
+        prescriptions: _cachedPrescriptions,
+        types: _cachedTypes,
+      )),
       (success) async {
         if (success) {
-          emit(const PrescriptionOperationSuccess('Prescription deleted successfully'));
+          emit(PrescriptionOperationSuccess(
+            'Prescription deleted successfully',
+            prescriptions: _cachedPrescriptions,
+            types: _cachedTypes,
+          ));
           await loadCommonPrescriptions();
         } else {
-          emit(const PrescriptionError('Failed to delete prescription'));
+          emit(PrescriptionError(
+            'Failed to delete prescription',
+            prescriptions: _cachedPrescriptions,
+            types: _cachedTypes,
+          ));
         }
       },
     );
@@ -215,25 +296,40 @@ class PrescriptionCubit extends Cubit<PrescriptionState> {
 
   /// Load common prescriptions (templates)
   Future<void> loadCommonPrescriptions() async {
-    emit(PrescriptionLoading());
+    emit(PrescriptionLoading(
+      prescriptions: _cachedPrescriptions,
+      types: _cachedTypes,
+    ));
 
     final result = await _repository.getCommonPrescriptions();
 
     result.fold(
-      (failure) => emit(PrescriptionError(failure.message)),
-      (prescriptions) => emit(PrescriptionsLoaded(prescriptions)),
+      (failure) => emit(PrescriptionError(
+        failure.message,
+        prescriptions: _cachedPrescriptions,
+        types: _cachedTypes,
+      )),
+      (prescriptions) {
+        _cachedPrescriptions = prescriptions;
+        emit(PrescriptionsLoaded(prescriptions, types: _cachedTypes));
+      },
     );
   }
 
   /// Load all prescription types (named templates)
   Future<void> loadPrescriptionTypes() async {
-    emit(PrescriptionLoading());
-
     final result = await _repository.getAllPrescriptionTypes();
 
     result.fold(
-      (failure) => emit(PrescriptionError(failure.message)),
-      (types) => emit(PrescriptionTypesLoaded(types)),
+      (failure) => emit(PrescriptionError(
+        failure.message,
+        prescriptions: _cachedPrescriptions,
+        types: _cachedTypes,
+      )),
+      (types) {
+        _cachedTypes = types;
+        emit(PrescriptionsLoaded(_cachedPrescriptions, types: _cachedTypes));
+      },
     );
   }
 }

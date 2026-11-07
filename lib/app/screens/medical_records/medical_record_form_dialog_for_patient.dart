@@ -4818,10 +4818,7 @@ class _MedicalRecordFormDialogForPatientState
                                     PrescriptionState
                                   >(
                                     builder: (context, state) {
-                                      List<PrescriptionType> types = [];
-                                      if (state is PrescriptionTypesLoaded) {
-                                        types = state.types;
-                                      }
+                                      final types = state.types;
 
                                       return DropdownButtonFormField<
                                         PrescriptionType
@@ -4877,7 +4874,8 @@ class _MedicalRecordFormDialogForPatientState
                                     PrescriptionState
                                   >(
                                     builder: (context, state) {
-                                      if (state is PrescriptionLoading) {
+                                      if (state is PrescriptionLoading &&
+                                          state.prescriptions.isEmpty) {
                                         return const Center(
                                           child: Padding(
                                             padding: EdgeInsets.all(8.0),
@@ -4886,23 +4884,22 @@ class _MedicalRecordFormDialogForPatientState
                                         );
                                       }
 
-                                      if (state is PrescriptionsLoaded) {
-                                        if (state.prescriptions.isEmpty) {
-                                          return const Center(
-                                            child: Padding(
-                                              padding: EdgeInsets.all(8.0),
-                                              child: Text('No templates found'),
-                                            ),
-                                          );
-                                        }
-
-                                        return Container(
-                                          constraints: const BoxConstraints(
-                                            maxHeight: 200,
+                                      if (state.prescriptions.isEmpty) {
+                                        return const Center(
+                                          child: Padding(
+                                            padding: EdgeInsets.all(8.0),
+                                            child: Text('No templates found'),
                                           ),
-                                          child: Material(
-                                         color: Colors.transparent,
-                                         child: ListView.builder(
+                                        );
+                                      }
+
+                                      return Container(
+                                        constraints: const BoxConstraints(
+                                          maxHeight: 200,
+                                        ),
+                                        child: Material(
+                                          color: Colors.transparent,
+                                          child: ListView.builder(
                                             shrinkWrap: true,
                                             itemCount:
                                                 state.prescriptions.length,
@@ -4942,9 +4939,6 @@ class _MedicalRecordFormDialogForPatientState
                                           ),
                                         ),
                                       );
-                                    }
-
-                                      return const SizedBox.shrink();
                                     },
                                   ),
                                 ],

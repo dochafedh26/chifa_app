@@ -101,12 +101,35 @@ class PrescriptionRepository implements BaseRepository<Prescription, int> {
     try {
       final searchPattern = '%$query%';
       final results = await _db.query(
-        'SELECT * FROM modern_prescriptions WHERE prescription LIKE ? AND is_deleted = 0 ORDER BY id DESC',
+        'SELECT * FROM modern_prescriptions WHERE prescription LIKE ? AND is_deleted = 0 ORDER BY id DESC LIMIT 50',
         [searchPattern],
       );
       final prescriptions = results
           .map((row) => Prescription.fromMap(row))
           .toList();
+
+      try {
+        final typeResults = await _db.query(
+          'SELECT * FROM ordonnance_type WHERE (title LIKE ? OR prescription LIKE ?) AND is_deleted = 0 ORDER BY id DESC LIMIT 25',
+          [searchPattern, searchPattern],
+        );
+        final existingTexts = prescriptions.map((p) => p.prescription.trim()).toSet();
+        for (final row in typeResults) {
+          final typeItem = PrescriptionType.fromMap(row);
+          if (typeItem.prescription.trim().isNotEmpty &&
+              !existingTexts.contains(typeItem.prescription.trim())) {
+            prescriptions.insert(
+              0,
+              Prescription(
+                id: typeItem.id,
+                prescription: typeItem.prescription,
+              ),
+            );
+            existingTexts.add(typeItem.prescription.trim());
+          }
+        }
+      } catch (_) {}
+
       return Right(prescriptions);
     } catch (e) {
       return Left(
