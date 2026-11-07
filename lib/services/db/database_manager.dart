@@ -334,7 +334,9 @@ class DatabaseManager {
   static ApiDatabaseService? _webApi;
 
   static Future<void> initialize({String? databaseType}) async {
-    final isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+    final isMobile = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS);
     final isWeb = kIsWeb;
 
     // Logic:
