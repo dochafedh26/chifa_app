@@ -51,7 +51,7 @@ class AuthRepository {
       emailCandidate = 'touami@gmail.com';
     }
 
-    // 1. Try Primary Database (Supabase Cloud / MySQL)
+    // 1. Try Primary Database (Octenium Cloud / MySQL)
     try {
       final results = await _db.query(
         'SELECT * FROM employees WHERE (LOWER(email) = ? OR LOWER(email) = ? OR phone = ? OR LOWER(email) LIKE ? OR LOWER(last_name) LIKE ?) AND is_deleted = 0',

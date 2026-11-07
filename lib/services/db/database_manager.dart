@@ -20,7 +20,7 @@ class OcteniumDatabaseConfig {
   static int get port => int.tryParse(dotenv.env['REMOTE_DB_PORT'] ?? '') ?? 3306;
   static String get database => dotenv.env['REMOTE_DB_NAME'] ?? 'rnhgnubg_chifa';
   static String get user => dotenv.env['REMOTE_DB_USER'] ?? 'rnhgnubg_chifa';
-  static String get password => dotenv.env['REMOTE_DB_PASSWORD'] ?? '';
+  static String get password => dotenv.env['REMOTE_DB_PASSWORD'] ?? 'MyNetPass@2026';
 }
 
 class RemoteDatabaseService {
@@ -334,15 +334,18 @@ class DatabaseManager {
   static ApiDatabaseService? _webApi;
 
   static Future<void> initialize({String? databaseType}) async {
+    final isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
     final isWeb = kIsWeb;
 
     // Logic:
-    // - If web or explicit supabase/webApi: Use HTTP API to Supabase backend
-    // - If mobile/desktop: XAMPP as local primary, Supabase API as background sync
-    bool useWebApi = isWeb || databaseType == 'supabase' || databaseType == 'web';
+    // - Web: Use Octenium HTTP API relay
+    // - Mobile (Android/iOS): Connect directly to Octenium MySQL with HTTP relay fallback
+    // - Desktop (Windows): XAMPP as local primary, Octenium as sync (fallback to Octenium if XAMPP offline)
+    bool useOcteniumAsPrimary = isMobile || databaseType == 'octenium';
+    bool useWebApi = isWeb || databaseType == 'web';
 
     if (useWebApi) {
-      debugPrint('Initializing Supabase Cloud API service...');
+      debugPrint('Initializing Octenium Web API service...');
       _primary = null;
       _webApi = ApiDatabaseService();
       await _webApi!.connect();
@@ -351,13 +354,21 @@ class DatabaseManager {
 
     final candidatePrimary = RemoteDatabaseService();
 
-    if (databaseType == 'octenium') {
-      debugPrint('Connecting to legacy Octenium as primary database...');
-      await candidatePrimary.connectToOctenium();
-      await candidatePrimary.checkAndBootstrap();
-      _primary = candidatePrimary;
-      _webApi = null;
-      _secondary = null;
+    if (useOcteniumAsPrimary) {
+      debugPrint('Connecting to Octenium as primary cloud database...');
+      try {
+        await candidatePrimary.connectToOctenium();
+        await candidatePrimary.checkAndBootstrap();
+        _primary = candidatePrimary;
+        _webApi = null;
+        _secondary = null;
+      } catch (e) {
+        debugPrint('Direct Octenium MySQL connection notice ($e). Using Octenium HTTP API relay...');
+        _primary = null;
+        _webApi = ApiDatabaseService();
+        await _webApi!.connect();
+        return;
+      }
     } else {
       debugPrint('Connecting to local database as primary...');
       try {
@@ -366,16 +377,22 @@ class DatabaseManager {
         _primary = candidatePrimary;
         _webApi = null;
 
-        // Setup background sync connection to Supabase cloud backend on Desktop
-        final apiService = ApiDatabaseService();
+        // Setup background sync connection to Octenium on Desktop
+        final octeniumSync = RemoteDatabaseService();
         try {
-          debugPrint('Setting up background sync connection to Supabase Cloud...');
-          await apiService.connect();
-          _secondary = apiService;
-          debugPrint('Supabase background sync connection established.');
+          debugPrint('Setting up background sync connection to Octenium...');
+          await octeniumSync.connectToOctenium();
+          _secondary = octeniumSync;
+          debugPrint('Octenium background sync connection established.');
         } catch (e) {
-          debugPrint('Supabase background sync connection failed (Offline): $e');
-          _secondary = null;
+          debugPrint('Direct Octenium sync notice: $e. Falling back to HTTP sync...');
+          try {
+            final apiService = ApiDatabaseService();
+            await apiService.connect();
+            _secondary = apiService;
+          } catch (_) {
+            _secondary = null;
+          }
         }
       } catch (e) {
         debugPrint('Local database connection failed: $e');
@@ -384,7 +401,9 @@ class DatabaseManager {
     }
 
     // Run migrations on primary
-    await _primary!.runMigrations();
+    if (_primary != null) {
+      await _primary!.runMigrations();
+    }
 
     // Run migrations on secondary (Cloud) if it exists
     if (_secondary != null && _secondary is RemoteDatabaseService) {

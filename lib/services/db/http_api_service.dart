@@ -4,11 +4,6 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 class ApiConfig {
-  static const String _defaultSupabaseUrl =
-      'https://orvdwwuzmcfrbtkwsosc.supabase.co';
-  static const String _defaultSupabaseAnonKey =
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ydmR3d3V6bWNmcmJ0a3dzb3NjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0Njk3NTgsImV4cCI6MjEwMDA0NTc1OH0.2r8w_2LW-z3HfmZpEpWnsxOdWubbX3yLSUdnUppouZs';
-
   static String? _safeEnv(String key) {
     try {
       if (dotenv.isInitialized) {
@@ -18,33 +13,7 @@ class ApiConfig {
     return null;
   }
 
-  // Supabase Cloud Configuration
-  static String get supabaseUrl {
-    final envVal = _safeEnv('SUPABASE_URL');
-    if (envVal == null ||
-        envVal.isEmpty ||
-        envVal.contains('your_supabase') ||
-        !envVal.startsWith('http')) {
-      return _defaultSupabaseUrl;
-    }
-    return envVal.replaceAll(RegExp(r'/+$'), '');
-  }
-
-  static String get supabaseAnonKey {
-    final envVal = _safeEnv('SUPABASE_ANON_KEY');
-    if (envVal == null ||
-        envVal.isEmpty ||
-        envVal.contains('your_supabase') ||
-        !envVal.startsWith('eyJ')) {
-      return _defaultSupabaseAnonKey;
-    }
-    return envVal;
-  }
-
-  static String get executeSqlRpcUrl =>
-      '$supabaseUrl/rest/v1/rpc/execute_sql';
-
-  // Legacy backend API base URL
+  // Octenium Cloud backend API base URL
   static String get baseUrl {
     if (kIsWeb) {
       final currentOrigin = Uri.base.origin;
@@ -53,7 +22,8 @@ class ApiConfig {
     final envUrl = _safeEnv('BACKEND_API_URL');
     if (envUrl != null &&
         envUrl.isNotEmpty &&
-        !envUrl.contains('localhost:3000')) {
+        !envUrl.contains('localhost:3000') &&
+        !envUrl.contains('supabase')) {
       return envUrl;
     }
     return 'https://srv50.octenium.net/chifa/api';
@@ -76,7 +46,7 @@ class HttpApiService {
     'X-Sync-Key': ApiConfig.syncKey,
   };
 
-  /// Safely format parameterized SQL query for Supabase PostgreSQL RPC
+  /// Safely format parameterized SQL query for Octenium MySQL HTTP relay
   String _formatSql(String sql, List<dynamic>? params) {
     if (params == null || params.isEmpty) return sql;
     int index = 0;
@@ -102,36 +72,11 @@ class HttpApiService {
   }) async {
     final formattedSql = _formatSql(sql, params);
 
-    // 1. Prioritize direct Supabase Serverless Cloud RPC
-    try {
-      final response = await http.post(
-        Uri.parse(ApiConfig.executeSqlRpcUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': ApiConfig.supabaseAnonKey,
-          'Authorization': 'Bearer ${ApiConfig.supabaseAnonKey}',
-        },
-        body: jsonEncode({
-          'p_sql': formattedSql,
-          'p_is_insert': isInsert,
-        }),
-      ).timeout(ApiConfig.timeout);
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data is Map<String, dynamic>) {
-          return data;
-        } else if (data is List) {
-          return {'success': true, 'data': data};
-        }
-      }
-    } catch (e) {
-      debugPrint('[HttpApiService] Direct Supabase RPC notice: $e');
-    }
-
-    // 2. Fallback to candidate Express / cPanel backend relay
+    // Candidate Express / cPanel Octenium backend relays
     final candidateUris = <Uri>[
       Uri.parse('${ApiConfig.baseUrl}/sync/query'),
+      Uri.parse('https://srv50.octenium.net/chifa/api/sync/query'),
+      Uri.parse('https://medevsync.com/chifa/api/sync/query'),
     ];
 
     if (kIsWeb) {

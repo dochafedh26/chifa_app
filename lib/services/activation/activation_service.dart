@@ -68,7 +68,7 @@ class ActivationService {
     }
   }
 
-  /// Verify activation key with central Cloud HTTP API on Supabase / Octenium
+  /// Verify activation key with central Cloud HTTP API on Octenium
   Future<Map<String, dynamic>> verifyAndActivate(String key, {String? customServerUrl}) async {
     final cleanKey = key.trim().toUpperCase();
     if (cleanKey.isEmpty) {
@@ -77,43 +77,6 @@ class ActivationService {
 
     final machineId = await getMachineId();
     final machineName = !kIsWeb ? Platform.localHostname : 'Client';
-
-    // 1. Prioritize direct Supabase Serverless Activation RPC
-    try {
-      const supabaseUrl = 'https://orvdwwuzmcfrbtkwsosc.supabase.co/rest/v1/rpc/verify_activation';
-      const anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ydmR3d3V6bWNmcmJ0a3dzb3NjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0Njk3NTgsImV4cCI6MjEwMDA0NTc1OH0.2r8w_2LW-z3HfmZpEpWnsxOdWubbX3yLSUdnUppouZs';
-
-      final response = await http.post(
-        Uri.parse(supabaseUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': anonKey,
-          'Authorization': 'Bearer $anonKey',
-        },
-        body: jsonEncode({
-          'p_key': cleanKey,
-          'p_machine_id': machineId,
-          'p_machine_name': machineName,
-        }),
-      ).timeout(const Duration(seconds: 10));
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data is Map && data['success'] == true) {
-          final desc = data['description']?.toString() ?? 'Clinique Chifa (Cloud Supabase)';
-          await _persistActivation(cleanKey, desc);
-          return {
-            'success': true,
-            'message': data['message'] ?? 'Poste activé avec succès auprès du Cloud Supabase.',
-            'description': desc,
-          };
-        } else if (data is Map && data['error'] != null) {
-          return {'success': false, 'error': data['error']};
-        }
-      }
-    } catch (e) {
-      debugPrint('[ActivationService] Supabase activation attempt notice: $e');
-    }
 
     final serverUrl = (customServerUrl ?? backendBaseUrl).replaceAll(RegExp(r'/+$'), '');
 

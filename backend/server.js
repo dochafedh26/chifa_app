@@ -21,7 +21,7 @@ const db = require('./db');
 // Auto-migrate appointments.status to VARCHAR(50) to support waitingRoom
 (async () => {
   try {
-    await db.query('ALTER TABLE "appointments" ALTER COLUMN "status" TYPE VARCHAR(50)');
+    await db.query('ALTER TABLE `appointments` MODIFY COLUMN `status` VARCHAR(50)');
     console.log('[Chifa Backend] Ensured appointments.status is VARCHAR(50)');
   } catch (_) {}
 })();
