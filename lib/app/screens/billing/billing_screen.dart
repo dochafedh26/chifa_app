@@ -344,16 +344,21 @@ class _BillingScreenState extends State<BillingScreen> {
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Top Action Bar (Desktop)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8.0),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Top Action Bar (Desktop & Tablet)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isCompactBar = constraints.maxWidth < 760;
+                final isNurse =
+                    context.watch<AuthCubit>().currentRole ==
+                    EmployeeRole.nurse;
+                final searchField = TextField(
                   controller: _searchController,
                   decoration: InputDecoration(
                     hintText: 'Quick search (name, service)...',
@@ -364,137 +369,177 @@ class _BillingScreenState extends State<BillingScreen> {
                     isDense: true,
                   ),
                   onChanged: _onSearchChanged,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Tooltip(
-                message: _showFilters ? 'Hide Filters' : 'Show Filters',
-                child: FilterChip(
-                  label: const Text('Filters'),
-                  selected: _showFilters,
-                  onSelected: (val) => setState(() => _showFilters = val),
-                  avatar: Icon(
-                    Icons.filter_list,
-                    size: 18,
-                    color: _showFilters ? Colors.white : null,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                onPressed: () {
-                  context.read<BillingCubit>().loadAllPayments();
-                  context.read<BillingCubit>().loadServices();
-                  context.read<BillingCubit>().loadDoctors();
-                },
-                icon: const Icon(Icons.refresh),
-                tooltip: 'Refresh',
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                onPressed: _showCreateInvoiceDialog,
-                icon: const Icon(Icons.add),
-                label: Text(
-                  context.watch<AuthCubit>().currentRole == EmployeeRole.nurse
-                      ? 'Nouvel Encaissement'
-                      : 'New Payment',
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                onPressed: _printBillingList,
-                icon: const Icon(Icons.print),
-                label: Text(_selectedPaymentIds.isEmpty
-                    ? 'Print List'
-                    : 'Print Selected (${_selectedPaymentIds.length})'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            ],
-          ),
-        ),
+                );
 
-        // Collapsible Filter Bar
-        AnimatedCrossFade(
-          firstChild: const SizedBox.shrink(),
-          secondChild: _buildFilterBar(),
-          crossFadeState: _showFilters
-              ? CrossFadeState.showSecond
-              : CrossFadeState.showFirst,
-          duration: const Duration(milliseconds: 250),
-        ),
-
-        const SizedBox(height: 16),
-
-        // Summary Cards (Desktop)
-        BlocBuilder<BillingCubit, BillingState>(
-          builder: (context, state) {
-            final role = context.watch<AuthCubit>().currentRole;
-            final canViewCommissions = RolePermissions.canViewDoctorCommissions(role);
-            final cards = [
-              _SummaryCard(
-                label: role == EmployeeRole.nurse ? 'Total Encaissé' : 'Total Revenue',
-                value: state.totalFilteredAmount,
-                icon: Icons.account_balance_wallet,
-                color: Colors.teal,
-              ),
-              if (canViewCommissions)
-                _SummaryCard(
-                  label: 'Commissions',
-                  value: state.totalFilteredCommission,
-                  icon: Icons.person_outline,
-                  color: Colors.orange,
-                ),
-              _SummaryCard(
-                label: role == EmployeeRole.nurse ? 'Encaissements' : 'Payments',
-                value: state.payments.length.toDouble(),
-                icon: Icons.receipt_long,
-                color: Colors.blue,
-                isInteger: true,
-              ),
-            ];
-
-            return Row(
-              children: cards
-                  .map(
-                    (c) => Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                        ),
-                        child: c,
-                      ),
+                final filterChip = Tooltip(
+                  message: _showFilters ? 'Hide Filters' : 'Show Filters',
+                  child: FilterChip(
+                    label: const Text('Filters'),
+                    selected: _showFilters,
+                    onSelected: (val) => setState(() => _showFilters = val),
+                    avatar: Icon(
+                      Icons.filter_list,
+                      size: 18,
+                      color: _showFilters ? Colors.white : null,
                     ),
-                  )
-                  .toList(),
-            );
-          },
-        ),
+                  ),
+                );
 
-        const SizedBox(height: 16),
+                final refreshBtn = IconButton(
+                  onPressed: () {
+                    context.read<BillingCubit>().loadAllPayments();
+                    context.read<BillingCubit>().loadServices();
+                    context.read<BillingCubit>().loadDoctors();
+                  },
+                  icon: const Icon(Icons.refresh),
+                  tooltip: 'Refresh',
+                );
 
-        // Selection Action Bar
-        _buildSelectionBar(),
+                final newPaymentBtn = ElevatedButton.icon(
+                  onPressed: _showCreateInvoiceDialog,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: Text(isNurse ? 'Nouvel Encaissement' : 'New Payment'),
+                );
 
-        // Payments list
-        Expanded(
-          child: _PaymentList(
-            onRefresh: _applyFilters,
-            selectedPaymentIds: _selectedPaymentIds,
-            onSelectionChanged: (paymentId, selected) {
-              setState(() {
-                if (selected) {
-                  _selectedPaymentIds.add(paymentId);
-                } else {
-                  _selectedPaymentIds.remove(paymentId);
+                final printBtn = ElevatedButton.icon(
+                  onPressed: _printBillingList,
+                  icon: const Icon(Icons.print, size: 18),
+                  label: Text(
+                    _selectedPaymentIds.isEmpty
+                        ? 'Print List'
+                        : 'Print (${_selectedPaymentIds.length})',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                  ),
+                );
+
+                if (isCompactBar) {
+                  return Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(child: searchField),
+                          const SizedBox(width: 8),
+                          filterChip,
+                          const SizedBox(width: 4),
+                          refreshBtn,
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Expanded(child: newPaymentBtn),
+                          const SizedBox(width: 8),
+                          Expanded(child: printBtn),
+                        ],
+                      ),
+                    ],
+                  );
                 }
-              });
+
+                return Row(
+                  children: [
+                    Expanded(child: searchField),
+                    const SizedBox(width: 8),
+                    filterChip,
+                    const SizedBox(width: 8),
+                    refreshBtn,
+                    const SizedBox(width: 8),
+                    newPaymentBtn,
+                    const SizedBox(width: 8),
+                    printBtn,
+                  ],
+                );
+              },
+            ),
+          ),
+
+          // Collapsible Filter Bar
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: _buildFilterBar(),
+            crossFadeState: _showFilters
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 250),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Summary Cards (Desktop & Tablet)
+          BlocBuilder<BillingCubit, BillingState>(
+            builder: (context, state) {
+              final role = context.watch<AuthCubit>().currentRole;
+              final canViewCommissions =
+                  RolePermissions.canViewDoctorCommissions(role);
+              final cards = [
+                _SummaryCard(
+                  label: role == EmployeeRole.nurse
+                      ? 'Total Encaissé'
+                      : 'Total Revenue',
+                  value: state.totalFilteredAmount,
+                  icon: Icons.account_balance_wallet,
+                  color: Colors.teal,
+                ),
+                if (canViewCommissions)
+                  _SummaryCard(
+                    label: 'Commissions',
+                    value: state.totalFilteredCommission,
+                    icon: Icons.person_outline,
+                    color: Colors.orange,
+                  ),
+                _SummaryCard(
+                  label: role == EmployeeRole.nurse
+                      ? 'Encaissements'
+                      : 'Payments',
+                  value: state.payments.length.toDouble(),
+                  icon: Icons.receipt_long,
+                  color: Colors.blue,
+                  isInteger: true,
+                ),
+              ];
+
+              return Row(
+                children: cards
+                    .map(
+                      (c) => Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          child: c,
+                        ),
+                      ),
+                    )
+                    .toList(),
+              );
             },
           ),
-        ),
-      ],
+
+          const SizedBox(height: 12),
+
+          // Selection Action Bar
+          _buildSelectionBar(),
+
+          // Payments list
+          Expanded(
+            child: _PaymentList(
+              onRefresh: _applyFilters,
+              selectedPaymentIds: _selectedPaymentIds,
+              onSelectionChanged: (paymentId, selected) {
+                setState(() {
+                  if (selected) {
+                    _selectedPaymentIds.add(paymentId);
+                  } else {
+                    _selectedPaymentIds.remove(paymentId);
+                  }
+                });
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -660,8 +705,11 @@ class _BillingScreenState extends State<BillingScreen> {
           margin: const EdgeInsets.only(top: 8, bottom: 8),
           child: Padding(
             padding: const EdgeInsets.all(12),
-            child: isMobile
-                ? Column(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isCompactFilter = isMobile || constraints.maxWidth < 820;
+                if (isCompactFilter) {
+                  return Column(
                     children: [
                       Row(
                         children: [
@@ -682,69 +730,76 @@ class _BillingScreenState extends State<BillingScreen> {
                               (d) => setState(() => _endDate = d),
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      _buildDoctorFilter(state),
-                      const SizedBox(height: 12),
-                      _buildPatientFilter(),
-                      const SizedBox(height: 12),
-                      _buildServiceFilter(state),
-                      const SizedBox(height: 12),
-                      TextButton.icon(
-                        onPressed: _resetFilters,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Reset Filters'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.orange,
-                        ),
-                      ),
-                    ],
-                  )
-                : Column(
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            flex: 1,
-                            child: _buildDateFilter(
-                              context,
-                              'From',
-                              _startDate,
-                              (d) => setState(() => _startDate = d),
-                            ),
-                          ),
                           const SizedBox(width: 8),
-                          Expanded(
-                            flex: 1,
-                            child: _buildDateFilter(
-                              context,
-                              'To',
-                              _endDate,
-                              (d) => setState(() => _endDate = d),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
                           Expanded(flex: 2, child: _buildDoctorFilter(state)),
-                          const SizedBox(width: 12),
-                          Expanded(flex: 2, child: _buildPatientFilter()),
-                          const SizedBox(width: 12),
-                          Expanded(flex: 2, child: _buildServiceFilter(state)),
-                          const SizedBox(width: 12),
-                          Padding(
-                            padding: const EdgeInsets.only(top: 18),
-                            child: IconButton(
-                              onPressed: _resetFilters,
-                              icon: const Icon(Icons.refresh),
-                              tooltip: 'Reset Filters',
-                              color: Colors.orange,
-                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Expanded(child: _buildPatientFilter()),
+                          const SizedBox(width: 8),
+                          Expanded(child: _buildServiceFilter(state)),
+                          const SizedBox(width: 4),
+                          IconButton(
+                            onPressed: _resetFilters,
+                            icon: const Icon(Icons.refresh),
+                            tooltip: 'Reset Filters',
+                            color: Colors.orange,
                           ),
                         ],
                       ),
                     ],
-                  ),
+                  );
+                }
+
+                return Column(
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          flex: 1,
+                          child: _buildDateFilter(
+                            context,
+                            'From',
+                            _startDate,
+                            (d) => setState(() => _startDate = d),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 1,
+                          child: _buildDateFilter(
+                            context,
+                            'To',
+                            _endDate,
+                            (d) => setState(() => _endDate = d),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(flex: 2, child: _buildDoctorFilter(state)),
+                        const SizedBox(width: 12),
+                        Expanded(flex: 2, child: _buildPatientFilter()),
+                        const SizedBox(width: 12),
+                        Expanded(flex: 2, child: _buildServiceFilter(state)),
+                        const SizedBox(width: 12),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 18),
+                          child: IconButton(
+                            onPressed: _resetFilters,
+                            icon: const Icon(Icons.refresh),
+                            tooltip: 'Reset Filters',
+                            color: Colors.orange,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         );
       },

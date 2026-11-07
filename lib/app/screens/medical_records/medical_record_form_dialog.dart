@@ -446,98 +446,97 @@ class _MedicalRecordFormDialogState extends State<MedicalRecordFormDialog> {
                               : null,
                         ),
                         const SizedBox(height: 16),
-                        Wrap(
-                          spacing: 16,
-                          runSpacing: 16,
-                          children: [
-                            SizedBox(
-                              width: context.isMobile
-                                  ? double.infinity
-                                  : (MediaQuery.of(context).size.width - 100) /
-                                        3,
-                              child: TextFormField(
-                                controller: _weightController,
-                                decoration: const InputDecoration(
-                                  labelText: 'Poids (kg)',
-                                  border: OutlineInputBorder(),
-                                  prefixIcon: Icon(Icons.scale),
-                                ),
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                      decimal: true,
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final isCompact =
+                                context.isMobile || constraints.maxWidth < 500;
+                            final thirdWidth = (constraints.maxWidth - 36) / 3;
+                            final halfWidth = (constraints.maxWidth - 20) / 2;
+                            return Column(
+                              children: [
+                                Wrap(
+                                  spacing: 16,
+                                  runSpacing: 16,
+                                  children: [
+                                    SizedBox(
+                                      width: isCompact
+                                          ? double.infinity
+                                          : thirdWidth,
+                                      child: TextFormField(
+                                        controller: _weightController,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Poids (kg)',
+                                          border: OutlineInputBorder(),
+                                          prefixIcon: Icon(Icons.scale),
+                                        ),
+                                        keyboardType:
+                                            const TextInputType.numberWithOptions(
+                                              decimal: true,
+                                            ),
+                                      ),
                                     ),
-                              ),
-                            ),
-                            SizedBox(
-                              width: context.isMobile
-                                  ? (MediaQuery.of(context).size.width - 40) / 2
-                                  : (MediaQuery.of(context).size.width - 100) /
-                                        3,
-                              child: TextFormField(
-                                controller: _temperatureController,
-                                decoration: const InputDecoration(
-                                  labelText: 'Température (°C)',
-                                  border: OutlineInputBorder(),
-                                  prefixIcon: Icon(Icons.thermostat),
-                                ),
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                      decimal: true,
+                                    SizedBox(
+                                      width: isCompact ? halfWidth : thirdWidth,
+                                      child: TextFormField(
+                                        controller: _temperatureController,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Température (°C)',
+                                          border: OutlineInputBorder(),
+                                          prefixIcon: Icon(Icons.thermostat),
+                                        ),
+                                        keyboardType:
+                                            const TextInputType.numberWithOptions(
+                                              decimal: true,
+                                            ),
+                                      ),
                                     ),
-                              ),
-                            ),
-                            SizedBox(
-                              width: context.isMobile
-                                  ? (MediaQuery.of(context).size.width - 40) / 2
-                                  : (MediaQuery.of(context).size.width - 100) /
-                                        3,
-                              child: TextFormField(
-                                controller: _tensionController,
-                                decoration: const InputDecoration(
-                                  labelText: 'Tension Artérielle',
-                                  border: OutlineInputBorder(),
-                                  prefixIcon: Icon(Icons.favorite),
+                                    SizedBox(
+                                      width: isCompact ? halfWidth : thirdWidth,
+                                      child: TextFormField(
+                                        controller: _tensionController,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Tension Artérielle',
+                                          border: OutlineInputBorder(),
+                                          prefixIcon: Icon(Icons.favorite),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        Wrap(
-                          spacing: 16,
-                          runSpacing: 16,
-                          children: [
-                            SizedBox(
-                              width: context.isMobile
-                                  ? (MediaQuery.of(context).size.width - 40) / 2
-                                  : (MediaQuery.of(context).size.width - 80) /
-                                        2,
-                              child: TextFormField(
-                                controller: _frequenceController,
-                                decoration: const InputDecoration(
-                                  labelText: 'Fréq. Cardiaque (bpm)',
-                                  border: OutlineInputBorder(),
-                                  prefixIcon: Icon(Icons.monitor_heart),
+                                const SizedBox(height: 16),
+                                Wrap(
+                                  spacing: 16,
+                                  runSpacing: 16,
+                                  children: [
+                                    SizedBox(
+                                      width: halfWidth,
+                                      child: TextFormField(
+                                        controller: _frequenceController,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Fréq. Cardiaque (bpm)',
+                                          border: OutlineInputBorder(),
+                                          prefixIcon: Icon(Icons.monitor_heart),
+                                        ),
+                                        keyboardType: TextInputType.number,
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: halfWidth,
+                                      child: TextFormField(
+                                        controller: _spao2Controller,
+                                        decoration: const InputDecoration(
+                                          labelText: 'SpO2 (%)',
+                                          border: OutlineInputBorder(),
+                                          prefixIcon: Icon(Icons.air),
+                                        ),
+                                        keyboardType: TextInputType.number,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                keyboardType: TextInputType.number,
-                              ),
-                            ),
-                            SizedBox(
-                              width: context.isMobile
-                                  ? (MediaQuery.of(context).size.width - 40) / 2
-                                  : (MediaQuery.of(context).size.width - 80) /
-                                        2,
-                              child: TextFormField(
-                                controller: _spao2Controller,
-                                decoration: const InputDecoration(
-                                  labelText: 'SpO2 (%)',
-                                  border: OutlineInputBorder(),
-                                  prefixIcon: Icon(Icons.air),
-                                ),
-                                keyboardType: TextInputType.number,
-                              ),
-                            ),
-                          ],
+                              ],
+                            );
+                          },
                         ),
                         const SizedBox(height: 16),
                         TextFormField(

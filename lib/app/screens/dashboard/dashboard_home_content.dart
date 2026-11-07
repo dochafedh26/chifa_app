@@ -1,4 +1,4 @@
-﻿import 'dart:math' as math;
+import 'dart:math' as math;
 
 import 'package:chifa/app/cubits/auth_cubit.dart';
 import 'package:chifa/app/cubits/dashboard_cubit.dart';
@@ -180,32 +180,31 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
                     // Charts Row
                     Builder(
                       builder: (context) {
-                        final canViewFinancial = RolePermissions.canViewFinancialData(
-                          context.read<AuthCubit>().currentRole,
-                        );
+                        final canViewFinancial =
+                            RolePermissions.canViewFinancialData(
+                              context.read<AuthCubit>().currentRole,
+                            );
+                        final isNarrowDashboard =
+                            context.isMobile || context.screenWidth < 1000;
 
                         if (canViewFinancial) {
-                          if (!context.isMobile) {
+                          if (!isNarrowDashboard) {
                             return Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Expanded(child: _buildRevenueChart(statistics)),
                                 const SizedBox(width: 24),
-                                Expanded(child: _buildAppointmentsChart(statistics)),
+                                Expanded(
+                                  child: _buildAppointmentsChart(statistics),
+                                ),
                               ],
                             );
                           } else {
                             return Column(
                               children: [
-                                SizedBox(
-                                  height: 250,
-                                  child: _buildRevenueChart(statistics),
-                                ),
+                                _buildRevenueChart(statistics),
                                 const SizedBox(height: 16),
-                                SizedBox(
-                                  height: 250,
-                                  child: _buildAppointmentsChart(statistics),
-                                ),
+                                _buildAppointmentsChart(statistics),
                               ],
                             );
                           }
@@ -222,7 +221,7 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
                     const SizedBox(height: 16),
 
                     // Status Cards
-                    if (!context.isMobile) ...[
+                    if (!context.isMobile && context.screenWidth >= 1000) ...[
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -473,8 +472,10 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
       ),
     ];
 
-    // childAspectRatio: landscape phone → wide cards, portrait phone → shorter, desktop → square-ish
-    final double aspectRatio = isLandscape ? 2.4 : (isMobile ? 2.2 : 1.1);
+    // childAspectRatio: landscape phone → wide cards, portrait phone → shorter, tablet → balanced, desktop → square-ish
+    final double aspectRatio = isLandscape
+        ? 2.4
+        : (isMobile ? 2.2 : (context.isTablet ? 1.55 : 1.1));
 
     return GridView.count(
       shrinkWrap: true,

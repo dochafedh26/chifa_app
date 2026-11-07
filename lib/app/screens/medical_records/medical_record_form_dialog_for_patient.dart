@@ -4336,9 +4336,7 @@ class _MedicalRecordFormDialogForPatientState
                               SizedBox(
                                 width: context.isMobile
                                     ? double.infinity
-                                    : (MediaQuery.of(context).size.width -
-                                              100) /
-                                          3,
+                                    : (constraints.maxWidth - 36) / 3,
                                 child: TextFormField(
                                   controller: _weightController,
                                   decoration: const InputDecoration(
@@ -4355,11 +4353,8 @@ class _MedicalRecordFormDialogForPatientState
                               ),
                               SizedBox(
                                 width: context.isMobile
-                                    ? (MediaQuery.of(context).size.width - 40) /
-                                          2
-                                    : (MediaQuery.of(context).size.width -
-                                              100) /
-                                          3,
+                                    ? (constraints.maxWidth - 20) / 2
+                                    : (constraints.maxWidth - 36) / 3,
                                 child: TextFormField(
                                   controller: _temperatureController,
                                   decoration: const InputDecoration(
@@ -4372,11 +4367,8 @@ class _MedicalRecordFormDialogForPatientState
                               ),
                               SizedBox(
                                 width: context.isMobile
-                                    ? (MediaQuery.of(context).size.width - 40) /
-                                          2
-                                    : (MediaQuery.of(context).size.width -
-                                              100) /
-                                          3,
+                                    ? (constraints.maxWidth - 20) / 2
+                                    : (constraints.maxWidth - 36) / 3,
                                 child: TextFormField(
                                   controller: _tensionController,
                                   decoration: const InputDecoration(
@@ -4395,11 +4387,7 @@ class _MedicalRecordFormDialogForPatientState
                             runSpacing: 16,
                             children: [
                               SizedBox(
-                                width: context.isMobile
-                                    ? (MediaQuery.of(context).size.width - 40) /
-                                          2
-                                    : (MediaQuery.of(context).size.width - 80) /
-                                          2,
+                                width: (constraints.maxWidth - 20) / 2,
                                 child: TextFormField(
                                   controller: _frequenceController,
                                   decoration: const InputDecoration(
@@ -4412,11 +4400,7 @@ class _MedicalRecordFormDialogForPatientState
                                 ),
                               ),
                               SizedBox(
-                                width: context.isMobile
-                                    ? (MediaQuery.of(context).size.width - 40) /
-                                          2
-                                    : (MediaQuery.of(context).size.width - 80) /
-                                          2,
+                                width: (constraints.maxWidth - 20) / 2,
                                 child: TextFormField(
                                   controller: _spao2Controller,
                                   decoration: const InputDecoration(
@@ -4484,7 +4468,7 @@ class _MedicalRecordFormDialogForPatientState
                           Builder(
                             builder: (context) {
                               final small =
-                                  context.isMobile;
+                                  context.isMobile || constraints.maxWidth < 780;
                               final searchField = Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
@@ -6057,7 +6041,7 @@ class _MedicalRecordFormDialogForPatientState
   // ── adaptive footer ──────────────────────────────────────────────────────────
 
   Widget _buildFooter(BuildContext context) {
-    final small = context.isMobile;
+    final small = context.isMobile || context.screenWidth < 1050;
 
     final previewBtn = OutlinedButton.icon(
       onPressed: () {

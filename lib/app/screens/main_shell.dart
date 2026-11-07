@@ -348,10 +348,11 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  // ─── Premium Dark Sidebar (Desktop Only) ───────────────────────────
+  // ─── Premium Dark Sidebar (Desktop & Tablet) ───────────────────────
   Widget _buildSidebar(List<_NavItem> items) {
+    final isCompactSidebar = context.screenWidth < 1100;
     return Container(
-      width: 180,
+      width: isCompactSidebar ? 124 : 180,
       decoration: BoxDecoration(
         color: AppTheme.sidebarBackground,
         boxShadow: [
@@ -365,17 +366,17 @@ class _MainShellState extends State<MainShell> {
       child: Column(
         children: [
           // ── Logo / Brand ──────────────────────────────
-          const SizedBox(height: 16),
+          SizedBox(height: isCompactSidebar ? 12 : 16),
           Container(
-            width: 46,
-            height: 46,
+            width: isCompactSidebar ? 40 : 46,
+            height: isCompactSidebar ? 40 : 46,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [AppTheme.primaryLight, AppTheme.primary],
               ),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(isCompactSidebar ? 12 : 14),
               boxShadow: [
                 BoxShadow(
                   color: AppTheme.primary.withValues(alpha: 0.4),
@@ -384,13 +385,13 @@ class _MainShellState extends State<MainShell> {
                 ),
               ],
             ),
-            child: const Icon(
+            child: Icon(
               Icons.local_hospital_rounded,
               color: Colors.white,
-              size: 24,
+              size: isCompactSidebar ? 20 : 24,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
             'CHIFA',
             style: TextStyle(
@@ -400,13 +401,13 @@ class _MainShellState extends State<MainShell> {
               letterSpacing: 2,
             ),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: isCompactSidebar ? 12 : 20),
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16),
             height: 1,
             color: AppTheme.sidebarSurface,
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: isCompactSidebar ? 8 : 12),
 
           // ── Nav Items ─────────────────────────────────
           Expanded(
@@ -426,28 +427,35 @@ class _MainShellState extends State<MainShell> {
                           color: AppTheme.sidebarSurface,
                         ),
                         const SizedBox(height: 8),
-                        _buildNavItem(i, items),
+                        _buildNavItem(i, items, isCompact: isCompactSidebar),
                       ],
                     );
                   }
-                  return _buildNavItem(i, items);
+                  return _buildNavItem(i, items, isCompact: isCompactSidebar);
                 }),
               ),
             ),
           ),
           const SyncIndicator(),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
         ],
       ),
     );
   }
 
-  Widget _buildNavItem(int index, List<_NavItem> items) {
+  Widget _buildNavItem(
+    int index,
+    List<_NavItem> items, {
+    bool isCompact = false,
+  }) {
     final item = items[index];
     final isSelected = _selectedIndex == index;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      padding: EdgeInsets.symmetric(
+        horizontal: isCompact ? 8 : 10,
+        vertical: 2,
+      ),
       child: Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(14),
@@ -457,11 +465,14 @@ class _MainShellState extends State<MainShell> {
           splashColor: AppTheme.primary.withValues(alpha: 0.15),
           hoverColor: AppTheme.sidebarSurface.withValues(alpha: 0.6),
           child: AnimatedContainer(
-            width: 120.0,
-            height: 80.0,
+            width: isCompact ? 104.0 : 120.0,
+            height: isCompact ? 64.0 : 80.0,
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+            padding: EdgeInsets.symmetric(
+              vertical: isCompact ? 6 : 10,
+              horizontal: 4,
+            ),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
               color: isSelected
@@ -470,13 +481,14 @@ class _MainShellState extends State<MainShell> {
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // Active indicator dot
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   width: isSelected ? 20 : 0,
                   height: 3,
-                  margin: const EdgeInsets.only(bottom: 6),
+                  margin: EdgeInsets.only(bottom: isCompact ? 4 : 6),
                   decoration: BoxDecoration(
                     color: isSelected
                         ? AppTheme.primaryLight
@@ -486,16 +498,16 @@ class _MainShellState extends State<MainShell> {
                 ),
                 Icon(
                   isSelected ? item.activeIcon : item.icon,
-                  size: 22,
+                  size: isCompact ? 20 : 22,
                   color: isSelected
-                        ? AppTheme.primaryLight
-                        : AppTheme.sidebarText,
+                      ? AppTheme.primaryLight
+                      : AppTheme.sidebarText,
                 ),
                 const SizedBox(height: 4),
                 Text(
                   item.label,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: isCompact ? 11.5 : 14,
                     fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                     color: isSelected
                         ? AppTheme.sidebarTextActive

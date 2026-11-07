@@ -55,41 +55,17 @@ class _InventoryScreenState extends State<InventoryScreen>
   Widget build(BuildContext context) {
     final isMobile = context.isMobile;
 
-    return Column(
-      children: [
-        // Search and Add
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8.0),
-          child: isMobile
-              ? Column(
-                  children: [
-                    TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: 'Search inventory...',
-                        prefixIcon: const Icon(Icons.search),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        isDense: true,
-                      ),
-                      onChanged: _onSearchChanged,
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _showCreateDialog,
-                        icon: const Icon(Icons.add),
-                        label: const Text('Add Item'),
-                      ),
-                    ),
-                  ],
-                )
-              : Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Column(
+        children: [
+          // Search and Add
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: isMobile
+                ? Column(
+                    children: [
+                      TextField(
                         controller: _searchController,
                         decoration: InputDecoration(
                           hintText: 'Search inventory...',
@@ -97,53 +73,80 @@ class _InventoryScreenState extends State<InventoryScreen>
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
+                          isDense: true,
                         ),
                         onChanged: _onSearchChanged,
                       ),
-                    ),
-                    const SizedBox(width: 16),
-                    ElevatedButton.icon(
-                      onPressed: _showCreateDialog,
-                      icon: const Icon(Icons.add),
-                      label: const Text('Add Item'),
-                    ),
-                  ],
-                ),
-        ),
-        const SizedBox(height: 8),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _showCreateDialog,
+                          icon: const Icon(Icons.add),
+                          label: const Text('Add Item'),
+                        ),
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            hintText: 'Search inventory...',
+                            prefixIcon: const Icon(Icons.search),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onChanged: _onSearchChanged,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      ElevatedButton.icon(
+                        onPressed: _showCreateDialog,
+                        icon: const Icon(Icons.add),
+                        label: const Text('Add Item'),
+                      ),
+                    ],
+                  ),
+          ),
+          const SizedBox(height: 8),
 
-        // Tabs
-        TabBar(
-          controller: _tabController,
-          tabs: [
-            Tab(
-              icon: const Icon(Icons.inventory_2),
-              text: isMobile ? 'All' : 'All Items',
-            ),
-            Tab(
-              icon: const Icon(Icons.warning_amber),
-              text: isMobile ? 'Low' : 'Low Stock',
-            ),
-            Tab(
-              icon: const Icon(Icons.error),
-              text: isMobile ? 'Exp.' : 'Expired',
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-
-        // Content
-        Expanded(
-          child: TabBarView(
+          // Tabs
+          TabBar(
             controller: _tabController,
-            children: const [
-              _InventoryList(filter: InventoryFilter.all),
-              _InventoryList(filter: InventoryFilter.lowStock),
-              _InventoryList(filter: InventoryFilter.expired),
+            tabs: [
+              Tab(
+                icon: const Icon(Icons.inventory_2),
+                text: isMobile ? 'All' : 'All Items',
+              ),
+              Tab(
+                icon: const Icon(Icons.warning_amber),
+                text: isMobile ? 'Low' : 'Low Stock',
+              ),
+              Tab(
+                icon: const Icon(Icons.error),
+                text: isMobile ? 'Exp.' : 'Expired',
+              ),
             ],
           ),
-        ),
-      ],
+          const SizedBox(height: 8),
+
+          // Content
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: const [
+                _InventoryList(filter: InventoryFilter.all),
+                _InventoryList(filter: InventoryFilter.lowStock),
+                _InventoryList(filter: InventoryFilter.expired),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

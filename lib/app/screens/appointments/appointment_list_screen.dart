@@ -407,6 +407,140 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
                     : LayoutBuilder(
                         builder: (context, constraints) {
                           final isCompact = constraints.maxWidth < 1120;
+                          final isPortraitTablet = constraints.maxWidth < 740;
+
+                          if (isPortraitTablet) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: SingleChildScrollView(
+                                        scrollDirection: Axis.horizontal,
+                                        child: _buildPeriodSelector(
+                                          isCompact: true,
+                                        ),
+                                      ),
+                                    ),
+                                    if (_dateFilterMode !=
+                                        AppointmentDateFilterMode.allTime) ...[
+                                      const SizedBox(width: 8),
+                                      TextButton(
+                                        onPressed: _goToCurrentPeriod,
+                                        child: Text(
+                                          _getCurrentPeriodButtonLabel(),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    if (_dateFilterMode !=
+                                        AppointmentDateFilterMode.allTime) ...[
+                                      IconButton(
+                                        icon: const Icon(Icons.chevron_left),
+                                        tooltip: 'Précédent',
+                                        onPressed: _previousPeriod,
+                                      ),
+                                      Expanded(
+                                        child: InkWell(
+                                          onTap: _pickPeriod,
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: Center(
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  _getPeriodTitle(),
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 15,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                                Text(
+                                                  _getPeriodSubtitle(),
+                                                  style: TextStyle(
+                                                    color: Colors.grey.shade600,
+                                                    fontSize: 12,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.chevron_right),
+                                        tooltip: 'Suivant',
+                                        onPressed: _nextPeriod,
+                                      ),
+                                    ] else
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              _getPeriodTitle(),
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 15,
+                                              ),
+                                            ),
+                                            Text(
+                                              _getPeriodSubtitle(),
+                                              style: TextStyle(
+                                                color: Colors.grey.shade600,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    const SizedBox(width: 8),
+                                    IconButton.filledTonal(
+                                      icon: const Icon(Icons.tv, size: 18),
+                                      tooltip: 'Écran TV Salle d\'attente',
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                const WaitingRoomTvScreen(),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                    const SizedBox(width: 6),
+                                    IconButton.filledTonal(
+                                      icon: const Icon(
+                                        Icons.qr_code_scanner,
+                                        size: 18,
+                                      ),
+                                      tooltip: 'Scan Check-in',
+                                      onPressed: () =>
+                                          _showQuickCheckInDialog(context),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    ElevatedButton.icon(
+                                      onPressed: () => _showAddDialog(context),
+                                      icon: const Icon(Icons.add, size: 18),
+                                      label: const Text('Add Appointment'),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            );
+                          }
 
                           if (isCompact) {
                             return Column(
@@ -653,14 +787,24 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Padding(
                 padding: const EdgeInsets.all(12),
-                child: isMobile
-                    ? Column(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isCompactFilter =
+                        isMobile || constraints.maxWidth < 880;
+                    if (isCompactFilter) {
+                      return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
                             child: Row(
                               children: [
+                                const Icon(
+                                  Icons.filter_list,
+                                  size: 18,
+                                  color: Colors.grey,
+                                ),
+                                const SizedBox(width: 8),
                                 _buildFilterChip('Tous', null),
                                 const SizedBox(width: 6),
                                 _buildFilterChip(
@@ -685,14 +829,23 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
                               ],
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 10),
                           SizedBox(
-                            height: 42,
+                            height: 40,
                             child: TextField(
                               controller: _searchController,
                               decoration: InputDecoration(
                                 hintText: 'Search by patient name...',
                                 prefixIcon: const Icon(Icons.search, size: 18),
+                                suffixIcon: _searchQuery.isNotEmpty
+                                    ? IconButton(
+                                        icon: const Icon(Icons.clear, size: 16),
+                                        onPressed: () {
+                                          _searchController.clear();
+                                          setState(() => _searchQuery = '');
+                                        },
+                                      )
+                                    : null,
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(10),
                                 ),
@@ -705,91 +858,95 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
                             ),
                           ),
                         ],
-                      )
-                    : Row(
-                        children: [
-                          // Status Filter Chips
-                          const Icon(
-                            Icons.filter_list,
-                            size: 20,
-                            color: Colors.grey,
-                          ),
-                          const SizedBox(width: 8),
-                          _buildFilterChip('Tous', null),
-                          const SizedBox(width: 6),
-                          _buildFilterChip(
-                            'Programmés',
-                            AppointmentStatus.scheduled,
-                          ),
-                          const SizedBox(width: 6),
-                          _buildFilterChip(
-                            'En salle d\'attente',
-                            AppointmentStatus.waitingRoom,
-                          ),
-                          const SizedBox(width: 6),
-                          _buildFilterChip(
-                            'Terminés',
-                            AppointmentStatus.completed,
-                          ),
-                          const SizedBox(width: 6),
-                          _buildFilterChip(
-                            'Annulés',
-                            AppointmentStatus.cancelled,
-                          ),
+                      );
+                    }
 
-                          const SizedBox(width: 16),
-                          // Search Field
-                          Expanded(
-                            child: SizedBox(
-                              height: 38,
-                              child: TextField(
-                                controller: _searchController,
-                                decoration: InputDecoration(
-                                  hintText: 'Search by patient name...',
-                                  hintStyle: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.grey.shade400,
-                                  ),
-                                  prefixIcon: const Icon(
-                                    Icons.search,
-                                    size: 18,
-                                  ),
-                                  suffixIcon: _searchQuery.isNotEmpty
-                                      ? IconButton(
-                                          icon: const Icon(
-                                            Icons.clear,
-                                            size: 16,
-                                          ),
-                                          onPressed: () {
-                                            _searchController.clear();
-                                            setState(() => _searchQuery = '');
-                                          },
-                                        )
-                                      : null,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    vertical: 0,
-                                    horizontal: 12,
-                                  ),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                    borderSide: BorderSide(
-                                      color: Colors.grey.shade300,
-                                    ),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                    borderSide: BorderSide(
-                                      color: Colors.grey.shade300,
-                                    ),
+                    return Row(
+                      children: [
+                        // Status Filter Chips
+                        const Icon(
+                          Icons.filter_list,
+                          size: 20,
+                          color: Colors.grey,
+                        ),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('Tous', null),
+                        const SizedBox(width: 6),
+                        _buildFilterChip(
+                          'Programmés',
+                          AppointmentStatus.scheduled,
+                        ),
+                        const SizedBox(width: 6),
+                        _buildFilterChip(
+                          'En salle d\'attente',
+                          AppointmentStatus.waitingRoom,
+                        ),
+                        const SizedBox(width: 6),
+                        _buildFilterChip(
+                          'Terminés',
+                          AppointmentStatus.completed,
+                        ),
+                        const SizedBox(width: 6),
+                        _buildFilterChip(
+                          'Annulés',
+                          AppointmentStatus.cancelled,
+                        ),
+
+                        const SizedBox(width: 16),
+                        // Search Field
+                        Expanded(
+                          child: SizedBox(
+                            height: 38,
+                            child: TextField(
+                              controller: _searchController,
+                              decoration: InputDecoration(
+                                hintText: 'Search by patient name...',
+                                hintStyle: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey.shade400,
+                                ),
+                                prefixIcon: const Icon(
+                                  Icons.search,
+                                  size: 18,
+                                ),
+                                suffixIcon: _searchQuery.isNotEmpty
+                                    ? IconButton(
+                                        icon: const Icon(
+                                          Icons.clear,
+                                          size: 16,
+                                        ),
+                                        onPressed: () {
+                                          _searchController.clear();
+                                          setState(() => _searchQuery = '');
+                                        },
+                                      )
+                                    : null,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  vertical: 0,
+                                  horizontal: 12,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide(
+                                    color: Colors.grey.shade300,
                                   ),
                                 ),
-                                onChanged: (v) =>
-                                    setState(() => _searchQuery = v),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide(
+                                    color: Colors.grey.shade300,
+                                  ),
+                                ),
                               ),
+                              onChanged: (v) =>
+                                  setState(() => _searchQuery = v),
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ),
             ),
 

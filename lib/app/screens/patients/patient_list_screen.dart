@@ -1,4 +1,4 @@
-﻿import 'package:chifa/app/cubits/auth_cubit.dart';
+import 'package:chifa/app/cubits/auth_cubit.dart';
 import 'package:chifa/app/cubits/medical_record_cubit.dart';
 import 'package:chifa/app/cubits/patient_cubit.dart';
 import 'package:chifa/app/cubits/workspace_cubit.dart';
@@ -46,248 +46,205 @@ class _PatientListScreenState extends State<PatientListScreen> {
           children: [
             // Search and Filter Bar
             Card(
-              margin: const EdgeInsets.all(12),
+              margin: const EdgeInsets.fromLTRB(12, 12, 12, 8),
               child: Padding(
                 padding: const EdgeInsets.all(12.0),
-                child: isMobile
-                    ? Column(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isCompactBar = isMobile || constraints.maxWidth < 880;
+                    final isVeryNarrow = constraints.maxWidth < 460;
+
+                    final searchField = TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        labelText: 'Search patients...',
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                        prefixIcon: const Icon(Icons.search, size: 20),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.calendar_month, size: 20),
+                          tooltip: 'Filtrer par date',
+                          onPressed: () => _showDatePicker(context),
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      onChanged: (value) {
+                        context.read<PatientCubit>().searchPatients(value);
+                      },
+                    );
+
+                    final starsDropdown = Container(
+                      height: 44,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int>(
+                          isExpanded: true,
+                          hint: const Text('All Patients'),
+                          value: _selectedStars,
+                          onChanged: (stars) {
+                            setState(() => _selectedStars = stars);
+                            if (stars != null) {
+                              context
+                                  .read<PatientCubit>()
+                                  .getPatientsByFidelity(stars);
+                            } else {
+                              context.read<PatientCubit>().loadPatients();
+                            }
+                          },
+                          items: [
+                            const DropdownMenuItem<int>(
+                              value: null,
+                              child: Text(
+                                'All Patients',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            ...List.generate(
+                              5,
+                              (index) => DropdownMenuItem<int>(
+                                value: index + 1,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: List.generate(
+                                    index + 1,
+                                    (i) => const Icon(
+                                      Icons.star,
+                                      color: Colors.amber,
+                                      size: 15,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+
+                    final categoryDropdown = Container(
+                      height: 44,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          isExpanded: true,
+                          hint: const Text('All Categories'),
+                          value: _selectedCategoryFilter,
+                          onChanged: (category) {
+                            setState(() => _selectedCategoryFilter = category);
+                            if (category != null) {
+                              context
+                                  .read<PatientCubit>()
+                                  .getPatientsBySuiviCategory(category);
+                            } else {
+                              context.read<PatientCubit>().loadPatients();
+                            }
+                          },
+                          items: [
+                            const DropdownMenuItem<String>(
+                              value: null,
+                              child: Text(
+                                'All Categories',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            ...state.categories.map(
+                              (c) => DropdownMenuItem<String>(
+                                value: c,
+                                child: Text(
+                                  c,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+
+                    if (isCompactBar) {
+                      return Column(
                         children: [
                           Row(
                             children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: _searchController,
-                                  decoration: InputDecoration(
-                                    labelText: 'Search patients...',
-                                    prefixIcon: const Icon(Icons.search),
-                                    suffixIcon: IconButton(
-                                      icon: const Icon(Icons.calendar_month),
-                                      onPressed: () => _showDatePicker(context),
-                                    ),
-                                    border: const OutlineInputBorder(),
-                                  ),
-                                  onChanged: (value) {
-                                    context.read<PatientCubit>().searchPatients(
-                                      value,
-                                    );
-                                  },
-                                ),
-                              ),
+                              Expanded(child: searchField),
                               const SizedBox(width: 8),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.add_circle,
-                                  color: Colors.blue,
-                                  size: 32,
-                                ),
-                                onPressed: () => _showAddPatientDialog(context),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<int>(
-                                    isExpanded: true,
-                                    hint: const Text('Stars'),
-                                    value: _selectedStars,
-                                    onChanged: (stars) {
-                                      setState(() => _selectedStars = stars);
-                                      if (stars != null) {
-                                        context
-                                            .read<PatientCubit>()
-                                            .getPatientsByFidelity(stars);
-                                      } else {
-                                        context
-                                            .read<PatientCubit>()
-                                            .loadPatients();
-                                      }
-                                    },
-                                    items: [
-                                      const DropdownMenuItem<int>(
-                                        value: null,
-                                        child: Text('All Stars'),
-                                      ),
-                                      ...List.generate(
-                                        5,
-                                        (index) => DropdownMenuItem<int>(
-                                          value: index + 1,
-                                          child: Row(
-                                            children: List.generate(
-                                              index + 1,
-                                              (i) => const Icon(
-                                                Icons.star,
-                                                color: Colors.amber,
-                                                size: 14,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<String>(
-                                    isExpanded: true,
-                                    hint: const Text('Category'),
-                                    value: _selectedCategoryFilter,
-                                    onChanged: (category) {
-                                      setState(
-                                        () =>
-                                            _selectedCategoryFilter = category,
-                                      );
-                                      if (category != null) {
-                                        context
-                                            .read<PatientCubit>()
-                                            .getPatientsBySuiviCategory(
-                                              category,
-                                            );
-                                      } else {
-                                        context
-                                            .read<PatientCubit>()
-                                            .loadPatients();
-                                      }
-                                    },
-                                    items: [
-                                      const DropdownMenuItem<String>(
-                                        value: null,
-                                        child: Text('All Categories'),
-                                      ),
-                                      ...state.categories.map(
-                                        (c) => DropdownMenuItem<String>(
-                                          value: c,
-                                          child: Text(
-                                            c,
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 4),
                               IconButton(
                                 icon: const Icon(Icons.refresh_rounded),
+                                tooltip: 'Actualiser',
                                 onPressed: () =>
                                     context.read<PatientCubit>().loadPatients(),
                               ),
-                            ],
-                          ),
-                        ],
-                      )
-                    : Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _searchController,
-                              decoration: InputDecoration(
-                                labelText: 'Search patients...',
-                                prefixIcon: const Icon(Icons.search),
-                                suffixIcon: IconButton(
-                                  icon: const Icon(Icons.calendar_month),
-                                  onPressed: () => _showDatePicker(context),
-                                ),
-                                border: const OutlineInputBorder(),
-                              ),
-                              onChanged: (value) {
-                                context.read<PatientCubit>().searchPatients(
-                                  value,
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          IconButton(
-                            icon: const Icon(Icons.refresh),
-                            onPressed: () {
-                              context.read<PatientCubit>().loadPatients();
-                            },
-                          ),
-                          const SizedBox(width: 16),
-                          DropdownButton<int>(
-                            hint: const Text('Filter by Stars'),
-                            value: _selectedStars,
-                            onChanged: (stars) {
-                              setState(() {
-                                _selectedStars = stars;
-                              });
-                              if (stars != null) {
-                                context
-                                    .read<PatientCubit>()
-                                    .getPatientsByFidelity(stars);
-                              } else {
-                                context.read<PatientCubit>().loadPatients();
-                              }
-                            },
-                            items: [
-                              const DropdownMenuItem<int>(
-                                value: null,
-                                child: Text('All Patients'),
-                              ),
-                              ...List.generate(5, (index) {
-                                final stars = index + 1;
-                                return DropdownMenuItem<int>(
-                                  value: stars,
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: List.generate(stars, (i) {
-                                      return const Icon(
-                                        Icons.star,
-                                        color: Colors.amber,
-                                        size: 16,
-                                      );
-                                    }),
+                              const SizedBox(width: 4),
+                              if (isVeryNarrow)
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.add_circle,
+                                    color: Colors.teal,
+                                    size: 32,
                                   ),
-                                );
-                              }),
+                                  onPressed: () =>
+                                      _showAddPatientDialog(context),
+                                )
+                              else
+                                ElevatedButton.icon(
+                                  onPressed: () =>
+                                      _showAddPatientDialog(context),
+                                  icon: const Icon(Icons.add, size: 18),
+                                  label: const Text('Add Patient'),
+                                ),
                             ],
                           ),
-                          const SizedBox(width: 16),
-                          DropdownButton<String>(
-                            hint: const Text('Filter by Category'),
-                            value: _selectedCategoryFilter,
-                            onChanged: (category) {
-                              setState(() {
-                                _selectedCategoryFilter = category;
-                              });
-                              if (category != null) {
-                                context
-                                    .read<PatientCubit>()
-                                    .getPatientsBySuiviCategory(category);
-                              } else {
-                                context.read<PatientCubit>().loadPatients();
-                              }
-                            },
-                            items: [
-                              const DropdownMenuItem<String>(
-                                value: null,
-                                child: Text('All Categories'),
-                              ),
-                              ...state.categories.map((c) {
-                                return DropdownMenuItem<String>(
-                                  value: c,
-                                  child: Text(c),
-                                );
-                              }),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(child: starsDropdown),
+                              const SizedBox(width: 12),
+                              Expanded(child: categoryDropdown),
                             ],
-                          ),
-                          const SizedBox(width: 16),
-                          ElevatedButton.icon(
-                            onPressed: () => _showAddPatientDialog(context),
-                            icon: const Icon(Icons.add),
-                            label: const Text('Add Patient'),
                           ),
                         ],
-                      ),
+                      );
+                    }
+
+                    return Row(
+                      children: [
+                        Expanded(child: searchField),
+                        const SizedBox(width: 12),
+                        IconButton(
+                          icon: const Icon(Icons.refresh_rounded),
+                          tooltip: 'Actualiser',
+                          onPressed: () {
+                            context.read<PatientCubit>().loadPatients();
+                          },
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(width: 165, child: starsDropdown),
+                        const SizedBox(width: 12),
+                        SizedBox(width: 185, child: categoryDropdown),
+                        const SizedBox(width: 12),
+                        ElevatedButton.icon(
+                          onPressed: () => _showAddPatientDialog(context),
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Add Patient'),
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ),
             ),
 

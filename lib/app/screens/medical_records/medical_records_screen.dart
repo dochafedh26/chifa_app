@@ -163,210 +163,222 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
     final role = context.watch<AuthCubit>().currentRole;
     final canCreateRecord = RolePermissions.canCreateMedicalRecord(role);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Top Action Bar
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8.0),
-          child: isMobile
-              ? Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _searchController,
-                            decoration: InputDecoration(
-                              hintText: 'Search...',
-                              prefixIcon: const Icon(Icons.search),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Top Action Bar
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: isMobile
+                ? Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _searchController,
+                              decoration: InputDecoration(
+                                hintText: 'Search...',
+                                prefixIcon: const Icon(Icons.search),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                isDense: true,
                               ),
-                              isDense: true,
+                              onChanged: _onSearchChanged,
                             ),
-                            onChanged: _onSearchChanged,
                           ),
-                        ),
-                        if (canCreateRecord) ...[
+                          if (canCreateRecord) ...[
+                            const SizedBox(width: 8),
+                            IconButton(
+                              onPressed: _showCreateDialog,
+                              icon: const Icon(
+                                Icons.add_circle,
+                                color: Colors.blue,
+                                size: 32,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: FilterChip(
+                              label: const Text('Filters'),
+                              selected: _showFilters,
+                              onSelected: (val) =>
+                                  setState(() => _showFilters = val),
+                              avatar: Icon(
+                                Icons.filter_list,
+                                size: 18,
+                                color: _showFilters ? Colors.white : null,
+                              ),
+                            ),
+                          ),
                           const SizedBox(width: 8),
                           IconButton(
-                            onPressed: _showCreateDialog,
-                            icon: const Icon(
-                              Icons.add_circle,
-                              color: Colors.blue,
-                              size: 32,
-                            ),
+                            onPressed: () {
+                              context
+                                  .read<MedicalRecordCubit>()
+                                  .loadMedicalRecords();
+                              context.read<MedicalRecordCubit>().loadDoctors();
+                            },
+                            icon: const Icon(Icons.refresh),
                           ),
                         ],
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: FilterChip(
-                            label: const Text('Filters'),
-                            selected: _showFilters,
-                            onSelected: (val) =>
-                                setState(() => _showFilters = val),
-                            avatar: Icon(
-                              Icons.filter_list,
-                              size: 18,
-                              color: _showFilters ? Colors.white : null,
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            hintText: 'Quick search (motif, patient)...',
+                            prefixIcon: const Icon(Icons.search),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
+                            isDense: true,
+                          ),
+                          onChanged: _onSearchChanged,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Tooltip(
+                        message: _showFilters ? 'Hide Filters' : 'Show Filters',
+                        child: FilterChip(
+                          label: const Text('Filters'),
+                          selected: _showFilters,
+                          onSelected: (val) =>
+                              setState(() => _showFilters = val),
+                          avatar: Icon(
+                            Icons.filter_list,
+                            size: 18,
+                            color: _showFilters ? Colors.white : null,
                           ),
                         ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: () {
+                          context
+                              .read<MedicalRecordCubit>()
+                              .loadMedicalRecords();
+                          context.read<MedicalRecordCubit>().loadDoctors();
+                        },
+                        icon: const Icon(Icons.refresh),
+                        tooltip: 'Refresh',
+                      ),
+                      if (canCreateRecord) ...[
                         const SizedBox(width: 8),
-                        IconButton(
-                          onPressed: () {
-                            context
-                                .read<MedicalRecordCubit>()
-                                .loadMedicalRecords();
-                            context.read<MedicalRecordCubit>().loadDoctors();
-                          },
-                          icon: const Icon(Icons.refresh),
+                        ElevatedButton.icon(
+                          onPressed: _showCreateDialog,
+                          icon: const Icon(Icons.add),
+                          label: const Text('New Record'),
+                        ),
+                      ],
+                    ],
+                  ),
+          ),
+
+          // Collapsible Filter Bar
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: _buildFilterBar(),
+            crossFadeState: _showFilters
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 250),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Records list
+          Expanded(
+            child: BlocBuilder<MedicalRecordCubit, MedicalRecordState>(
+              builder: (context, state) {
+                if (state.isLoading && state.medicalRecords.isEmpty) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (state.error != null && state.medicalRecords.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          size: 64,
+                          color: Colors.red.shade300,
+                        ),
+                        const SizedBox(height: 16),
+                        Text('Error: ${state.error}'),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: () => context
+                              .read<MedicalRecordCubit>()
+                              .loadMedicalRecords(),
+                          child: const Text('Retry'),
                         ),
                       ],
                     ),
-                  ],
-                )
-              : Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          hintText: 'Quick search (motif, patient)...',
-                          prefixIcon: const Icon(Icons.search),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          isDense: true,
-                        ),
-                        onChanged: _onSearchChanged,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Tooltip(
-                      message: _showFilters ? 'Hide Filters' : 'Show Filters',
-                      child: FilterChip(
-                        label: const Text('Filters'),
-                        selected: _showFilters,
-                        onSelected: (val) => setState(() => _showFilters = val),
-                        avatar: Icon(
-                          Icons.filter_list,
-                          size: 18,
-                          color: _showFilters ? Colors.white : null,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      onPressed: () {
-                        context.read<MedicalRecordCubit>().loadMedicalRecords();
-                        context.read<MedicalRecordCubit>().loadDoctors();
-                      },
-                      icon: const Icon(Icons.refresh),
-                      tooltip: 'Refresh',
-                    ),
-                    if (canCreateRecord) ...[
-                      const SizedBox(width: 8),
-                      ElevatedButton.icon(
-                        onPressed: _showCreateDialog,
-                        icon: const Icon(Icons.add),
-                        label: const Text('New Record'),
-                      ),
-                    ],
-                  ],
-                ),
-        ),
-
-        // Collapsible Filter Bar
-        AnimatedCrossFade(
-          firstChild: const SizedBox.shrink(),
-          secondChild: _buildFilterBar(),
-          crossFadeState: _showFilters
-              ? CrossFadeState.showSecond
-              : CrossFadeState.showFirst,
-          duration: const Duration(milliseconds: 250),
-        ),
-
-        const SizedBox(height: 16),
-
-        // Records list
-        Expanded(
-          child: BlocBuilder<MedicalRecordCubit, MedicalRecordState>(
-            builder: (context, state) {
-              if (state.isLoading && state.medicalRecords.isEmpty) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              if (state.error != null && state.medicalRecords.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.error_outline,
-                        size: 64,
-                        color: Colors.red.shade300,
-                      ),
-                      const SizedBox(height: 16),
-                      Text('Error: ${state.error}'),
-                      const SizedBox(height: 8),
-                      TextButton(
-                        onPressed: () => context
-                            .read<MedicalRecordCubit>()
-                            .loadMedicalRecords(),
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              if (state.medicalRecords.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.description,
-                        size: 64,
-                        color: Colors.grey.shade300,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No medical records found',
-                        style: TextStyle(color: Colors.grey.shade600),
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              final currentRole = context.watch<AuthCubit>().currentRole;
-              final canEdit = RolePermissions.canEditMedicalRecord(currentRole);
-              final canDelete = RolePermissions.canDeleteMedicalRecords(currentRole);
-
-              return ListView.builder(
-                padding: const EdgeInsets.only(bottom: 16),
-                itemCount: state.medicalRecords.length,
-                itemBuilder: (context, index) {
-                  final record = state.medicalRecords[index];
-                  return _MedicalRecordCard(
-                    record: record,
-                    onTap: () => _showDetailsDialog(record),
-                    onEdit: canEdit ? () => _showEditDialog(record) : null,
-                    onDelete: canDelete ? () => _confirmDelete(record) : null,
                   );
-                },
-              );
-            },
+                }
+
+                if (state.medicalRecords.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.description,
+                          size: 64,
+                          color: Colors.grey.shade300,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No medical records found',
+                          style: TextStyle(color: Colors.grey.shade600),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                final currentRole = context.watch<AuthCubit>().currentRole;
+                final canEdit = RolePermissions.canEditMedicalRecord(
+                  currentRole,
+                );
+                final canDelete = RolePermissions.canDeleteMedicalRecords(
+                  currentRole,
+                );
+
+                return ListView.builder(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  itemCount: state.medicalRecords.length,
+                  itemBuilder: (context, index) {
+                    final record = state.medicalRecords[index];
+                    return _MedicalRecordCard(
+                      record: record,
+                      onTap: () => _showDetailsDialog(record),
+                      onEdit: canEdit ? () => _showEditDialog(record) : null,
+                      onDelete: canDelete
+                          ? () => _confirmDelete(record)
+                          : null,
+                    );
+                  },
+                );
+              },
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -385,8 +397,11 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
           margin: const EdgeInsets.only(top: 8, bottom: 8),
           child: Padding(
             padding: const EdgeInsets.all(12),
-            child: isMobile
-                ? Column(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isCompactFilter = isMobile || constraints.maxWidth < 820;
+                if (isCompactFilter) {
+                  return Column(
                     children: [
                       Row(
                         children: [
@@ -407,69 +422,76 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
                               (d) => setState(() => _endDate = d),
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      _buildDoctorFilter(state),
-                      const SizedBox(height: 12),
-                      _buildPatientFilter(),
-                      const SizedBox(height: 12),
-                      _buildMotifFilter(),
-                      const SizedBox(height: 12),
-                      TextButton.icon(
-                        onPressed: _resetFilters,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Reset Filters'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.orange,
-                        ),
-                      ),
-                    ],
-                  )
-                : Column(
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            flex: 1,
-                            child: _buildDateFilter(
-                              context,
-                              'From',
-                              _startDate,
-                              (d) => setState(() => _startDate = d),
-                            ),
-                          ),
                           const SizedBox(width: 8),
-                          Expanded(
-                            flex: 1,
-                            child: _buildDateFilter(
-                              context,
-                              'To',
-                              _endDate,
-                              (d) => setState(() => _endDate = d),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
                           Expanded(flex: 2, child: _buildDoctorFilter(state)),
-                          const SizedBox(width: 12),
-                          Expanded(flex: 2, child: _buildPatientFilter()),
-                          const SizedBox(width: 12),
-                          Expanded(flex: 2, child: _buildMotifFilter()),
-                          const SizedBox(width: 12),
-                          Padding(
-                            padding: const EdgeInsets.only(top: 18),
-                            child: IconButton(
-                              onPressed: _resetFilters,
-                              icon: const Icon(Icons.refresh),
-                              tooltip: 'Reset Filters',
-                              color: Colors.orange,
-                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Expanded(child: _buildPatientFilter()),
+                          const SizedBox(width: 8),
+                          Expanded(child: _buildMotifFilter()),
+                          const SizedBox(width: 4),
+                          IconButton(
+                            onPressed: _resetFilters,
+                            icon: const Icon(Icons.refresh),
+                            tooltip: 'Reset Filters',
+                            color: Colors.orange,
                           ),
                         ],
                       ),
                     ],
-                  ),
+                  );
+                }
+
+                return Column(
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          flex: 1,
+                          child: _buildDateFilter(
+                            context,
+                            'From',
+                            _startDate,
+                            (d) => setState(() => _startDate = d),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 1,
+                          child: _buildDateFilter(
+                            context,
+                            'To',
+                            _endDate,
+                            (d) => setState(() => _endDate = d),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(flex: 2, child: _buildDoctorFilter(state)),
+                        const SizedBox(width: 12),
+                        Expanded(flex: 2, child: _buildPatientFilter()),
+                        const SizedBox(width: 12),
+                        Expanded(flex: 2, child: _buildMotifFilter()),
+                        const SizedBox(width: 12),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 18),
+                          child: IconButton(
+                            onPressed: _resetFilters,
+                            icon: const Icon(Icons.refresh),
+                            tooltip: 'Reset Filters',
+                            color: Colors.orange,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         );
       },
