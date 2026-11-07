@@ -54,7 +54,7 @@ class SyncManager {
     SyncProgress(isSyncing: false),
   );
 
-  RemoteDatabaseService get _localDb => DatabaseManager.instance;
+  dynamic get _localDb => DatabaseManager.instance;
   dynamic get _remoteDb => DatabaseManager.secondary;
   final Uuid _uuid = const Uuid();
 

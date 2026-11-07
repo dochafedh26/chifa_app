@@ -486,16 +486,22 @@ class DatabaseManager {
             defaultTargetPlatform == TargetPlatform.iOS);
     final isWeb = kIsWeb;
 
-    // Logic:
-    // - Web: Use Octenium HTTP API relay
-    // - Mobile (Android/iOS): Connect directly to Octenium MySQL with HTTP relay fallback
-    // - Desktop (Windows): XAMPP as local primary, Octenium as sync (fallback to Octenium if XAMPP offline)
-    bool useOcteniumAsPrimary = isMobile || databaseType == 'octenium';
-    bool useWebApi = isWeb || databaseType == 'web';
+    // Architecture:
+    // - Mobile (Android/iOS), Web, or explicit 'octenium'/'web' mode:
+    //   Connect exclusively through the secure Chifa Node.js Backend API (https://chifa.medevsync.com/api)
+    //   without exposing direct MySQL port 3306 or DB credentials on clients.
+    // - Desktop (Windows 'xampp' mode):
+    //   Connect to local XAMPP MySQL (localhost:3306) as primary for ultra-fast local work,
+    //   and use ApiDatabaseService (HTTPS backend) as secondary for background cloud sync.
+    final useCloudBackendAsPrimary =
+        isWeb || isMobile || databaseType == 'octenium' || databaseType == 'web';
 
-    if (useWebApi) {
-      debugPrint('Initializing Octenium Web API service...');
+    if (useCloudBackendAsPrimary) {
+      debugPrint(
+        'Initializing Chifa Cloud Backend API service (${ApiConfig.baseUrl})...',
+      );
       _primary = null;
+      _secondary = null;
       _webApi = ApiDatabaseService();
       await _webApi!.connect();
       return;
@@ -503,61 +509,39 @@ class DatabaseManager {
 
     final candidatePrimary = RemoteDatabaseService();
 
-    if (useOcteniumAsPrimary) {
-      debugPrint('Connecting to Octenium as primary cloud database...');
+    debugPrint('Connecting to local XAMPP database as primary...');
+    try {
+      await candidatePrimary.connectToXampp();
+      await candidatePrimary.checkAndBootstrap();
+      _primary = candidatePrimary;
+      _webApi = null;
+
+      // Setup background sync connection to Chifa Cloud Backend over HTTPS
       try {
-        await candidatePrimary.connectToOctenium();
-        await candidatePrimary.checkAndBootstrap();
-        _primary = candidatePrimary;
-        _webApi = null;
+        debugPrint(
+          'Setting up background HTTPS sync connection to Chifa Cloud Backend...',
+        );
+        final apiService = ApiDatabaseService();
+        await apiService.connect();
+        _secondary = apiService;
+        debugPrint('Chifa Cloud Backend HTTPS sync connection established.');
+      } catch (e) {
+        debugPrint('Cloud HTTPS sync setup notice: $e');
         _secondary = null;
-      } catch (e) {
-        debugPrint('Direct Octenium MySQL connection notice ($e). Using Octenium HTTP API relay...');
-        _primary = null;
-        _webApi = ApiDatabaseService();
-        await _webApi!.connect();
-        return;
       }
-    } else {
-      debugPrint('Connecting to local database as primary...');
-      try {
-        await candidatePrimary.connectToXampp();
-        await candidatePrimary.checkAndBootstrap();
-        _primary = candidatePrimary;
-        _webApi = null;
 
-        // Setup background sync connection to Octenium on Desktop
-        final octeniumSync = RemoteDatabaseService();
-        try {
-          debugPrint('Setting up background sync connection to Octenium...');
-          await octeniumSync.connectToOctenium();
-          _secondary = octeniumSync;
-          debugPrint('Octenium background sync connection established.');
-        } catch (e) {
-          debugPrint('Direct Octenium sync notice: $e. Falling back to HTTP sync...');
-          try {
-            final apiService = ApiDatabaseService();
-            await apiService.connect();
-            _secondary = apiService;
-          } catch (_) {
-            _secondary = null;
-          }
-        }
-      } catch (e) {
-        debugPrint('Local database connection failed: $e');
-        rethrow;
+      // Run migrations on local XAMPP primary
+      if (_primary != null) {
+        await _primary!.runMigrations();
       }
-    }
-
-    // Run migrations on primary
-    if (_primary != null) {
-      await _primary!.runMigrations();
-    }
-
-    // Run migrations on secondary (Cloud) if it exists
-    if (_secondary != null && _secondary is RemoteDatabaseService) {
-      debugPrint('Running migrations on secondary database...');
-      await _secondary!.runMigrations();
+    } catch (e) {
+      debugPrint(
+        'Local XAMPP database connection failed ($e). Falling back to Chifa Cloud Backend API...',
+      );
+      _primary = null;
+      _secondary = null;
+      _webApi = ApiDatabaseService();
+      await _webApi!.connect();
     }
   }
 

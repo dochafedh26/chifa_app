@@ -259,7 +259,7 @@ class PvcAppointmentCardPdf {
       'nin': patient.nationalId ?? '',
       'adresse': patient.address ?? '',
       'portal_url':
-          'https://medevsync.com/chifa/?phone=${patient.phone ?? patient.patientId}&pin=${patient.dateOfBirth.year}',
+          'https://chifa.medevsync.com/?phone=${patient.phone ?? patient.patientId}&pin=${patient.dateOfBirth.year}',
       'uuid': patient.uuid ?? '',
       'cree_le': dateFormat.format(patient.createdAt),
     });

@@ -104,6 +104,8 @@ jobs:
       - name: Prepare Release Assets
         run: |
           mkdir -p release-assets
+          node backend/package_deploy.js
+          cp backend/chifa-backend-octenium.zip release-assets/chifa-backend-octenium.zip
           find android-release -name "*.apk" -exec cp {} release-assets/chifa-android.apk \;
           find android-release -name "*.aab" -exec cp {} release-assets/chifa-android.aab \;
           find windows-release -name "*.zip" -exec cp {} release-assets/chifa-windows.zip \;
@@ -116,5 +118,6 @@ jobs:
             release-assets/chifa-android.apk
             release-assets/chifa-android.aab
             release-assets/chifa-windows.zip
+            release-assets/chifa-backend-octenium.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

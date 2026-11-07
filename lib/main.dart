@@ -41,7 +41,6 @@ import 'package:chifa/services/db/repositories/prescription_repository.dart';
 import 'package:chifa/services/db/repositories/service_repository.dart';
 import 'package:chifa/services/db/repositories/soins_service_repository.dart';
 import 'package:chifa/services/db/sync_manager.dart';
-import 'package:chifa/services/db/sync_worker_manager.dart';
 import 'package:chifa/services/xampp_service.dart';
 import 'package:chifa/tunnel/services/settings_service.dart';
 import 'package:chifa/tunnel/services/tunnel_service.dart';
@@ -78,11 +77,6 @@ void main() async {
 
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
     await XamppService().startAll();
-    // Start sync worker for database synchronization
-    // Sync interval can be configured via .env (SYNC_INTERVAL_SECONDS)
-    if (!Platform.isMacOS) {
-      SyncWorkerManager().startWorker();
-    }
   }
 
   // Initialize local SQLite service for offline resilience (Desktop / Mobile only)

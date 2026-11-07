@@ -325,21 +325,29 @@ router.get('/pull', async (req, res) => {
   }
 });
 
-// ─── POST /api/sync/query (Web Client SQL Relay) ──────────────────────────────
+// ─── POST /api/sync/query (Client HTTPS SQL Relay) ────────────────────────────
 router.post('/query', async (req, res) => {
   const { sql, params, is_insert } = req.body;
   if (!sql || typeof sql !== 'string') {
     return res.status(400).json({ error: 'La requête SQL est requise.' });
   }
 
-  // Basic guard against destructive global drops
+  // Guard against destructive global drops or privilege changes
   const trimmed = sql.trim().toUpperCase();
-  if (trimmed.startsWith('DROP DATABASE') || trimmed.startsWith('DROP USER')) {
-    return res.status(403).json({ error: 'Opération interdite.' });
+  if (
+    trimmed.startsWith('DROP DATABASE') ||
+    trimmed.startsWith('DROP TABLE') ||
+    trimmed.startsWith('DROP USER') ||
+    trimmed.startsWith('TRUNCATE ') ||
+    trimmed.startsWith('GRANT ') ||
+    trimmed.startsWith('REVOKE ') ||
+    trimmed.startsWith('SHUTDOWN')
+  ) {
+    return res.status(403).json({ error: 'Opération SQL interdite.' });
   }
 
   try {
-    // Ensure all data created or updated from the Web app is tagged as cloud_server
+    // Ensure all data created or updated directly on the Cloud backend is tagged as cloud_server
     let processedSql = sql;
     if (processedSql.includes("'local_server'")) {
       processedSql = processedSql.replace(/'local_server'/g, "'cloud_server'");
@@ -348,9 +356,17 @@ router.post('/query', async (req, res) => {
       processedSql = processedSql.replace(/"local_server"/g, '"cloud_server"');
     }
 
-    const formattedParams = Array.isArray(params)
-      ? params.map(p => (p === 'local_server' ? 'cloud_server' : p))
-      : [];
+    let formattedParams = [];
+    if (Array.isArray(params)) {
+      formattedParams = params.map(p => (p === 'local_server' ? 'cloud_server' : p));
+    } else if (params && typeof params === 'object') {
+      // Support named parameters (:p0, :p1, ...) if passed from a client
+      processedSql = processedSql.replace(/:([a-zA-Z0-9_]+)/g, (_match, key) => {
+        const val = params[key];
+        formattedParams.push(val === 'local_server' ? 'cloud_server' : val);
+        return '?';
+      });
+    }
 
     const [result] = await db.query(processedSql, formattedParams);
 
@@ -367,7 +383,7 @@ router.post('/query', async (req, res) => {
     res.json({ success: true, data: result || [] });
   } catch (err) {
     console.error('[sync:query]', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message, success: false });
   }
 });
 

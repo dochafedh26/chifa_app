@@ -41,13 +41,13 @@ function rateLimiter(req, res, next) {
   try {
     const [cols] = await db.query("SHOW COLUMNS FROM employees LIKE 'is_active'");
     if (cols.length === 0) {
-      await db.query("ALTER TABLE employees ADD COLUMN IF NOT EXISTS is_active SMALLINT DEFAULT 1");
+      await db.query("ALTER TABLE employees ADD COLUMN is_active TINYINT(1) DEFAULT 1");
       console.log("[Auth] Added 'is_active' column to employees table.");
     }
     const [approvedCols] = await db.query("SHOW COLUMNS FROM employees LIKE 'approved_at'");
     if (approvedCols.length === 0) {
-      await db.query("ALTER TABLE employees ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP DEFAULT NULL");
-      await db.query("ALTER TABLE employees ADD COLUMN IF NOT EXISTS approved_by VARCHAR(100) DEFAULT NULL");
+      await db.query("ALTER TABLE employees ADD COLUMN approved_at DATETIME DEFAULT NULL");
+      await db.query("ALTER TABLE employees ADD COLUMN approved_by VARCHAR(100) DEFAULT NULL");
       console.log("[Auth] Added approval audit columns to employees table.");
     }
   } catch (e) {

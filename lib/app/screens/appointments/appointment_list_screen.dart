@@ -1509,7 +1509,7 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
         'dd/MM/yyyy à HH:mm',
       ).format(appointment.appointmentDate);
       final portalUrl =
-          'https://medevsync.com/chifa/?phone=${patient.phone ?? patient.patientId}&pin=${patient.dateOfBirth.year}';
+          'https://chifa.medevsync.com/?phone=${patient.phone ?? patient.patientId}&pin=${patient.dateOfBirth.year}';
 
       final message =
           'Bonjour ${patient.firstName} ${patient.lastName},\n\n'
@@ -1792,7 +1792,7 @@ class _QuickCheckInDialogState extends State<_QuickCheckInDialog> {
 
   Future<void> _openCameraOrPhoneScanner() async {
     final sessionId = 'scan_${DateTime.now().millisecondsSinceEpoch.toRadixString(36)}';
-    final scannerUrl = 'https://medevsync.com/chifa/scanner?session=$sessionId';
+    final scannerUrl = 'https://chifa.medevsync.com/scanner?session=$sessionId';
 
     Timer? pollTimer;
     bool isDialogClosed = false;
@@ -1808,7 +1808,7 @@ class _QuickCheckInDialogState extends State<_QuickCheckInDialog> {
           }
           try {
             final res = await http.get(
-              Uri.parse('https://medevsync.com/chifa/api/tv/scan-session/$sessionId'),
+              Uri.parse('https://chifa.medevsync.com/api/tv/scan-session/$sessionId'),
             ).timeout(const Duration(seconds: 2));
 
             if (res.statusCode == 200) {

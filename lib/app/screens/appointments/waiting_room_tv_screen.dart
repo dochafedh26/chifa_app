@@ -471,7 +471,7 @@ class _WaitingRoomTvScreenState extends State<WaitingRoomTvScreen>
                   ),
                   const SizedBox(width: 16),
                   const Text(
-                    'medevsync.com/chifa',
+                    'chifa.medevsync.com',
                     style: TextStyle(
                       color: Color(0xFF38BDF8),
                       fontSize: 13,

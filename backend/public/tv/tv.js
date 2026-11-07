@@ -41,7 +41,7 @@ const tips = [
   'En cas d\'urgence médicale signalée, veuillez avertir l\'accueil immédiatement.',
   'Veuillez respecter le calme et couper la sonnerie de votre téléphone.',
   'Le port du masque reste recommandé en cas de symptômes respiratoires.',
-  'Consultez vos bilans et ordonnances en ligne sur medevsync.com/chifa',
+  'Consultez vos bilans et ordonnances en ligne sur chifa.medevsync.com',
 ];
 let tipIndex = 0;
 setInterval(() => {

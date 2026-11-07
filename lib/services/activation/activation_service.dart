@@ -15,8 +15,8 @@ class ActivationService {
   static const String _kMachineId = 'chifa_machine_id';
   static const String _kClinicName = 'chifa_clinic_name';
 
-  // Base URL for Octenium Backend API (configured under /chifa in cPanel Node.js)
-  static String backendBaseUrl = 'https://medevsync.com/chifa';
+  // Base URL for Octenium Backend API (isolated on https://chifa.medevsync.com)
+  static String backendBaseUrl = 'https://chifa.medevsync.com';
 
   bool? _cachedActivated;
 
@@ -80,18 +80,19 @@ class ActivationService {
 
     final serverUrl = (customServerUrl ?? backendBaseUrl).replaceAll(RegExp(r'/+$'), '');
 
-    // Try direct root POST (which Apache never rewrites), query route, and REST paths
+    // Try chifa.medevsync.com endpoints first, with medevsync.com/chifa fallbacks
     final candidateEndpoints = <String>[
+      '$serverUrl/api/activation/verify',
+      '$serverUrl/?route=/activation/verify',
       '$serverUrl/',
       '$serverUrl/?action=verify',
-      '$serverUrl/?route=/activation/verify',
-      '$serverUrl/api/activation/verify',
       '$serverUrl/activation/verify',
-      'https://medevsync.com/chifa/',
-      'https://medevsync.com/chifa/?action=verify',
+      'https://chifa.medevsync.com/api/activation/verify',
+      'https://chifa.medevsync.com/?route=/activation/verify',
+      'https://chifa.medevsync.com/',
       'https://medevsync.com/chifa/?route=/activation/verify',
       'https://medevsync.com/chifa/api/activation/verify',
-      'https://medevsync.com/chifa/activation/verify',
+      'https://medevsync.com/chifa/',
     ];
 
     for (final endpoint in candidateEndpoints) {
@@ -152,7 +153,7 @@ class ActivationService {
 
     return {
       'success': false,
-      'error': "Impossible de joindre le serveur Cloud Chifa (https://medevsync.com/chifa). Assurez-vous d'avoir cliqué sur 'Restart' dans cPanel Node.js.",
+      'error': "Impossible de joindre le serveur Cloud Chifa (https://chifa.medevsync.com). Assurez-vous d'avoir cliqué sur 'Restart' dans cPanel Node.js.",
     };
   }
 

@@ -50,8 +50,8 @@ const upload = multer({
     // Add portal columns to patients table if not exists
     const [cols] = await db.query("SHOW COLUMNS FROM patients LIKE 'portal_pin_hash'");
     if (cols.length === 0) {
-      await db.query("ALTER TABLE patients ADD COLUMN IF NOT EXISTS portal_pin_hash VARCHAR(255) DEFAULT NULL");
-      await db.query("ALTER TABLE patients ADD COLUMN IF NOT EXISTS portal_access_enabled SMALLINT DEFAULT 1");
+      await db.query("ALTER TABLE patients ADD COLUMN portal_pin_hash VARCHAR(255) DEFAULT NULL");
+      await db.query("ALTER TABLE patients ADD COLUMN portal_access_enabled TINYINT(1) DEFAULT 1");
       console.log("[Portal] Added portal columns to patients table.");
     }
 

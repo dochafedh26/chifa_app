@@ -18,12 +18,81 @@ const notificationRoutes = require('./routes/notifications');
 const tvRoutes = require('./routes/tv');
 const db = require('./db');
 
-// Auto-migrate appointments.status to VARCHAR(50) to support waitingRoom
-(async () => {
+// Auto-migrate Octenium MySQL schema on startup so clients never need to run heavy DDL over HTTP
+(async function runStartupMigrations() {
   try {
-    await db.query('ALTER TABLE `appointments` MODIFY COLUMN `status` VARCHAR(50)');
-    console.log('[Chifa Backend] Ensured appointments.status is VARCHAR(50)');
-  } catch (_) {}
+    await db.query('ALTER TABLE `appointments` MODIFY COLUMN `status` VARCHAR(50) DEFAULT "Scheduled"').catch(() => {});
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS \`sync_status\` (
+        \`table_name\` varchar(50) NOT NULL,
+        \`last_push_at\` timestamp NOT NULL DEFAULT '1970-01-01 00:00:00',
+        \`last_pull_at\` timestamp NOT NULL DEFAULT '1970-01-01 00:00:00',
+        PRIMARY KEY (\`table_name\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+    `).catch(() => {});
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS \`hospitalizations\` (
+        \`id\` int(11) NOT NULL AUTO_INCREMENT,
+        \`patient_id\` int(11) NOT NULL,
+        \`admission_date\` datetime NOT NULL,
+        \`discharge_date\` datetime DEFAULT NULL,
+        \`diagnosis\` text DEFAULT NULL,
+        \`room_number\` varchar(50) DEFAULT NULL,
+        \`status\` enum('active','discharged','transferred') DEFAULT 'active',
+        \`uuid\` varchar(36) DEFAULT NULL,
+        \`updated_at\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        \`is_deleted\` tinyint(1) DEFAULT 0,
+        \`needs_sync\` tinyint(1) DEFAULT 0,
+        PRIMARY KEY (\`id\`),
+        UNIQUE KEY \`idx_hosp_uuid\` (\`uuid\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `).catch(() => {});
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS \`patients_fideles\` (
+        \`id\` int(11) NOT NULL AUTO_INCREMENT,
+        \`patient_id\` int(11) NOT NULL,
+        \`medical_records_count\` int(11) NOT NULL DEFAULT 0,
+        \`created_at\` timestamp NOT NULL DEFAULT current_timestamp(),
+        \`updated_at\` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+        PRIMARY KEY (\`id\`),
+        UNIQUE KEY \`patient_id\` (\`patient_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `).catch(() => {});
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS \`patients_suivi\` (
+        \`id\` int(11) NOT NULL AUTO_INCREMENT,
+        \`patient_id\` int(11) NOT NULL,
+        \`doctor_id\` int(11) DEFAULT 1,
+        \`pathologies\` text DEFAULT NULL,
+        \`created_at\` timestamp NOT NULL DEFAULT current_timestamp(),
+        \`updated_at\` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+        PRIMARY KEY (\`id\`),
+        UNIQUE KEY \`patient_id\` (\`patient_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `).catch(() => {});
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS \`patient_suivi_categories\` (
+        \`id\` int(11) NOT NULL AUTO_INCREMENT,
+        \`patient_id\` int(11) NOT NULL,
+        \`category\` varchar(100) NOT NULL,
+        PRIMARY KEY (\`id\`),
+        KEY \`idx_psc_patient\` (\`patient_id\`),
+        KEY \`idx_psc_category\` (\`category\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `).catch(() => {});
+
+    // Ensure modern_prescriptions.id has AUTO_INCREMENT
+    const [mpCols] = await db.query(
+      "SELECT EXTRA FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'modern_prescriptions' AND column_name = 'id'"
+    ).catch(() => [[]]);
+    if (mpCols && mpCols.length > 0 && !String(mpCols[0].EXTRA || mpCols[0].extra || '').toLowerCase().includes('auto_increment')) {
+      await db.query('ALTER TABLE `modern_prescriptions` MODIFY `id` int(11) NOT NULL AUTO_INCREMENT').catch(() => {});
+    }
+
+    console.log('[Chifa Backend] Startup schema checks completed.');
+  } catch (err) {
+    console.warn('[Chifa Backend] Startup schema check notice:', err.message);
+  }
 })();
 
 const app = express();
@@ -47,9 +116,16 @@ app.use(
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Sync-Key'],
+    exposedHeaders: ['X-Chifa-Backend'],
   })
 );
 app.options('*', cors());
+
+// Identify every response as originating from Chifa Node.js Backend
+app.use((req, res, next) => {
+  res.setHeader('X-Chifa-Backend', '1');
+  next();
+});
 
 // ─── TRUST PROXY (for cPanel / Passenger / Nginx) ───────────────────────────
 app.enable('trust proxy');
@@ -139,6 +215,37 @@ app.use('/portal', express.static(portalStaticDir));
 app.use('/chifa', express.static(portalStaticDir));
 app.use('/chifa/portal', express.static(portalStaticDir));
 
+// ─── QUERY ROUTER & PASSENGER DIRECT POST FALLBACKS ─────────────────────────
+// Handles environments where Apache parent .htaccess catches sub-paths
+app.use((req, res, next) => {
+  if (req.query && req.query.route) {
+    const target = req.query.route.startsWith('/') ? req.query.route : `/${req.query.route}`;
+    req.url = `/chifa/api${target}`;
+  }
+  next();
+});
+
+// Direct POST to / or /chifa or /chifa/ (auto-detects sync query, sync push, activation, or portal login)
+app.post(['/', '/chifa', '/chifa/'], (req, res, next) => {
+  if (req.body && typeof req.body.sql === 'string') {
+    req.url = '/query';
+    return syncRoutes(req, res, next);
+  }
+  if (req.body && req.body.changes && typeof req.body.changes === 'object') {
+    req.url = '/push';
+    return syncRoutes(req, res, next);
+  }
+  if (req.body && (req.body.key || req.body.activation_key || req.query.action === 'verify')) {
+    req.url = '/verify';
+    return activationRoutes(req, res, next);
+  }
+  if (req.body && (req.body.phone || req.body.cin) && req.body.pin) {
+    req.url = '/login';
+    return portalRoutes(req, res, next);
+  }
+  next();
+});
+
 // Serve index.html for root, /chifa, /chifa/, /portal, /portal/, and /chifa/portal
 app.get([
   '/', 
@@ -150,31 +257,11 @@ app.get([
   '/chifa/portal',
   '/chifa/portal/',
   '/chifa/portal/index.html'
-], (req, res) => {
-  res.sendFile(path.join(portalStaticDir, 'index.html'));
-});
-
-// ─── QUERY ROUTER & PASSENGER DIRECT POST FALLBACKS ─────────────────────────
-// Handles environments where Apache parent .htaccess catches sub-paths
-app.use((req, res, next) => {
+], (req, res, next) => {
   if (req.query && req.query.route) {
-    const target = req.query.route.startsWith('/') ? req.query.route : `/${req.query.route}`;
-    req.url = `/chifa/api${target}`;
+    return next();
   }
-  next();
-});
-
-// Direct POST to / or /chifa or /chifa/ (auto-detects activation vs portal login)
-app.post(['/', '/chifa', '/chifa/'], (req, res, next) => {
-  if (req.body && (req.body.key || req.body.activation_key || req.query.action === 'verify')) {
-    req.url = '/verify';
-    return activationRoutes(req, res, next);
-  }
-  if (req.body && (req.body.phone || req.body.cin) && req.body.pin) {
-    req.url = '/login';
-    return portalRoutes(req, res, next);
-  }
-  next();
+  res.sendFile(path.join(portalStaticDir, 'index.html'));
 });
 
 // ─── STATIC SMART TV DISPLAY ──────────────────────────────────────────────────
