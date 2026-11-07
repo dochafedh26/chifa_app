@@ -4,10 +4,19 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 class ApiConfig {
-  // Supabase cloud backend API base URL
+  // Supabase Cloud Configuration
+  static String get supabaseUrl =>
+      dotenv.env['SUPABASE_URL'] ?? 'https://orvdwwuzmcfrbtkwsosc.supabase.co';
+  static String get supabaseAnonKey =>
+      dotenv.env['SUPABASE_ANON_KEY'] ??
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ydmR3d3V6bWNmcmJ0a3dzb3NjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0Njk3NTgsImV4cCI6MjEwMDA0NTc1OH0.2r8w_2LW-z3HfmZpEpWnsxOdWubbX3yLSUdnUppouZs';
+
+  static String get executeSqlRpcUrl =>
+      '$supabaseUrl/rest/v1/rpc/execute_sql';
+
+  // Legacy backend API base URL
   static String get baseUrl {
     if (kIsWeb) {
-      // In browser, dynamically use the current host origin (e.g. https://medevsync.com)
       final currentOrigin = Uri.base.origin;
       return '$currentOrigin/chifa/api';
     }
@@ -19,7 +28,7 @@ class ApiConfig {
   }
 
   static String get syncKey => dotenv.env['SYNC_KEY'] ?? 'chifa_sync_secure_key_2026';
-  static const Duration timeout = Duration(seconds: 30);
+  static const Duration timeout = Duration(seconds: 25);
 }
 
 class HttpApiService {
@@ -34,11 +43,60 @@ class HttpApiService {
     'X-Sync-Key': ApiConfig.syncKey,
   };
 
+  /// Safely format parameterized SQL query for Supabase PostgreSQL RPC
+  String _formatSql(String sql, List<dynamic>? params) {
+    if (params == null || params.isEmpty) return sql;
+    int index = 0;
+    return sql.replaceAllMapped(RegExp(r'\?'), (match) {
+      if (index >= params.length) return '?';
+      final val = params[index++];
+      if (val == null) return 'NULL';
+      if (val is num) return val.toString();
+      if (val is bool) return val ? '1' : '0';
+      if (val is DateTime) {
+        final formatted = val.toIso8601String().replaceAll('T', ' ');
+        return "'${formatted.length >= 19 ? formatted.substring(0, 19) : formatted}'";
+      }
+      final str = val.toString().replaceAll("'", "''");
+      return "'$str'";
+    });
+  }
+
   Future<Map<String, dynamic>> postQuery({
     required String sql,
     List<dynamic>? params,
     bool isInsert = false,
   }) async {
+    final formattedSql = _formatSql(sql, params);
+
+    // 1. Prioritize direct Supabase Serverless Cloud RPC
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.executeSqlRpcUrl),
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': ApiConfig.supabaseAnonKey,
+          'Authorization': 'Bearer ${ApiConfig.supabaseAnonKey}',
+        },
+        body: jsonEncode({
+          'p_sql': formattedSql,
+          'p_is_insert': isInsert,
+        }),
+      ).timeout(ApiConfig.timeout);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is Map<String, dynamic>) {
+          return data;
+        } else if (data is List) {
+          return {'success': true, 'data': data};
+        }
+      }
+    } catch (e) {
+      debugPrint('[HttpApiService] Direct Supabase RPC notice: $e');
+    }
+
+    // 2. Fallback to candidate Express / cPanel backend relay
     final candidateUris = <Uri>[
       Uri.parse('${ApiConfig.baseUrl}/sync/query'),
     ];
@@ -58,8 +116,8 @@ class HttpApiService {
           uri,
           headers: _headers,
           body: jsonEncode({
-            'sql': sql,
-            'params': params ?? [],
+            'sql': formattedSql,
+            'params': [],
             'is_insert': isInsert,
           }),
         ).timeout(ApiConfig.timeout);

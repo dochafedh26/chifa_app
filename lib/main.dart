@@ -84,14 +84,20 @@ void main() async {
     }
   }
 
-  // Initialize database (Web uses HTTP API directly to Octenium Cloud)
+  // Initialize database (Mobile/Tablet and Web use direct Supabase Cloud)
   try {
-    if (kIsWeb) {
-      await DatabaseManager.initialize(databaseType: 'web');
+    final isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+    if (kIsWeb || isMobile) {
+      await DatabaseManager.initialize(databaseType: 'supabase');
     } else {
-      await DatabaseManager.initialize(databaseType: 'xampp');
-      // Automatically keep Windows local database synchronized with Octenium cloud
-      SyncManager().startPeriodicSync();
+      try {
+        await DatabaseManager.initialize(databaseType: 'xampp');
+        // Automatically keep Windows local database synchronized with Supabase cloud
+        SyncManager().startPeriodicSync();
+      } catch (e) {
+        debugPrint('Local XAMPP failed, falling back to Supabase Cloud: $e');
+        await DatabaseManager.initialize(databaseType: 'supabase');
+      }
     }
   } catch (e) {
     debugPrint('Database initialization failed: $e');

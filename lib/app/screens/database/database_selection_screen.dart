@@ -12,7 +12,7 @@ class DatabaseSelectionScreen extends StatefulWidget {
 
 class _DatabaseSelectionScreenState extends State<DatabaseSelectionScreen> {
   bool _isLoading = false;
-  String _selectedDatabaseType = 'xampp'; // Default option
+  String _selectedDatabaseType = 'supabase'; // Default option
   bool _rememberChoice = false;
 
   Future<void> _initializeDatabaseConnection() async {
@@ -32,9 +32,9 @@ class _DatabaseSelectionScreenState extends State<DatabaseSelectionScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              (_selectedDatabaseType == 'octenium')
-                  ? 'Successfully connected to Remote Database (Octenium)! 🚀'
-                  : 'Successfully connected to Local Database!',
+              (_selectedDatabaseType == 'supabase')
+                  ? 'Connecté avec succès à Supabase Cloud ! 🚀'
+                  : (_selectedDatabaseType == 'octenium' ? 'Connecté à Octenium !' : 'Connecté à la base locale XAMPP !'),
             ),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 3),
@@ -73,8 +73,8 @@ class _DatabaseSelectionScreenState extends State<DatabaseSelectionScreen> {
                 const SizedBox(height: 16),
                 SegmentedButton<String>(
                   segments: const [
+                    ButtonSegment(value: 'supabase', label: Text('Supabase Cloud')),
                     ButtonSegment(value: 'xampp', label: Text('XAMPP (Local)')),
-                    ButtonSegment(value: 'octenium', label: Text('Octenium')),
                   ],
                   selected: {_selectedDatabaseType},
                   onSelectionChanged: (Set<String> newSelection) {

@@ -770,12 +770,19 @@ class LocalSqliteService {
     ]);
   }
 
-  Future<Map<String, dynamic>?> getCachedEmployee(String email) async {
+  Future<Map<String, dynamic>?> getCachedEmployee(String identifier) async {
     if (kIsWeb) return null;
     final db = await database;
+    final clean = identifier.toLowerCase().trim();
+    String alias = clean;
+    if (clean == 'toumi' || clean == 'touami') {
+      alias = 'touami@gmail.com';
+    } else if (!clean.contains('@')) {
+      alias = '$clean@gmail.com';
+    }
     final rows = await db.rawQuery(
-      'SELECT * FROM cached_employees WHERE LOWER(email) = ? OR phone = ? LIMIT 1',
-      [email.toLowerCase().trim(), email.trim()],
+      'SELECT * FROM cached_employees WHERE LOWER(email) = ? OR LOWER(email) = ? OR phone = ? OR LOWER(last_name) LIKE ? LIMIT 1',
+      [clean, alias, identifier.trim(), '%$clean%'],
     );
     if (rows.isEmpty) return null;
     return rows.first;
