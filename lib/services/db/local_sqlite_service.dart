@@ -26,7 +26,7 @@ class LocalSqliteService {
     if (_initialized && _db != null && _db!.isOpen) return;
 
     try {
-      if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      if (!kIsWeb) {
         sqfliteFfiInit();
         databaseFactory = databaseFactoryFfi;
       }
@@ -95,6 +95,23 @@ class LocalSqliteService {
         last_login_at TEXT
       )
     ''');
+
+    // Seed default clinic accounts for offline resilience on first launch
+    try {
+      await db.execute('''
+        INSERT OR IGNORE INTO cached_employees
+          (employee_id, uuid, first_name, last_name, role, specialization, email, phone, password_hash, access_level, is_active)
+        VALUES
+          (41, 'f783118e-4343-11f1-9b11-c43d1a0313fd', 'DR', 'CHIKH TOUAMI', 'Doctor', 'MEDECIN GENERALISTE', 'touami@gmail.com', '0770258453', '\$2a\$10\$iG68392E19pkwT6ErXIRKuPjF4gpNey7z.RIOkYqmFYt6abtYwKbG', 'Admin', 1),
+          (34, 'f7831000-4343-11f1-9b11-c43d1a0313fd', 'admin', 'admin', 'Admin', NULL, 'admin@gmail.com', '000', '\$2a\$10\$iG68392E19pkwT6ErXIRKuPjF4gpNey7z.RIOkYqmFYt6abtYwKbG', 'Admin', 1),
+          (38, 'f7831038-4343-11f1-9b11-c43d1a0313fd', 'dr', 'herhour', 'Doctor', NULL, 'herhour@gmail.com', '0784125220', '\$2y\$10\$Mm.lCjuk6OltxIzmqaGqDexLO160ocuyqZk4PDN892rKx6KgMVV5a', 'Doctor', 1),
+          (39, 'f7831039-4343-11f1-9b11-c43d1a0313fd', 'dr', 'temamra', 'Doctor', NULL, 'temamra@gmail.com', '0774104063', '\$2y\$10\$.6zF7KNNW.d6IE47nGZ1teWQb3bCEtxSkLr.FNXwDIREdmJZ1.Xxq', 'Doctor', 1),
+          (40, 'f7831040-4343-11f1-9b11-c43d1a0313fd', 'Dr', 'DJEKKOUNE', 'Doctor', NULL, 'djekkoune@gmail.com', '0671093824', '\$2y\$10\$tx.w.bQ9AeCatx9gqK5NEemVFEoyWbgNaVZkEMYVmAxk4M7T2A0UO', 'Doctor', 1),
+          (42, 'f7831042-4343-11f1-9b11-c43d1a0313fd', 'dr', 'tarasraste', 'Doctor', NULL, 'taresraset@gmail.com', '0791609772', '\$2y\$10\$z5y4kIQj3X23mfYbY.2CFesA1ayiErEwgT/vEburMtBPmxAP/m/.W', 'Admin', 1),
+          (46, 'f7831046-4343-11f1-9b11-c43d1a0313fd', 'menndaci', 'sara', 'Doctor', NULL, 'mendaci@gmail.com', '', '\$2y\$10\$Ypd9/7rv/cjZ/PcE1BTaReCM08kmyWFwwCg9bwKH4bFtqr9FGALJq', 'Admin', 1),
+          (32, 'f7831032-4343-11f1-9b11-c43d1a0313fd', 'assistante', 'assistante', 'Nurse', NULL, 'assistante@gmail.com', '00', '\$2a\$10\$fDZ6CDHWpmM4RzPhiwK.3utr8k6R20crPiesLoBHOPV/HXgLikISa', 'Nurse', 1)
+      ''');
+    } catch (_) {}
 
     // 2. Sync tracking
     await db.execute('''

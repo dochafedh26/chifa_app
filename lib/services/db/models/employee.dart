@@ -58,22 +58,26 @@ class Employee extends Equatable {
 
   factory Employee.fromMap(Map<String, dynamic> map) {
     return Employee(
-      employeeId: map['employee_id'] as int?,
+      employeeId: map['employee_id'] is int
+          ? map['employee_id'] as int
+          : int.tryParse(map['employee_id']?.toString() ?? ''),
       firstName: map['first_name']?.toString() ?? '',
       lastName: map['last_name']?.toString() ?? '',
       role: EmployeeRole.values.firstWhere(
         (e) => e.name.toLowerCase() == map['role']?.toString().toLowerCase(),
         orElse: () => EmployeeRole.nurse,
       ),
-      specialization: map['specialization'] as String?,
+      specialization: map['specialization']?.toString(),
       email: map['email']?.toString() ?? '',
-      phone: map['phone'] as String?,
+      phone: map['phone']?.toString(),
       password: map['password']?.toString() ?? '',
       accessLevel: AccessLevel.values.firstWhere(
         (e) => e.name.toLowerCase() == map['access_level']?.toString().toLowerCase(),
         orElse: () => AccessLevel.nurse,
       ),
-      patientId: map['patient_id'] as int?,
+      patientId: map['patient_id'] is int
+          ? map['patient_id'] as int
+          : int.tryParse(map['patient_id']?.toString() ?? ''),
       isActive: map['is_active'] == null ||
           map['is_active'] == 1 ||
           map['is_active'] == true ||
@@ -81,14 +85,16 @@ class Employee extends Equatable {
       workSchedule: map['work_schedule'] != null
           ? (map['work_schedule'] is DateTime
               ? map['work_schedule'] as DateTime
-              : DateTime.parse(map['work_schedule'] as String))
+              : DateTime.tryParse(map['work_schedule'].toString()))
           : null,
       createdAt: map['created_at'] is DateTime
           ? map['created_at'] as DateTime
-          : DateTime.parse(map['created_at'] as String),
+          : (DateTime.tryParse(map['created_at']?.toString() ?? '') ??
+              DateTime.now()),
       updatedAt: map['updated_at'] is DateTime
           ? map['updated_at'] as DateTime
-          : DateTime.parse(map['updated_at'] as String),
+          : (DateTime.tryParse(map['updated_at']?.toString() ?? '') ??
+              DateTime.now()),
     );
   }
 

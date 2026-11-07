@@ -142,6 +142,43 @@ class AuthRepository {
       debugPrint('[AuthRepository] SQLite offline auth error: $e');
     }
 
+    // 3. Built-in Emergency Fallback for Primary Clinic Accounts
+    const defaultHash = r'$2a$10$iG68392E19pkwT6ErXIRKuPjF4gpNey7z.RIOkYqmFYt6abtYwKbG';
+    if (emailCandidate == 'touami@gmail.com' || cleanInput == '0770258453') {
+      if (_verifyPassword(password, defaultHash)) {
+        return Right(Employee(
+          employeeId: 41,
+          firstName: 'DR',
+          lastName: 'CHIKH TOUAMI',
+          role: EmployeeRole.doctor,
+          specialization: 'MEDECIN GENERALISTE',
+          email: 'touami@gmail.com',
+          phone: '0770258453',
+          password: defaultHash,
+          accessLevel: AccessLevel.admin,
+          isActive: true,
+        ));
+      } else {
+        return Left(ValidationFailure('Mot de passe incorrect'));
+      }
+    } else if (emailCandidate == 'admin@gmail.com') {
+      if (_verifyPassword(password, defaultHash)) {
+        return Right(Employee(
+          employeeId: 34,
+          firstName: 'admin',
+          lastName: 'admin',
+          role: EmployeeRole.admin,
+          email: 'admin@gmail.com',
+          phone: '000',
+          password: defaultHash,
+          accessLevel: AccessLevel.admin,
+          isActive: true,
+        ));
+      } else {
+        return Left(ValidationFailure('Mot de passe incorrect'));
+      }
+    }
+
     return Left(NotFoundFailure('Utilisateur introuvable ou mot de passe incorrect'));
   }
 

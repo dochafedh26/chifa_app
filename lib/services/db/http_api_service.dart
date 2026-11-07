@@ -4,12 +4,42 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 class ApiConfig {
-  // Supabase Cloud Configuration
-  static String get supabaseUrl =>
-      dotenv.env['SUPABASE_URL'] ?? 'https://orvdwwuzmcfrbtkwsosc.supabase.co';
-  static String get supabaseAnonKey =>
-      dotenv.env['SUPABASE_ANON_KEY'] ??
+  static const String _defaultSupabaseUrl =
+      'https://orvdwwuzmcfrbtkwsosc.supabase.co';
+  static const String _defaultSupabaseAnonKey =
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ydmR3d3V6bWNmcmJ0a3dzb3NjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0Njk3NTgsImV4cCI6MjEwMDA0NTc1OH0.2r8w_2LW-z3HfmZpEpWnsxOdWubbX3yLSUdnUppouZs';
+
+  static String? _safeEnv(String key) {
+    try {
+      if (dotenv.isInitialized) {
+        return dotenv.env[key]?.trim();
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  // Supabase Cloud Configuration
+  static String get supabaseUrl {
+    final envVal = _safeEnv('SUPABASE_URL');
+    if (envVal == null ||
+        envVal.isEmpty ||
+        envVal.contains('your_supabase') ||
+        !envVal.startsWith('http')) {
+      return _defaultSupabaseUrl;
+    }
+    return envVal.replaceAll(RegExp(r'/+$'), '');
+  }
+
+  static String get supabaseAnonKey {
+    final envVal = _safeEnv('SUPABASE_ANON_KEY');
+    if (envVal == null ||
+        envVal.isEmpty ||
+        envVal.contains('your_supabase') ||
+        !envVal.startsWith('eyJ')) {
+      return _defaultSupabaseAnonKey;
+    }
+    return envVal;
+  }
 
   static String get executeSqlRpcUrl =>
       '$supabaseUrl/rest/v1/rpc/execute_sql';
@@ -20,14 +50,17 @@ class ApiConfig {
       final currentOrigin = Uri.base.origin;
       return '$currentOrigin/chifa/api';
     }
-    final envUrl = dotenv.env['BACKEND_API_URL'];
-    if (envUrl != null && envUrl.isNotEmpty) {
+    final envUrl = _safeEnv('BACKEND_API_URL');
+    if (envUrl != null &&
+        envUrl.isNotEmpty &&
+        !envUrl.contains('localhost:3000')) {
       return envUrl;
     }
     return 'https://srv50.octenium.net/chifa/api';
   }
 
-  static String get syncKey => dotenv.env['SYNC_KEY'] ?? 'chifa_sync_secure_key_2026';
+  static String get syncKey =>
+      _safeEnv('SYNC_KEY') ?? 'chifa_sync_secure_key_2026';
   static const Duration timeout = Duration(seconds: 25);
 }
 

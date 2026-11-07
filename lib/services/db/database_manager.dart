@@ -343,23 +343,28 @@ class DatabaseManager {
 
     if (useWebApi) {
       debugPrint('Initializing Supabase Cloud API service...');
+      _primary = null;
       _webApi = ApiDatabaseService();
       await _webApi!.connect();
       return;
     }
 
-    _primary = RemoteDatabaseService();
+    final candidatePrimary = RemoteDatabaseService();
 
     if (databaseType == 'octenium') {
       debugPrint('Connecting to legacy Octenium as primary database...');
-      await _primary!.connectToOctenium();
-      await _primary!.checkAndBootstrap();
+      await candidatePrimary.connectToOctenium();
+      await candidatePrimary.checkAndBootstrap();
+      _primary = candidatePrimary;
+      _webApi = null;
       _secondary = null;
     } else {
       debugPrint('Connecting to local database as primary...');
       try {
-        await _primary!.connectToXampp();
-        await _primary!.checkAndBootstrap();
+        await candidatePrimary.connectToXampp();
+        await candidatePrimary.checkAndBootstrap();
+        _primary = candidatePrimary;
+        _webApi = null;
 
         // Setup background sync connection to Supabase cloud backend on Desktop
         final apiService = ApiDatabaseService();
@@ -374,7 +379,6 @@ class DatabaseManager {
         }
       } catch (e) {
         debugPrint('Local database connection failed: $e');
-        _primary = null;
         rethrow;
       }
     }
@@ -393,7 +397,9 @@ class DatabaseManager {
 
   static dynamic get instance {
     if (_webApi != null) return _webApi;
-    return _primary!;
+    if (_primary != null) return _primary;
+    _webApi = ApiDatabaseService()..connect();
+    return _webApi;
   }
 
   static ApiDatabaseService? get webApi => _webApi;
