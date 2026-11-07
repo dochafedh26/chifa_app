@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/vidal/vidal_indication_service.dart';
 import '../../services/db/database.dart';
+import '../../services/db/http_api_service.dart';
 
 class VidalIndicationSearchDialog extends StatefulWidget {
   final String? initialQuery;
@@ -68,14 +69,37 @@ class _VidalIndicationSearchDialogState
 
     if (!mounted) return;
 
-    if (result != null && result.status == 'success') {
+    if (result != null &&
+        result.status == 'success' &&
+        result.indications.isNotEmpty) {
+      var meds = result.medications;
+      if (meds.isEmpty) {
+        meds = await _fetchLocalMedications(result.indications.first.title);
+      }
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
         _indications = result.indications;
-        _medications = result.medications;
-        if (result.indications.isNotEmpty) {
-          _selectedIndication = result.indications.first;
-        }
+        _medications = meds;
+        _selectedIndication = result.indications.first;
+      });
+      return;
+    }
+
+    // Fallback to local/cloud Algerian medication database (medalgeriemedics)
+    final localMeds = await _fetchLocalMedications(trimmed);
+    if (!mounted) return;
+
+    if (localMeds.isNotEmpty) {
+      final fallbackInd = VidalIndicationItem(
+        title: 'Indication : $trimmed (Nomenclature Algérienne)',
+        url: '',
+      );
+      setState(() {
+        _isLoading = false;
+        _indications = [fallbackInd];
+        _selectedIndication = fallbackInd;
+        _medications = localMeds;
       });
     } else {
       setState(() {
@@ -117,23 +141,33 @@ class _VidalIndicationSearchDialogState
 
     if (combined.contains('otite')) {
       keywords.addAll(['otite', 'oflocet', 'polydexa', 'amoxicilline', 'augmentin', 'ciprofloxacine']);
-    } else if (combined.contains('angine')) {
-      keywords.addAll(['angine', 'amoxicilline', 'augmentin', 'cefuroxime', 'azithromycine']);
+    } else if (combined.contains('angine') || combined.contains('pharyng')) {
+      keywords.addAll(['angine', 'amoxicilline', 'augmentin', 'cefuroxime', 'azithromycine', 'maxilase']);
     } else if (combined.contains('hta') || combined.contains('hypertension')) {
       keywords.addAll(['hypertension', 'amlodipine', 'enalapril', 'lisinopril', 'ramipril', 'valsartan']);
     } else if (combined.contains('diab')) {
-      keywords.addAll(['diabete', 'metformine', 'gliclazide', 'insuline']);
+      keywords.addAll(['diabete', 'metformine', 'gliclazide', 'insuline', 'glimepiride']);
     } else if (combined.contains('asthme') || combined.contains('bronch')) {
-      keywords.addAll(['asthme', 'ventoline', 'salbutamol', 'seretide']);
+      keywords.addAll(['asthme', 'ventoline', 'salbutamol', 'budesonide', 'montelukast']);
+    } else if (combined.contains('fievre') || combined.contains('fièvre') || combined.contains('douleur') || combined.contains('cephalee')) {
+      keywords.addAll(['paracetamol', 'doliprane', 'efferalgan', 'ibuprofene']);
+    } else if (combined.contains('toux')) {
+      keywords.addAll(['carbocisteine', 'ambroxol', 'oxomemazine', 'toplexil']);
+    } else if (combined.contains('gastr') || combined.contains('ulcer') || combined.contains('reflux') || combined.contains('rgo')) {
+      keywords.addAll(['omeprazole', 'esomeprazole', 'pantoprazole', 'famotidine', 'alginate']);
+    } else if (combined.contains('allerg') || combined.contains('rhinit') || combined.contains('urtic')) {
+      keywords.addAll(['cetirizine', 'loratadine', 'desloratadine', 'fexofenadine']);
+    } else if (combined.contains('diarrh')) {
+      keywords.addAll(['diosmectite', 'loperamide', 'racecadotril', 'nifuroxazide']);
+    } else if (combined.contains('urin') || combined.contains('cystit')) {
+      keywords.addAll(['fosfomycine', 'ciprofloxacine', 'cefixime', 'nitrofurantoine']);
     } else {
       final words = combined
           .replaceAll(RegExp(r'[^\w\s]'), '')
-          .split(' ')
-          .where((s) => s.length > 2 && !['des', 'les', 'par', 'aux', 'sur', 'pour', 'chez', 'avec', 'traitement', 'aigu', 'chronique'].contains(s))
+          .split(RegExp(r'\s+'))
+          .where((s) => s.length > 2 && !['des', 'les', 'par', 'aux', 'sur', 'pour', 'chez', 'avec', 'traitement', 'aigu', 'chronique', 'indication', 'nomenclature', 'algerienne'].contains(s))
           .toList();
-      if (words.isNotEmpty) {
-        keywords.add(words.first);
-      }
+      keywords.addAll(words);
     }
     return keywords;
   }
@@ -144,12 +178,27 @@ class _VidalIndicationSearchDialogState
       if (keywords.isEmpty) return [];
 
       final Set<String> medNames = {};
-      for (final kw in keywords.take(3)) {
-        final rows = await DatabaseService().query(
-          '''SELECT name, dci, dosage, formulation FROM medicaments 
-             WHERE indication LIKE ? OR name LIKE ? OR dci LIKE ? LIMIT 20''',
-          ['%$kw%', '%$kw%', '%$kw%'],
-        );
+      const sql = '''SELECT name, dci, dosage, formulation FROM medalgeriemedics 
+             WHERE indication LIKE ? OR category LIKE ? OR name LIKE ? OR dci LIKE ? LIMIT 25''';
+
+      for (final kw in keywords.take(4)) {
+        final pattern = '%$kw%';
+        List<Map<String, dynamic>> rows = [];
+        try {
+          rows = await DatabaseService().query(
+            sql,
+            [pattern, pattern, pattern, pattern],
+          );
+        } catch (_) {}
+
+        if (rows.isEmpty) {
+          try {
+            rows = await ApiDatabaseService().query(
+              sql,
+              [pattern, pattern, pattern, pattern],
+            );
+          } catch (_) {}
+        }
 
         for (final r in rows) {
           final name = (r['name'] ?? '').toString().trim();

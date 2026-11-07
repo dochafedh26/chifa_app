@@ -260,7 +260,7 @@ class DatabaseMigrations {
         );
       }
 
-      // ── medalgeriemedics: add posologie_adulte and posologie_pediatrique columns ───────────────────
+      // ── medalgeriemedics: add posologie_adulte, posologie_pediatrique, dosage, conditionnement, liste columns ───────────────────
       if (!await db.columnExists('medalgeriemedics', 'posologie_adulte')) {
         await db.execute(
           'ALTER TABLE medalgeriemedics ADD COLUMN posologie_adulte TEXT DEFAULT NULL',
@@ -269,6 +269,21 @@ class DatabaseMigrations {
       if (!await db.columnExists('medalgeriemedics', 'posologie_pediatrique')) {
         await db.execute(
           'ALTER TABLE medalgeriemedics ADD COLUMN posologie_pediatrique TEXT DEFAULT NULL',
+        );
+      }
+      if (!await db.columnExists('medalgeriemedics', 'dosage')) {
+        await db.execute(
+          'ALTER TABLE medalgeriemedics ADD COLUMN dosage VARCHAR(255) DEFAULT NULL',
+        );
+      }
+      if (!await db.columnExists('medalgeriemedics', 'conditionnement')) {
+        await db.execute(
+          'ALTER TABLE medalgeriemedics ADD COLUMN conditionnement VARCHAR(255) DEFAULT NULL',
+        );
+      }
+      if (!await db.columnExists('medalgeriemedics', 'liste')) {
+        await db.execute(
+          'ALTER TABLE medalgeriemedics ADD COLUMN liste VARCHAR(100) DEFAULT NULL',
         );
       }
 

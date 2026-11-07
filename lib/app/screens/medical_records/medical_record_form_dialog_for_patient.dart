@@ -30,6 +30,7 @@ import 'package:chifa/app/printing/ordonnance.dart';
 import 'package:chifa/app/printing/preview.dart';
 import 'package:chifa/app/printing/soins_medicaux.dart';
 import 'package:chifa/services/db/database.dart';
+import 'package:chifa/services/db/http_api_service.dart';
 import 'package:chifa/services/db/models/appointment.dart';
 import 'package:chifa/services/db/models/arret_de_travail.dart';
 import 'package:chifa/services/db/models/certificat_aptitude_sport.dart';
@@ -495,15 +496,19 @@ class _MedicalRecordFormDialogForPatientState
 
   Future<void> _searchMedicament(String query) async {
     _debounceTimer?.cancel();
-    if (query.trim().isEmpty) {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) {
       setState(() => _searchResults = []);
       return;
     }
-    _debounceTimer = Timer(const Duration(milliseconds: 400), () async {
+    _debounceTimer = Timer(const Duration(milliseconds: 350), () async {
+      if (!mounted) return;
       setState(() => _isSearching = true);
-      try {
-        final results = await DatabaseService().query(
-          '''SELECT id, name, dci, indication, manufacturer, category, formulation, origin, dosage, conditionnement, liste, posologie, posologie_adulte, posologie_pediatrique 
+      final exactPattern = '%$trimmed%';
+      final flexPattern = '%${trimmed.replaceAll(RegExp(r'\s+'), '%')}%';
+      final prefixPattern = '$trimmed%';
+
+      const fullSql = '''SELECT id, name, dci, indication, manufacturer, category, formulation, origin, dosage, conditionnement, liste, posologie, posologie_adulte, posologie_pediatrique 
            FROM medalgeriemedics 
            WHERE name LIKE ? 
               OR dci LIKE ? 
@@ -515,21 +520,59 @@ class _MedicalRecordFormDialogForPatientState
               OR dosage LIKE ? 
               OR conditionnement LIKE ? 
               OR liste LIKE ? 
-           LIMIT 20''',
-          [
-            '%$query%',
-            '%$query%',
-            '%$query%',
-            '%$query%',
-            '%$query%',
-            '%$query%',
-            '%$query%',
-            '%$query%',
-            '%$query%',
-            '%$query%',
-          ],
-        );
-        setState(() => _searchResults = results);
+              OR CONCAT_WS(' ', COALESCE(name, ''), COALESCE(dosage, ''), COALESCE(formulation, ''), COALESCE(dci, '')) LIKE ?
+           ORDER BY CASE WHEN name LIKE ? THEN 0 ELSE 1 END, name ASC
+           LIMIT 25''';
+
+      final fullParams = [
+        exactPattern,
+        exactPattern,
+        exactPattern,
+        exactPattern,
+        exactPattern,
+        exactPattern,
+        exactPattern,
+        exactPattern,
+        exactPattern,
+        exactPattern,
+        flexPattern,
+        prefixPattern,
+      ];
+
+      try {
+        List<Map<String, dynamic>> results = [];
+        try {
+          results = await DatabaseService().query(fullSql, fullParams);
+        } catch (localErr) {
+          debugPrint('[MedicationSearch] Primary query notice: $localErr');
+          try {
+            results = await DatabaseService().query(
+              '''SELECT id, name, dci, indication, manufacturer, category, formulation, origin, posologie, posologie_adulte, posologie_pediatrique 
+                 FROM medalgeriemedics 
+                 WHERE name LIKE ? OR dci LIKE ? OR indication LIKE ? OR category LIKE ? OR formulation LIKE ?
+                 LIMIT 25''',
+              [
+                flexPattern,
+                flexPattern,
+                flexPattern,
+                flexPattern,
+                flexPattern,
+              ],
+            );
+          } catch (_) {}
+        }
+
+        if (results.isEmpty) {
+          try {
+            results = await ApiDatabaseService().query(fullSql, fullParams);
+          } catch (cloudErr) {
+            debugPrint('[MedicationSearch] Cloud fallback notice: $cloudErr');
+          }
+        }
+
+        if (mounted) {
+          setState(() => _searchResults = results);
+        }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
