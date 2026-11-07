@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:chifa/services/db/database_migrations.dart';
 import 'package:chifa/services/db/http_api_service.dart';
 import 'package:flutter/foundation.dart';
@@ -25,11 +26,78 @@ class OcteniumDatabaseConfig {
 
 class RemoteDatabaseService {
   MySQLConnection? _connection;
+  String? _mode; // 'octenium', 'xampp', or 'direct'
+  String? _directHost;
+  int? _directPort;
+  String? _directUser;
+  String? _directPassword;
+  String? _directDatabase;
+  bool _directSecure = true;
+  Future<void>? _lock;
+  ApiDatabaseService? _fallbackApi;
 
   bool get isConnected => _connection?.connected ?? false;
 
+  /// Serialize operations on the single MySQLConnection socket to prevent
+  /// concurrent packet interleaving or unexpected socket closure.
+  Future<T> _synchronized<T>(Future<T> Function() action) async {
+    while (_lock != null) {
+      try {
+        await _lock;
+      } catch (_) {}
+    }
+    final completer = Completer<void>();
+    _lock = completer.future;
+    try {
+      return await action();
+    } finally {
+      _lock = null;
+      completer.complete();
+    }
+  }
+
+  bool _isConnectionClosedError(Object e) {
+    final msg = e.toString().toLowerCase();
+    return msg.contains('connection closed') ||
+        msg.contains('not connected') ||
+        msg.contains('can not execute query') ||
+        msg.contains('socket') ||
+        msg.contains('broken pipe') ||
+        msg.contains('connection reset') ||
+        msg.contains('closed');
+  }
+
+  /// Ensure the underlying MySQLConnection is open, reconnecting if needed.
+  Future<void> _ensureConnected() async {
+    if (_connection != null && _connection!.connected) {
+      return;
+    }
+
+    try {
+      await _connection?.close();
+    } catch (_) {}
+    _connection = null;
+
+    debugPrint('🔄 Reconnecting to MySQL database (mode: ${_mode ?? "octenium"})...');
+    if (_mode == 'xampp') {
+      await connectToXampp();
+    } else if (_mode == 'direct' && _directHost != null) {
+      await connectDirectly(
+        host: _directHost!,
+        port: _directPort ?? 3306,
+        user: _directUser ?? '',
+        password: _directPassword ?? '',
+        database: _directDatabase ?? '',
+        secure: _directSecure,
+      );
+    } else {
+      await connectToOctenium();
+    }
+  }
+
   /// Connect to database using XAMPP configuration
   Future<void> connectToXampp() async {
+    _mode = 'xampp';
     try {
       _connection = await MySQLConnection.createConnection(
         host: XamppDatabaseConfig.host,
@@ -58,6 +126,7 @@ class RemoteDatabaseService {
 
   /// Connect to database using Octenium configuration directly
   Future<void> connectToOctenium() async {
+    _mode = 'octenium';
     try {
       _connection = await MySQLConnection.createConnection(
         host: OcteniumDatabaseConfig.host,
@@ -85,6 +154,13 @@ class RemoteDatabaseService {
     required String database,
     bool secure = true,
   }) async {
+    _mode = 'direct';
+    _directHost = host;
+    _directPort = port;
+    _directUser = user;
+    _directPassword = password;
+    _directDatabase = database;
+    _directSecure = secure;
     try {
       _connection = await MySQLConnection.createConnection(
         host: host,
@@ -118,65 +194,131 @@ class RemoteDatabaseService {
     });
   }
 
+  /// Internal helper that serializes execution, ensures an active connection,
+  /// and automatically reconnects + retries once if the MySQL socket was closed.
+  Future<IResultSet> _executeWithReconnect(
+    String processedSql,
+    Map<String, dynamic> namedParams,
+  ) async {
+    return _synchronized(() async {
+      await _ensureConnected();
+      try {
+        return await _connection!.execute(processedSql, namedParams);
+      } catch (e) {
+        if (_isConnectionClosedError(e)) {
+          debugPrint('⚠️ MySQL connection lost ($e). Reconnecting and retrying...');
+          try {
+            await _connection?.close();
+          } catch (_) {}
+          _connection = null;
+          await _ensureConnected();
+          return await _connection!.execute(processedSql, namedParams);
+        }
+        rethrow;
+      }
+    });
+  }
+
   /// Execute a query and return results
   Future<List<Map<String, dynamic>>> query(
     String sql, [
     List<dynamic>? params,
   ]) async {
-    if (_connection == null) {
-      throw Exception('Database connection is not established');
-    }
-
     final Map<String, dynamic> namedParams = {};
     final processedSql = _prepareSql(sql, params, namedParams);
 
-    final result = await _connection!.execute(processedSql, namedParams);
-
-    return result.rows.map((row) => row.typedAssoc()).toList();
+    try {
+      final result = await _executeWithReconnect(processedSql, namedParams);
+      return result.rows.map((row) => row.typedAssoc()).toList();
+    } catch (e) {
+      if (_mode == 'octenium' && _isConnectionClosedError(e)) {
+        debugPrint('⚠️ Falling back to Octenium HTTP API for query...');
+        _fallbackApi ??= ApiDatabaseService()..connect();
+        return await _fallbackApi!.query(sql, params);
+      }
+      rethrow;
+    }
   }
 
   /// Execute an insert, update, or delete
   Future<int> execute(String sql, [List<dynamic>? params]) async {
-    if (_connection == null) {
-      throw Exception('Database connection is not established');
-    }
-
     final Map<String, dynamic> namedParams = {};
     final processedSql = _prepareSql(sql, params, namedParams);
 
-    final result = await _connection!.execute(processedSql, namedParams);
-
-    return result.affectedRows.toInt();
+    try {
+      final result = await _executeWithReconnect(processedSql, namedParams);
+      return result.affectedRows.toInt();
+    } catch (e) {
+      if (_mode == 'octenium' && _isConnectionClosedError(e)) {
+        debugPrint('⚠️ Falling back to Octenium HTTP API for execute...');
+        _fallbackApi ??= ApiDatabaseService()..connect();
+        return await _fallbackApi!.execute(sql, params);
+      }
+      rethrow;
+    }
   }
 
   /// Execute a transaction
   Future<T> transaction<T>(
     Future<T> Function(MySQLConnection conn) callback,
   ) async {
-    if (_connection == null) {
-      throw Exception('Database connection is not established');
+    await _synchronized(() => _ensureConnected());
+
+    try {
+      await execute('START TRANSACTION');
+      final result = await callback(_connection!);
+      await execute('COMMIT');
+      return result;
+    } catch (e) {
+      try {
+        if (_connection != null && _connection!.connected) {
+          await execute('ROLLBACK');
+        }
+      } catch (_) {}
+
+      if (_isConnectionClosedError(e)) {
+        debugPrint('⚠️ Transaction failed due to closed connection ($e). Reconnecting and retrying...');
+        await _synchronized(() async {
+          try {
+            await _connection?.close();
+          } catch (_) {}
+          _connection = null;
+          await _ensureConnected();
+        });
+        await execute('START TRANSACTION');
+        try {
+          final result = await callback(_connection!);
+          await execute('COMMIT');
+          return result;
+        } catch (retryError) {
+          try {
+            if (_connection != null && _connection!.connected) {
+              await execute('ROLLBACK');
+            }
+          } catch (_) {}
+          rethrow;
+        }
+      }
+      rethrow;
     }
-
-    T? result;
-    await _connection!.transactional((ctx) async {
-      result = await callback(ctx);
-    });
-
-    return result as T;
   }
 
   /// Insert and return the last inserted ID
   Future<int> insert(String sql, [List<dynamic>? params]) async {
-    if (_connection == null) {
-      throw Exception('Database connection is not established');
-    }
-
     final Map<String, dynamic> namedParams = {};
     final processedSql = _prepareSql(sql, params, namedParams);
 
-    final result = await _connection!.execute(processedSql, namedParams);
-
-    return result.lastInsertID.toInt();
+    try {
+      final result = await _executeWithReconnect(processedSql, namedParams);
+      return result.lastInsertID.toInt();
+    } catch (e) {
+      if (_mode == 'octenium' && _isConnectionClosedError(e)) {
+        debugPrint('⚠️ Falling back to Octenium HTTP API for insert...');
+        _fallbackApi ??= ApiDatabaseService()..connect();
+        return await _fallbackApi!.insert(sql, params);
+      }
+      rethrow;
+    }
   }
 
   /// Check if a column exists in a table

@@ -28,7 +28,6 @@ class _PatientListScreenState extends State<PatientListScreen> {
   void initState() {
     super.initState();
     context.read<PatientCubit>().loadPatients();
-    context.read<PatientCubit>().loadCategories();
   }
 
   @override
@@ -40,7 +39,24 @@ class _PatientListScreenState extends State<PatientListScreen> {
   @override
   Widget build(BuildContext context) {
     final isMobile = context.isMobile;
-    return BlocBuilder<PatientCubit, PatientState>(
+    return BlocConsumer<PatientCubit, PatientState>(
+      listenWhen: (previous, current) =>
+          current.error != null && current.error != previous.error,
+      listener: (context, state) {
+        if (state.error != null && state.patients.isNotEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.error!),
+              backgroundColor: Colors.red.shade700,
+              action: SnackBarAction(
+                label: 'Réessayer',
+                textColor: Colors.white,
+                onPressed: () => context.read<PatientCubit>().loadPatients(),
+              ),
+            ),
+          );
+        }
+      },
       builder: (context, state) {
         return Column(
           children: [
@@ -257,24 +273,30 @@ class _PatientListScreenState extends State<PatientListScreen> {
   }
 
   Widget _buildStateContent(PatientState state) {
-    if (state.isLoading) {
+    if (state.isLoading && state.patients.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (state.error != null) {
+    if (state.error != null && state.patients.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 48, color: Colors.red),
-            const SizedBox(height: 16),
-            Text('Error: ${state.error}'),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => context.read<PatientCubit>().loadPatients(),
-              child: const Text('Retry'),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 48, color: Colors.red),
+              const SizedBox(height: 16),
+              Text(
+                'Error: ${state.error}',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => context.read<PatientCubit>().loadPatients(),
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
         ),
       );
     }
