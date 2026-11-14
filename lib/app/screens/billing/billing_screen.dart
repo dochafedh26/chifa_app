@@ -36,7 +36,6 @@ class _BillingScreenState extends State<BillingScreen> {
   @override
   void initState() {
     super.initState();
-    context.read<BillingCubit>().loadAllPayments();
     context.read<BillingCubit>().loadServices();
     context.read<BillingCubit>().loadDoctors();
     _applyFilters();
@@ -73,7 +72,7 @@ class _BillingScreenState extends State<BillingScreen> {
       _searchController.clear();
       _selectedPaymentIds.clear();
     });
-    context.read<BillingCubit>().loadAllPayments();
+    _applyFilters();
   }
 
   void _onSearchChanged(String query) {
@@ -195,7 +194,7 @@ class _BillingScreenState extends State<BillingScreen> {
                           child: TextField(
                             controller: _searchController,
                             decoration: InputDecoration(
-                              hintText: 'Recherche encaissement...',
+                              hintText: 'Recherche...',
                               hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade500),
                               prefixIcon: const Icon(Icons.search, size: 20),
                               suffixIcon: _searchController.text.isNotEmpty
@@ -387,7 +386,7 @@ class _BillingScreenState extends State<BillingScreen> {
 
                 final refreshBtn = IconButton(
                   onPressed: () {
-                    context.read<BillingCubit>().loadAllPayments();
+                    _applyFilters();
                     context.read<BillingCubit>().loadServices();
                     context.read<BillingCubit>().loadDoctors();
                   },
@@ -632,7 +631,7 @@ class _BillingScreenState extends State<BillingScreen> {
                   Text('Error: ${state.error}'),
                   const SizedBox(height: 8),
                   TextButton(
-                    onPressed: () => context.read<BillingCubit>().loadAllPayments(),
+                    onPressed: _applyFilters,
                     child: const Text('Retry'),
                   ),
                 ],
@@ -872,16 +871,17 @@ class _BillingScreenState extends State<BillingScreen> {
   }
 
   Widget _buildPatientFilter() {
+    final isMobile = context.isMobile;
     return _FilterItem(
       label: 'Patient Name',
       child: TextField(
         controller: _patientController,
         style: const TextStyle(fontSize: 12),
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           isDense: true,
-          border: OutlineInputBorder(),
-          hintText: 'Search patient...',
-          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+          border: const OutlineInputBorder(),
+          hintText: isMobile ? 'Patient...' : 'Search patient...',
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
         ),
         onChanged: (_) => _applyFilters(),
       ),
@@ -983,8 +983,13 @@ class _PaymentList extends StatelessWidget {
                 Text('Error: ${state.error}'),
                 const SizedBox(height: 8),
                 TextButton(
-                  onPressed: () =>
-                      context.read<BillingCubit>().loadAllPayments(),
+                  onPressed: () {
+                    if (onRefresh != null) {
+                      onRefresh!();
+                    } else {
+                      context.read<BillingCubit>().loadAllPayments();
+                    }
+                  },
                   child: const Text('Retry'),
                 ),
               ],
@@ -1181,19 +1186,21 @@ class _PaymentCardState extends State<_PaymentCard> {
                 children: [
                   Row(
                     children: [
-                      Container(
-                        padding: EdgeInsets.all(isMobile ? 6 : 8),
-                        decoration: BoxDecoration(
-                          color: accentColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(8),
+                      if (!isMobile) ...[
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: accentColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            Icons.receipt_long,
+                            color: accentColor,
+                            size: 22,
+                          ),
                         ),
-                        child: Icon(
-                          Icons.receipt_long,
-                          color: accentColor,
-                          size: isMobile ? 18 : 22,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
+                        const SizedBox(width: 10),
+                      ],
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1447,15 +1454,18 @@ class _InfoRow extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     )
-                  : Text(
-                      value,
-                      style: TextStyle(
-                        fontSize: isMobile ? 12 : 14,
-                        fontWeight: FontWeight.bold,
-                        color: valueColor ?? Colors.black87,
+                  : FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        value,
+                        style: TextStyle(
+                          fontSize: isMobile ? 12 : 14,
+                          fontWeight: FontWeight.bold,
+                          color: valueColor ?? Colors.black87,
+                        ),
+                        maxLines: 1,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
             ],
           ),
@@ -1483,6 +1493,73 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMobile = context.isMobile;
+    final formattedValue = isInteger
+        ? value.toInt().toString()
+        : '${value.toStringAsFixed(2)} DA';
+
+    if (isMobile) {
+      return Card(
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        color: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(color: Colors.grey.shade200),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Icon(icon, color: color, size: 13),
+                  ),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  formattedValue,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                  maxLines: 1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Card(
       elevation: 0,
       color: Colors.white,
@@ -1491,21 +1568,21 @@ class _SummaryCard extends StatelessWidget {
         side: BorderSide(color: Colors.grey.shade200),
       ),
       child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: isMobile ? 8 : 16,
-          vertical: isMobile ? 8 : 14,
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
         ),
         child: Row(
           children: [
             Container(
-              padding: EdgeInsets.all(isMobile ? 6 : 8),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(icon, color: color, size: isMobile ? 18 : 22),
+              child: Icon(icon, color: color, size: 22),
             ),
-            SizedBox(width: isMobile ? 8 : 12),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1514,20 +1591,18 @@ class _SummaryCard extends StatelessWidget {
                   Text(
                     label,
                     style: TextStyle(
-                      fontSize: isMobile ? 10 : 12,
+                      fontSize: 12,
                       color: Colors.grey.shade600,
                       fontWeight: FontWeight.w500,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  SizedBox(height: isMobile ? 2 : 4),
+                  const SizedBox(height: 4),
                   Text(
-                    isInteger
-                        ? value.toInt().toString()
-                        : '${value.toStringAsFixed(2)} DA',
+                    formattedValue,
                     style: TextStyle(
-                      fontSize: isMobile ? 13 : 16,
+                      fontSize: 16,
                       fontWeight: FontWeight.bold,
                       color: color,
                     ),
