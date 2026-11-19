@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -37,6 +38,7 @@ class ApiConfig {
   static String get syncKey =>
       _safeEnv('SYNC_KEY') ?? 'chifa_sync_secure_key_2026';
   static const Duration timeout = Duration(seconds: 20);
+  static const Duration queryTimeout = Duration(seconds: 12);
 }
 
 class HttpApiService {
@@ -48,6 +50,37 @@ class HttpApiService {
 
   /// Cached working endpoint style so subsequent calls succeed in 1 round-trip
   String? _cachedSyncBase;
+
+  /// Cooldown after a network/timeout outage to avoid stacking 5x20s hanging requests
+  /// against an unreachable cloud host (which stalls UI and can trigger host firewall blocks).
+  static const Duration _offlineCooldown = Duration(seconds: 30);
+  DateTime? _unreachableUntil;
+  String _lastOutageError = '';
+
+  bool get _isInOutageCooldown =>
+      _unreachableUntil != null && DateTime.now().isBefore(_unreachableUntil!);
+
+  void _markReachable() {
+    _unreachableUntil = null;
+    _lastOutageError = '';
+  }
+
+  void _markUnreachable(String error) {
+    _unreachableUntil = DateTime.now().add(_offlineCooldown);
+    _lastOutageError = error;
+  }
+
+  bool _isNetworkOrTimeoutError(Object e) {
+    if (e is TimeoutException) return true;
+    final msg = e.toString().toLowerCase();
+    return msg.contains('timeoutexception') ||
+        msg.contains('timed out') ||
+        msg.contains('socketexception') ||
+        msg.contains('failed host lookup') ||
+        msg.contains('connection refused') ||
+        msg.contains('network is unreachable') ||
+        msg.contains('handshakeexception');
+  }
 
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
@@ -135,6 +168,13 @@ class HttpApiService {
     List<dynamic>? params,
     bool isInsert = false,
   }) async {
+    if (_isInOutageCooldown) {
+      return {
+        'error': 'Cloud API temporarily unreachable (cooldown): $_lastOutageError',
+        'success': false,
+      };
+    }
+
     final normalizedParams = _normalizeParams(params);
     final candidateUris = _buildCandidateUris('query');
 
@@ -151,13 +191,14 @@ class HttpApiService {
                 'is_insert': isInsert,
               }),
             )
-            .timeout(ApiConfig.timeout);
+            .timeout(ApiConfig.queryTimeout);
 
         if (!_isJsonResponse(response)) {
           lastError = 'Invalid non-JSON response from $uri (HTTP ${response.statusCode})';
           continue;
         }
 
+        _markReachable();
         if (response.statusCode == 200) {
           _rememberWorkingUri(uri, 'query');
           final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -177,6 +218,10 @@ class HttpApiService {
         }
       } catch (e) {
         lastError = e.toString();
+        if (_isNetworkOrTimeoutError(e)) {
+          _markUnreachable(lastError);
+          break;
+        }
       }
     }
 
@@ -188,6 +233,12 @@ class HttpApiService {
     required String sourceId,
     required Map<String, List<Map<String, dynamic>>> changes,
   }) async {
+    if (_isInOutageCooldown) {
+      throw Exception(
+        'Impossible de synchroniser (push) vers le serveur Cloud (cooldown): $_lastOutageError',
+      );
+    }
+
     final candidateUris = _buildCandidateUris('push');
     String lastError = '';
 
@@ -209,6 +260,7 @@ class HttpApiService {
           continue;
         }
 
+        _markReachable();
         if (response.statusCode == 200) {
           _rememberWorkingUri(uri, 'push');
           return jsonDecode(response.body) as Map<String, dynamic>;
@@ -218,6 +270,10 @@ class HttpApiService {
       } catch (e) {
         lastError = e.toString();
         debugPrint('[HttpApiService] pushChanges error ($uri): $e');
+        if (_isNetworkOrTimeoutError(e)) {
+          _markUnreachable(lastError);
+          break;
+        }
       }
     }
     throw Exception('Impossible de synchroniser (push) vers le serveur Cloud: $lastError');
@@ -227,6 +283,12 @@ class HttpApiService {
     required String since,
     String? sourceId,
   }) async {
+    if (_isInOutageCooldown) {
+      throw Exception(
+        'Impossible de récupérer (pull) depuis le serveur Cloud (cooldown): $_lastOutageError',
+      );
+    }
+
     final qs =
         'since=${Uri.encodeComponent(since)}&source_id=${Uri.encodeComponent(sourceId ?? "")}';
     final candidateUris = _buildCandidateUris('pull', queryString: qs);
@@ -240,6 +302,7 @@ class HttpApiService {
           lastError = 'Non-JSON response from $uri';
           continue;
         }
+        _markReachable();
         if (response.statusCode == 200) {
           _rememberWorkingUri(uri, 'pull');
           return jsonDecode(response.body) as Map<String, dynamic>;
@@ -249,6 +312,10 @@ class HttpApiService {
       } catch (e) {
         lastError = e.toString();
         debugPrint('[HttpApiService] pullChanges error ($uri): $e');
+        if (_isNetworkOrTimeoutError(e)) {
+          _markUnreachable(lastError);
+          break;
+        }
       }
     }
     throw Exception('Impossible de récupérer (pull) depuis le serveur Cloud: $lastError');

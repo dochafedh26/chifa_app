@@ -28,6 +28,7 @@ import 'package:chifa/app/printing/profil_glycemique.dart';
 import 'package:chifa/app/printing/profil_ta.dart';
 import 'package:chifa/app/printing/ordonnance.dart';
 import 'package:chifa/app/printing/preview.dart';
+import 'package:chifa/app/printing/priere_de_faire.dart';
 import 'package:chifa/app/printing/soins_medicaux.dart';
 import 'package:chifa/services/db/database.dart';
 import 'package:chifa/services/db/http_api_service.dart';
@@ -3183,6 +3184,221 @@ class _MedicalRecordFormDialogForPatientState
     );
   }
 
+  void _showPriereDeFaireDialog() {
+    final demandCtrl = TextEditingController();
+    DateTime selectedDate = _prescriptionDate;
+    bool includeDate = _includeDateInOrdonnance;
+    PrintTemplate selectedTemplate = _selectedTemplate;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            final weight = _weightController.text.trim().isNotEmpty
+                ? _weightController.text.trim()
+                : null;
+            return AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.assignment_outlined, color: Colors.indigo),
+                  SizedBox(width: 8),
+                  Text('Prière de Faire'),
+                ],
+              ),
+              content: SizedBox(
+                width: 520,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.indigo.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.indigo.shade200),
+                        ),
+                        child: Text(
+                          '${_currentPatient.fullName} • ${_currentPatient.formattedAge}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.indigo.shade900,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          InkWell(
+                            onTap: () async {
+                              final picked = await showDatePicker(
+                                context: dialogContext,
+                                initialDate: selectedDate,
+                                firstDate: DateTime(2000),
+                                lastDate: DateTime(2100),
+                              );
+                              if (picked != null) {
+                                setDialogState(() => selectedDate = picked);
+                              }
+                            },
+                            child: InputDecorator(
+                              decoration: const InputDecoration(
+                                labelText: 'Date',
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                                prefixIcon: Icon(
+                                  Icons.calendar_today,
+                                  size: 16,
+                                ),
+                              ),
+                              child: Text(
+                                DateFormat('dd/MM/yyyy').format(selectedDate),
+                              ),
+                            ),
+                          ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Checkbox(
+                                value: includeDate,
+                                onChanged: (v) {
+                                  setDialogState(
+                                    () => includeDate = v ?? true,
+                                  );
+                                },
+                              ),
+                              const Text('Afficher la date'),
+                            ],
+                          ),
+                          Wrap(
+                            spacing: 6,
+                            children: PrintTemplate.values.map((t) {
+                              return ChoiceChip(
+                                label: Text(t.label),
+                                selected: selectedTemplate == t,
+                                onSelected: (_) {
+                                  setDialogState(() => selectedTemplate = t);
+                                },
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: demandCtrl,
+                        autofocus: true,
+                        minLines: 6,
+                        maxLines: 10,
+                        decoration: const InputDecoration(
+                          labelText: 'Demande (Prière de faire) *',
+                          hintText:
+                              'Saisissez ce que vous souhaitez demander...\nEx:\n- Échographie abdomino-pelvienne\n- Téléthorax face',
+                          border: OutlineInputBorder(),
+                          alignLabelWithHint: true,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Fermer'),
+                ),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.visibility),
+                  label: const Text('Aperçu'),
+                  onPressed: () {
+                    if (demandCtrl.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Veuillez saisir le contenu de la demande.',
+                          ),
+                          backgroundColor: Colors.orange,
+                        ),
+                      );
+                      return;
+                    }
+                    showPdfPreview(
+                      context: context,
+                      generatedPdfBytes: generatePriereDeFairePdf(
+                        patient: _currentPatient,
+                        weight: weight,
+                        demandText: demandCtrl.text,
+                        template: selectedTemplate,
+                        includeDate: includeDate,
+                        date: selectedDate,
+                      ),
+                      title: 'Prière de Faire - ${_currentPatient.fullName}',
+                      pageFormat: PdfPageFormat.a5,
+                    );
+                  },
+                ),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.print),
+                  label: const Text('Imprimer'),
+                  onPressed: () async {
+                    if (demandCtrl.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Veuillez saisir le contenu de la demande.',
+                          ),
+                          backgroundColor: Colors.orange,
+                        ),
+                      );
+                      return;
+                    }
+                    try {
+                      final pdfBytes = await generatePriereDeFairePdf(
+                        patient: _currentPatient,
+                        weight: weight,
+                        demandText: demandCtrl.text,
+                        template: selectedTemplate,
+                        includeDate: includeDate,
+                        date: selectedDate,
+                      );
+                      if (!mounted) return;
+                      final dateStr = DateFormat('dd-MM-yyyy').format(
+                        selectedDate,
+                      );
+                      await PdfGenerationService().printPdfBytes(
+                        pdfBytes,
+                        name:
+                            'priere_de_faire_${_currentPatient.fullName}_$dateStr.pdf',
+                        context: context,
+                      );
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Print error: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    ).then((_) => demandCtrl.dispose());
+  }
+
   void _submit() {
     final plainDetails = _detailsQuillController.document.toPlainText().trim();
     if (plainDetails.isEmpty) {
@@ -5131,6 +5347,12 @@ class _MedicalRecordFormDialogForPatientState
                                 color: Colors.purple,
                                 label: 'Lettre de Liaison',
                                 onPressed: _showLettreDeLiaisonDialog,
+                              ),
+                              _certButton(
+                                icon: Icons.assignment_outlined,
+                                color: Colors.indigo,
+                                label: 'Prière de Faire',
+                                onPressed: _showPriereDeFaireDialog,
                               ),
                               _certButton(
                                 icon: Icons.medical_information,

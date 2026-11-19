@@ -14,6 +14,8 @@ import 'package:chifa/app/printing/maladie_chronique.dart';
 import 'package:chifa/app/printing/certificat_prenuptial.dart';
 import 'package:chifa/app/printing/coups_et_blessures.dart';
 import 'package:chifa/app/printing/preview.dart';
+import 'package:chifa/app/printing/priere_de_faire.dart';
+import 'package:pdf/pdf.dart';
 import 'package:chifa/services/db/database_manager.dart';
 import 'package:chifa/services/db/models/arret_de_travail.dart';
 import 'package:chifa/services/db/models/bonne_sante.dart';
@@ -47,7 +49,7 @@ class _CertificatesScreenState extends State<CertificatesScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 9, vsync: this);
+    _tabController = TabController(length: 10, vsync: this);
     context.read<CertificateCubit>().loadArretsDeTravail();
     context.read<CertificateCubit>().loadLettres();
     context.read<CertificateCubit>().loadCertificatsPrenuptial();
@@ -109,6 +111,10 @@ class _CertificatesScreenState extends State<CertificatesScreen>
               icon: const Icon(Icons.personal_injury),
               text: isMobile ? 'Coups' : 'Coups et Blessures',
             ),
+            Tab(
+              icon: const Icon(Icons.assignment_outlined),
+              text: isMobile ? 'Prière' : 'Prière de Faire',
+            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -127,6 +133,7 @@ class _CertificatesScreenState extends State<CertificatesScreen>
               _InterpretationEcgList(),
               _PrenuptialList(),
               _CoupsEtBlessuresList(),
+              _PriereDeFaireTab(),
             ],
           ),
         ),
@@ -6458,6 +6465,442 @@ class _InterpretationEcgPrintDialogState extends State<_InterpretationEcgPrintDi
       context: context,
       generatedPdfBytes: _generatePdfBytes(),
       title: 'Compte-rendu ECG - ${_patient!.fullName}',
+    );
+  }
+}
+
+// ==================== PRIÈRE DE FAIRE ====================
+
+class _PriereDeFaireTab extends StatefulWidget {
+  const _PriereDeFaireTab();
+
+  @override
+  State<_PriereDeFaireTab> createState() => _PriereDeFaireTabState();
+}
+
+class _PriereDeFaireTabState extends State<_PriereDeFaireTab> {
+  final _patientSearchController = TextEditingController();
+  final _weightController = TextEditingController();
+  final _demandController = TextEditingController();
+
+  List<Patient> _patientResults = [];
+  Patient? _selectedPatient;
+  bool _isSearchingPatient = false;
+  bool _showPatientSuggestions = false;
+
+  DateTime _selectedDate = DateTime.now();
+  bool _includeDate = true;
+  PrintTemplate _selectedTemplate = PrintTemplate.chifa;
+
+  @override
+  void dispose() {
+    _patientSearchController.dispose();
+    _weightController.dispose();
+    _demandController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _searchPatients(String query) async {
+    if (query.trim().isEmpty) {
+      setState(() {
+        _patientResults = [];
+        _showPatientSuggestions = false;
+      });
+      return;
+    }
+    setState(() => _isSearchingPatient = true);
+    try {
+      final results = await DatabaseManager.instance.query(
+        '''SELECT * FROM patients 
+           WHERE first_name LIKE ? OR last_name LIKE ? OR patient_id = ?
+           LIMIT 10''',
+        ['%$query%', '%$query%', int.tryParse(query) ?? -1],
+      );
+      if (mounted) {
+        setState(() {
+          _patientResults = results.map((row) => Patient.fromMap(row)).toList();
+          _showPatientSuggestions = true;
+        });
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _isSearchingPatient = false);
+    }
+  }
+
+  void _selectPatient(Patient patient) {
+    setState(() {
+      _selectedPatient = patient;
+      _patientSearchController.text = patient.fullName;
+      _patientResults = [];
+      _showPatientSuggestions = false;
+    });
+  }
+
+  void _resetForm() {
+    setState(() {
+      _selectedPatient = null;
+      _patientSearchController.clear();
+      _weightController.clear();
+      _demandController.clear();
+      _patientResults = [];
+      _showPatientSuggestions = false;
+      _selectedDate = DateTime.now();
+      _includeDate = true;
+    });
+  }
+
+  bool _validateBeforePdf() {
+    if (_selectedPatient == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Veuillez sélectionner un patient d\'abord'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return false;
+    }
+    if (_demandController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Veuillez saisir le contenu de la demande'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return false;
+    }
+    return true;
+  }
+
+  Future<Uint8List> _generatePdfBytes() {
+    final weight = _weightController.text.trim().isNotEmpty
+        ? _weightController.text.trim()
+        : null;
+    return generatePriereDeFairePdf(
+      patient: _selectedPatient!,
+      weight: weight,
+      demandText: _demandController.text,
+      template: _selectedTemplate,
+      includeDate: _includeDate,
+      date: _selectedDate,
+    );
+  }
+
+  void _previewPdf() {
+    if (!_validateBeforePdf()) return;
+    showPdfPreview(
+      context: context,
+      generatedPdfBytes: _generatePdfBytes(),
+      title: 'Prière de Faire - ${_selectedPatient!.fullName}',
+      pageFormat: PdfPageFormat.a5,
+    );
+  }
+
+  Future<void> _printPdf() async {
+    if (!_validateBeforePdf()) return;
+    try {
+      final pdfBytes = await _generatePdfBytes();
+      if (!mounted) return;
+      final dateStr = DateFormat('dd-MM-yyyy').format(_selectedDate);
+      await PdfGenerationService().printPdfBytes(
+        pdfBytes,
+        name: 'priere_de_faire_${_selectedPatient!.fullName}_$dateStr.pdf',
+        context: context,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Print error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isMobile = context.isMobile;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Nouvelle Prière de Faire',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Patient search
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    controller: _patientSearchController,
+                    decoration: InputDecoration(
+                      labelText: 'Patient *',
+                      hintText: 'Search by name or ID...',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.person_search, size: 20),
+                      suffixIcon: _isSearchingPatient
+                          ? const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            )
+                          : _selectedPatient != null
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, size: 16),
+                              onPressed: () {
+                                setState(() {
+                                  _selectedPatient = null;
+                                  _patientSearchController.clear();
+                                  _showPatientSuggestions = false;
+                                });
+                              },
+                            )
+                          : null,
+                    ),
+                    onChanged: _searchPatients,
+                  ),
+                  if (_showPatientSuggestions && _patientResults.isNotEmpty)
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 180),
+                      margin: const EdgeInsets.only(top: 4),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                        color: Colors.white,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          padding: EdgeInsets.zero,
+                          itemCount: _patientResults.length,
+                          separatorBuilder: (_, index) =>
+                              Divider(height: 1, color: Colors.grey.shade200),
+                          itemBuilder: (context, index) {
+                            final p = _patientResults[index];
+                            return ListTile(
+                              dense: true,
+                              leading: const Icon(Icons.person, size: 20),
+                              title: Text(
+                                p.fullName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              subtitle: Text(
+                                'ID: ${p.patientId} • ${p.formattedAge}',
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                              onTap: () => _selectPatient(p),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+
+              if (_selectedPatient != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.indigo.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.indigo.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 16,
+                        color: Colors.indigo.shade700,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '${_selectedPatient!.fullName}  •  ${_selectedPatient!.formattedAge}  •  ${_selectedPatient!.gender.name}',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.indigo.shade900,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+
+              // Options: Weight, Date, Include Date, Template
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 140,
+                    child: TextField(
+                      controller: _weightController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Poids (kg)',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _selectedDate,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (picked != null) {
+                        setState(() => _selectedDate = picked);
+                      }
+                    },
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Date',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                        prefixIcon: Icon(Icons.calendar_today, size: 16),
+                      ),
+                      child: Text(
+                        DateFormat('dd/MM/yyyy').format(_selectedDate),
+                      ),
+                    ),
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Checkbox(
+                        value: _includeDate,
+                        onChanged: (v) {
+                          setState(() => _includeDate = v ?? true);
+                        },
+                      ),
+                      const Text('Afficher la date'),
+                    ],
+                  ),
+                  Wrap(
+                    spacing: 6,
+                    children: PrintTemplate.values.map((t) {
+                      return ChoiceChip(
+                        label: Text(t.label),
+                        selected: _selectedTemplate == t,
+                        onSelected: (_) {
+                          setState(() => _selectedTemplate = t);
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Demand Body
+              TextField(
+                controller: _demandController,
+                minLines: 6,
+                maxLines: 12,
+                decoration: const InputDecoration(
+                  labelText: 'Demande (Prière de faire) *',
+                  hintText:
+                      'Saisissez ce que vous souhaitez demander...\nEx:\n- Échographie abdomino-pelvienne\n- Téléthorax face',
+                  border: OutlineInputBorder(),
+                  alignLabelWithHint: true,
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Actions
+              isMobile
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: _previewPdf,
+                          icon: const Icon(Icons.visibility),
+                          label: const Text('Aperçu PDF'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ElevatedButton.icon(
+                          onPressed: _printPdf,
+                          icon: const Icon(Icons.print),
+                          label: const Text('Imprimer'),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton.icon(
+                          onPressed: _resetForm,
+                          icon: const Icon(Icons.clear),
+                          label: const Text('Effacer'),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton.icon(
+                          onPressed: _resetForm,
+                          icon: const Icon(Icons.clear),
+                          label: const Text('Effacer'),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton.icon(
+                          onPressed: _previewPdf,
+                          icon: const Icon(Icons.visibility),
+                          label: const Text('Aperçu PDF'),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          onPressed: _printPdf,
+                          icon: const Icon(Icons.print),
+                          label: const Text('Imprimer'),
+                        ),
+                      ],
+                    ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
