@@ -2,6 +2,7 @@ import 'package:chifa/app/cubits/auth_cubit.dart';
 import 'package:chifa/app/cubits/doctor_working_hours_cubit.dart';
 import 'package:chifa/app/screens/appointments/working_hours_dialog.dart';
 import 'package:chifa/app/screens/settings/user_form_dialog.dart';
+import 'package:chifa/app/widgets/floating_window.dart';
 import 'package:chifa/services/db/models/employee.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -203,8 +204,11 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
   }
 
   void _showEditProfileDialog(BuildContext context) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Modifier Profil',
+      defaultWidth: 560,
+      defaultHeight: 540,
       builder: (context) => UserFormDialog(employee: widget.user),
     );
   }
@@ -225,8 +229,11 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
                 ).textTheme.titleSmall?.copyWith(color: Colors.grey.shade700),
               ),
               TextButton.icon(
-                onPressed: () => showDialog(
+                onPressed: () => FloatingWindowManager.showDialog<void>(
                   context: context,
+                  title: 'Horaires de Travail',
+                  defaultWidth: 500,
+                  defaultHeight: 420,
                   builder: (context) =>
                       WorkingHoursDialog(doctorId: widget.user.employeeId!),
                 ),

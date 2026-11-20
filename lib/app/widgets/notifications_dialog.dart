@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:chifa/app/theme/app_theme.dart';
 import 'package:chifa/app/utils/responsive.dart';
+import 'package:chifa/app/widgets/floating_window.dart';
 import 'package:chifa/services/db/database_manager.dart';
 import 'package:chifa/services/db/local_sqlite_service.dart';
 import 'package:intl/intl.dart';
@@ -13,8 +14,12 @@ class NotificationsDialog extends StatefulWidget {
   const NotificationsDialog({super.key, this.onNotificationsUpdated});
 
   static Future<void> show(BuildContext context, {VoidCallback? onUpdated}) {
-    return showDialog(
+    return FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Notifications',
+      defaultWidth: 620,
+      defaultHeight: 680,
+      icon: Icons.notifications_active_outlined,
       builder: (ctx) => NotificationsDialog(onNotificationsUpdated: onUpdated),
     );
   }

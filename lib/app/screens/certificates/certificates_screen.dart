@@ -33,6 +33,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 import 'package:chifa/app/utils/responsive.dart';
+import 'package:chifa/app/widgets/floating_window.dart';
 
 /// Work Certificates Screen - Arret de travail and Lettres
 class CertificatesScreen extends StatefulWidget {
@@ -322,8 +323,12 @@ class _MaladieChroniqueListState extends State<_MaladieChroniqueList> {
   }
 
   void _showPrintDialog(CertificatMaladieChronique cert) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Aperçu Certificat Maladie Chronique',
+      defaultWidth: 860,
+      defaultHeight: 680,
+      icon: Icons.print_outlined,
       builder: (context) => _MaladieChroniquePrintDialog(certificat: cert),
     );
   }
@@ -608,8 +613,11 @@ class _MaladieChroniqueListState extends State<_MaladieChroniqueList> {
                     onEdit: () => _startEdit(cert),
                     onPrint: () => _showPrintDialog(cert),
                     onDelete: () {
-                      showDialog(
+                      FloatingWindowManager.showDialog<void>(
                         context: context,
+                        title: 'Supprimer Certificat',
+                        defaultWidth: 440,
+                        defaultHeight: 260,
                         builder: (ctx) => AlertDialog(
                           title: const Text('Supprimer Certificat'),
                           content: const Text(
@@ -1032,7 +1040,7 @@ class _ArretDeTravailListState extends State<_ArretDeTravailList> {
   }
 
   Future<void> _pickDateDebut() async {
-    final picked = await showDatePicker(
+    final picked = await FloatingWindowManager.showDatePicker(
       context: context,
       initialDate: _dateDebut,
       firstDate: DateTime(2020),
@@ -1047,7 +1055,7 @@ class _ArretDeTravailListState extends State<_ArretDeTravailList> {
   }
 
   Future<void> _pickDateReprise() async {
-    final picked = await showDatePicker(
+    final picked = await FloatingWindowManager.showDatePicker(
       context: context,
       initialDate: _dateReprise ?? DateTime.now(),
       firstDate: DateTime(2020),
@@ -1160,8 +1168,12 @@ class _ArretDeTravailListState extends State<_ArretDeTravailList> {
   }
 
   void _showPrintDialog(ArretDeTravail arret) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Aperçu Arrêt de Travail',
+      defaultWidth: 860,
+      defaultHeight: 680,
+      icon: Icons.print_outlined,
       builder: (context) => _ArretPrintDialog(arret: arret),
     );
   }
@@ -1791,8 +1803,11 @@ class _ArretDeTravailListState extends State<_ArretDeTravailList> {
                       onEdit: () => _startEdit(arret),
                       onPrint: () => _showPrintDialog(arret),
                       onDelete: () {
-                        showDialog(
+                        FloatingWindowManager.showDialog<void>(
                           context: context,
+                          title: 'Delete Certificate',
+                          defaultWidth: 440,
+                          defaultHeight: 260,
                           builder: (ctx) => AlertDialog(
                             title: const Text('Delete Certificate'),
                             content: const Text(
@@ -2291,8 +2306,12 @@ class _LettresListState extends State<_LettresList> {
   }
 
   void _showPrintDialog(Lettre lettre) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Aperçu Lettre de Liaison',
+      defaultWidth: 860,
+      defaultHeight: 680,
+      icon: Icons.print_outlined,
       builder: (context) => _LettrePrintDialog(lettre: lettre),
     );
   }
@@ -2589,8 +2608,11 @@ class _LettresListState extends State<_LettresList> {
                       onEdit: () => _startEdit(lettre),
                       onPrint: () => _showPrintDialog(lettre),
                       onDelete: () {
-                        showDialog(
+                        FloatingWindowManager.showDialog<void>(
                           context: context,
+                          title: 'Delete Letter',
+                          defaultWidth: 440,
+                          defaultHeight: 260,
                           builder: (ctx) => AlertDialog(
                             title: const Text('Delete Letter'),
                             content: const Text(
@@ -3029,8 +3051,12 @@ class _BonneSanteListState extends State<_BonneSanteList> {
   }
 
   void _showPrintDialog(CertificatBonneSante cert) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Aperçu Certificat de Bonne Santé',
+      defaultWidth: 860,
+      defaultHeight: 680,
+      icon: Icons.print_outlined,
       builder: (context) => _BonneSantePrintDialog(certificat: cert),
     );
   }
@@ -3221,8 +3247,11 @@ class _BonneSanteListState extends State<_BonneSanteList> {
                     certificat: cert,
                     onPrint: () => _showPrintDialog(cert),
                     onDelete: () {
-                      showDialog(
+                      FloatingWindowManager.showDialog<void>(
                         context: context,
+                        title: 'Supprimer Certificat',
+                        defaultWidth: 440,
+                        defaultHeight: 260,
                         builder: (ctx) => AlertDialog(
                           title: const Text('Supprimer Certificat'),
                           content: const Text(
@@ -3735,8 +3764,12 @@ class _DispenseSportListState extends State<_DispenseSportList> {
                           IconButton(
                             icon: const Icon(Icons.print, color: Colors.blue),
                             onPressed: () {
-                              showDialog(
+                              FloatingWindowManager.showDialog<void>(
                                 context: context,
+                                title: 'Aperçu Dispense de Sport',
+                                defaultWidth: 860,
+                                defaultHeight: 680,
+                                icon: Icons.print_outlined,
                                 builder: (context) =>
                                     _DispenseSportPrintDialog(certificat: cert),
                               );
@@ -3989,8 +4022,11 @@ class _PrenuptialListState extends State<_PrenuptialList> {
   }
 
   void _deleteCertificat(int id) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Confirmer la suppression',
+      defaultWidth: 440,
+      defaultHeight: 260,
       builder: (ctx) => AlertDialog(
         title: const Text('Confirmer la suppression'),
         content: const Text('Voulez-vous supprimer ce certificat ?'),
@@ -4180,8 +4216,12 @@ class _PrenuptialListState extends State<_PrenuptialList> {
                           IconButton(
                             icon: const Icon(Icons.print, color: Colors.blue),
                             onPressed: () {
-                              showDialog(
+                              FloatingWindowManager.showDialog<void>(
                                 context: context,
+                                title: 'Aperçu Certificat Prénuptial',
+                                defaultWidth: 860,
+                                defaultHeight: 680,
+                                icon: Icons.print_outlined,
                                 builder: (context) =>
                                     _PrenuptialPrintDialog(certificat: cert),
                               );
@@ -4515,8 +4555,12 @@ class _CoupsEtBlessuresListState extends State<_CoupsEtBlessuresList> {
   }
 
   void _showPrintDialog(CertificatCoupsEtBlessures cert) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Aperçu Coups et Blessures',
+      defaultWidth: 860,
+      defaultHeight: 680,
+      icon: Icons.print_outlined,
       builder: (_) => _CoupsEtBlessuresPrintDialog(certificat: cert),
     );
   }
@@ -4634,14 +4678,14 @@ class _CoupsEtBlessuresListState extends State<_CoupsEtBlessuresList> {
                           Expanded(
                             child: InkWell(
                               onTap: () async {
-                                final d = await showDatePicker(
+                                final d = await FloatingWindowManager.showDatePicker(
                                   context: context,
                                   initialDate: _dateConsultation,
                                   firstDate: DateTime(2000),
                                   lastDate: DateTime(2100),
                                 );
                                 if (d != null) {
-                                  final t = await showTimePicker(
+                                  final t = await FloatingWindowManager.showTimePicker(
                                     context: context,
                                     initialTime: TimeOfDay.fromDateTime(_dateConsultation),
                                   );
@@ -4687,7 +4731,7 @@ class _CoupsEtBlessuresListState extends State<_CoupsEtBlessuresList> {
                           Expanded(
                             child: InkWell(
                               onTap: () async {
-                                final d = await showDatePicker(
+                                final d = await FloatingWindowManager.showDatePicker(
                                   context: context,
                                   initialDate: _dateFaits ?? DateTime.now(),
                                   firstDate: DateTime(2000),
@@ -5171,8 +5215,11 @@ class _AptitudeSportListState extends State<_AptitudeSportList> {
   }
 
   void _deleteCertificat(int id) async {
-    final confirm = await showDialog<bool>(
+    final confirm = await FloatingWindowManager.showDialog<bool>(
       context: context,
+      title: 'Confirmer la suppression',
+      defaultWidth: 440,
+      defaultHeight: 260,
       builder: (ctx) => AlertDialog(
         title: const Text('Confirmer la suppression'),
         content: const Text('Voulez-vous vraiment supprimer ce certificat d\'aptitude ?'),
@@ -5475,8 +5522,12 @@ class _AptitudeSportListState extends State<_AptitudeSportList> {
                             icon: const Icon(Icons.print, color: Colors.blue),
                             tooltip: 'Imprimer / Aperçu',
                             onPressed: () {
-                              showDialog(
+                              FloatingWindowManager.showDialog<void>(
                                 context: context,
+                                title: 'Aperçu Aptitude au Sport',
+                                defaultWidth: 860,
+                                defaultHeight: 680,
+                                icon: Icons.print_outlined,
                                 builder: (context) =>
                                     _AptitudeSportPrintDialog(certificat: cert),
                               );
@@ -5826,8 +5877,11 @@ class _InterpretationEcgListState extends State<_InterpretationEcgList> {
   }
 
   void _deleteEcg(int id) async {
-    final confirm = await showDialog<bool>(
+    final confirm = await FloatingWindowManager.showDialog<bool>(
       context: context,
+      title: 'Confirmer la suppression',
+      defaultWidth: 440,
+      defaultHeight: 260,
       builder: (ctx) => AlertDialog(
         title: const Text('Confirmer la suppression'),
         content: const Text('Voulez-vous vraiment supprimer ce compte-rendu ECG ?'),
@@ -6297,8 +6351,12 @@ class _InterpretationEcgListState extends State<_InterpretationEcgList> {
                             icon: const Icon(Icons.print, color: Colors.blue),
                             tooltip: 'Imprimer / Aperçu',
                             onPressed: () {
-                              showDialog(
+                              FloatingWindowManager.showDialog<void>(
                                 context: context,
+                                title: 'Aperçu Interprétation ECG',
+                                defaultWidth: 860,
+                                defaultHeight: 680,
+                                icon: Icons.print_outlined,
                                 builder: (context) =>
                                     _InterpretationEcgPrintDialog(ecg: ecg),
                               );
@@ -6780,7 +6838,7 @@ class _PriereDeFaireTabState extends State<_PriereDeFaireTab> {
                   ),
                   InkWell(
                     onTap: () async {
-                      final picked = await showDatePicker(
+                      final picked = await FloatingWindowManager.showDatePicker(
                         context: context,
                         initialDate: _selectedDate,
                         firstDate: DateTime(2000),

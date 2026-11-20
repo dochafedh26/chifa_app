@@ -13,6 +13,7 @@ import 'package:chifa/app/widgets/rich_text_viewer.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:chifa/app/utils/responsive.dart';
+import 'package:chifa/app/widgets/floating_window.dart';
 
 /// Medical Records Screen - Displays consultations and medical records
 class MedicalRecordsScreen extends StatefulWidget {
@@ -93,8 +94,11 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
   }
 
   void _showDetailsDialog(MedicalRecord record) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Medical Record Details',
+      defaultWidth: 700,
+      defaultHeight: 600,
       builder: (context) => MedicalRecordDetailsDialog(record: record),
     );
   }
@@ -129,8 +133,11 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
   }
 
   void _confirmDelete(MedicalRecord record) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Delete Record',
+      defaultWidth: 440,
+      defaultHeight: 260,
       builder: (context) => AlertDialog(
         title: const Text('Delete Record'),
         content: const Text(
@@ -508,7 +515,7 @@ class _MedicalRecordsScreenState extends State<MedicalRecordsScreen> {
       label: label,
       child: OutlinedButton.icon(
         onPressed: () async {
-          final picked = await showDatePicker(
+          final picked = await FloatingWindowManager.showDatePicker(
             context: context,
             firstDate: DateTime(2020),
             lastDate: DateTime(2030),

@@ -8,6 +8,7 @@ import 'package:chifa/services/db/sync_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:chifa/app/utils/responsive.dart';
+import 'package:chifa/app/widgets/floating_window.dart';
 
 /// Settings Screen - User management and clinic settings
 class SettingsScreen extends StatefulWidget {
@@ -36,19 +37,31 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   void _showCreateUserDialog() {
-    showDialog(context: context, builder: (context) => const UserFormDialog());
+    FloatingWindowManager.showDialog<void>(
+      context: context,
+      title: 'Nouvel Utilisateur',
+      defaultWidth: 560,
+      defaultHeight: 540,
+      builder: (context) => const UserFormDialog(),
+    );
   }
 
   void _showClinicSettings() {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Paramètres Clinique',
+      defaultWidth: 680,
+      defaultHeight: 640,
       builder: (context) => const ClinicSettingsDialog(),
     );
   }
 
   void _showFullSyncDialog(BuildContext context) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Full Sync',
+      defaultWidth: 460,
+      defaultHeight: 280,
       builder: (ctx) => AlertDialog(
         title: const Text('Full Sync'),
         content: const Text(
@@ -312,15 +325,21 @@ class _UserCard extends StatelessWidget {
   }
 
   void _showEditUserDialog(BuildContext context, Employee user) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Modifier Utilisateur',
+      defaultWidth: 560,
+      defaultHeight: 540,
       builder: (context) => UserFormDialog(employee: user),
     );
   }
 
   void _showDeleteConfirmation(BuildContext context, Employee user) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Delete User',
+      defaultWidth: 440,
+      defaultHeight: 260,
       builder: (context) => AlertDialog(
         title: const Text('Delete User'),
         content: Text('Are you sure you want to delete ${user.fullName}?'),

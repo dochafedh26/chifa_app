@@ -5,6 +5,7 @@ import 'package:chifa/services/db/models/models.dart';
 import 'package:chifa/services/db/repositories/repositories.dart';
 import 'package:chifa/services/pdf_generation_service.dart';
 import 'package:chifa/app/utils/responsive.dart';
+import 'package:chifa/app/widgets/floating_window.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -37,9 +38,13 @@ class PvcAppointmentCardDialog extends StatefulWidget {
       settingsCubit = context.read<SettingsCubit>();
     } catch (_) {}
 
-    return showDialog(
+    return FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Carte PVC — Rendez-vous',
+      defaultWidth: 960,
+      defaultHeight: 720,
       barrierDismissible: true,
+      icon: Icons.badge_outlined,
       builder: (ctx) {
         final dialog = PvcAppointmentCardDialog(
           patient: patient,

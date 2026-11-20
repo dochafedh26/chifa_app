@@ -4,6 +4,7 @@ import 'package:chifa/app/cubits/auth_cubit.dart';
 import 'package:chifa/app/cubits/dashboard_cubit.dart';
 import 'package:chifa/app/utils/responsive.dart';
 import 'package:chifa/app/utils/role_permissions.dart';
+import 'package:chifa/app/widgets/floating_window.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -330,8 +331,11 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
   Widget _buildLogoutButton(BuildContext context) {
     return OutlinedButton.icon(
       onPressed: () async {
-        final confirm = await showDialog<bool>(
+        final confirm = await FloatingWindowManager.showDialog<bool>(
           context: context,
+          title: 'Logout',
+          defaultWidth: 440,
+          defaultHeight: 260,
           builder: (ctx) => AlertDialog(
             title: const Text('Logout'),
             content: const Text('Are you sure you want to sign out?'),

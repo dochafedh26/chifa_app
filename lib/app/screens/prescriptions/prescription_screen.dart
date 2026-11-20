@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:chifa/app/utils/responsive.dart';
+import 'package:chifa/app/widgets/floating_window.dart';
 import 'package:printing/printing.dart';
 
 class PrescriptionScreen extends StatefulWidget {
@@ -119,8 +120,12 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
       return;
     }
 
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Imprimer Ordonnance',
+      defaultWidth: 760,
+      defaultHeight: 640,
+      icon: Icons.print_outlined,
       builder: (context) => PrescriptionPrintDialog(
         patientId: _selectedPatient!.patientId!,
         prescription: _prescriptionController.text,
@@ -592,7 +597,7 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
                         Expanded(
                           child: InkWell(
                             onTap: () async {
-                              final pickedDate = await showDatePicker(
+                              final pickedDate = await FloatingWindowManager.showDatePicker(
                                 context: context,
                                 initialDate: _prescriptionDate,
                                 firstDate: DateTime(2000),

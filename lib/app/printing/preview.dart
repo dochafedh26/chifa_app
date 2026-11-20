@@ -1,3 +1,4 @@
+import 'package:chifa/app/widgets/floating_window.dart';
 import 'package:chifa/services/pdf_generation_service.dart';
 import "dart:typed_data";
 
@@ -16,8 +17,12 @@ Future<void> showPdfPreview({
 
     if (!context.mounted) return;
 
-    showDialog(
+    await FloatingWindowManager.showDialog<void>(
       context: context,
+      title: title,
+      defaultWidth: 920,
+      defaultHeight: 720,
+      icon: Icons.picture_as_pdf_outlined,
       builder: (dialogContext) => Dialog(
         child: SizedBox(
           width: MediaQuery.of(dialogContext).size.width * 0.9,

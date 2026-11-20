@@ -1,3 +1,4 @@
+import 'package:chifa/app/widgets/floating_window.dart';
 import 'package:chifa/services/db/models/patient.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -198,7 +199,7 @@ class _PatientFormDialogState extends State<PatientFormDialog> {
   }
 
   Future<void> _selectDate() async {
-    final picked = await showDatePicker(
+    final picked = await FloatingWindowManager.showDatePicker(
       context: context,
       initialDate: _selectedDob ?? DateTime(2000),
       firstDate: DateTime(1900),

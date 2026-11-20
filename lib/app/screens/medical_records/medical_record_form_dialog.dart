@@ -10,6 +10,7 @@ import 'package:chifa/services/db/models/soins_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:chifa/app/utils/responsive.dart';
+import 'package:chifa/app/widgets/floating_window.dart';
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 
@@ -164,8 +165,12 @@ class _MedicalRecordFormDialogState extends State<MedicalRecordFormDialog> {
   }
 
   void _previewSoinsPdf() {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Aperçu: Soins Médicaux',
+      defaultWidth: 840,
+      defaultHeight: 660,
+      icon: Icons.picture_as_pdf_outlined,
       builder: (context) => AlertDialog(
         title: const Text('Aperçu: Soins Médicaux'),
         content: Container(

@@ -50,10 +50,12 @@ import 'package:chifa/services/db/models/print_template.dart';
 import 'package:chifa/services/db/models/service.dart';
 import 'package:chifa/services/db/models/soins_service.dart';
 import 'package:chifa/app/screens/medical_records/widgets/patient_history_panel.dart';
+import 'package:chifa/app/screens/medical_records/widgets/record_actions_speed_dial.dart';
 import 'package:chifa/services/db/repositories/payment_repository.dart';
 import 'package:chifa/services/db/repositories/patient_repository.dart';
 import 'package:chifa/services/formatters/formatters.dart';
 import 'package:chifa/services/posology/posology_scraper_service.dart';
+import 'package:chifa/app/widgets/floating_window.dart';
 import 'package:chifa/app/widgets/pathology_search_dialog.dart';
 import 'package:chifa/app/widgets/vidal_indication_search_dialog.dart';
 import 'package:chifa/services/cnas/cnas_service.dart';
@@ -645,8 +647,11 @@ class _MedicalRecordFormDialogForPatientState
     final dciController = TextEditingController();
     final formulationController = TextEditingController();
 
-    await showDialog(
+    await FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Ajouter un nouveau médicament',
+      defaultWidth: 500,
+      defaultHeight: 380,
       builder: (ctx) {
         return AlertDialog(
           title: const Text('Ajouter un nouveau médicament'),
@@ -855,8 +860,11 @@ class _MedicalRecordFormDialogForPatientState
 
     final titleController = TextEditingController();
 
-    await showDialog(
+    await FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Sauvegarder comme modèle',
+      defaultWidth: 520,
+      defaultHeight: 340,
       builder: (ctx) {
         return AlertDialog(
           title: const Text('Sauvegarder comme modèle'),
@@ -1024,8 +1032,12 @@ class _MedicalRecordFormDialogForPatientState
   }
 
   void _previewSoinsPdf() {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Aperçu: Soins Médicaux',
+      defaultWidth: 860,
+      defaultHeight: 680,
+      icon: Icons.picture_as_pdf_outlined,
       builder: (context) => AlertDialog(
         title: const Text('Aperçu: Soins Médicaux'),
         content: SizedBox(
@@ -1137,8 +1149,11 @@ class _MedicalRecordFormDialogForPatientState
     final ageController = TextEditingController(text: _currentPatient.age.toString());
     final editFormKey = GlobalKey<FormState>();
 
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Modifier Patient',
+      defaultWidth: 560,
+      defaultHeight: 540,
       builder: (ctx) {
         return AlertDialog(
           title: Row(
@@ -1247,8 +1262,11 @@ class _MedicalRecordFormDialogForPatientState
     AppointmentStatus selectedStatus = AppointmentStatus.scheduled;
     final dateFormat = DateFormat('dd/MM/yyyy');
 
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Planifier un rendez-vous',
+      defaultWidth: 560,
+      defaultHeight: 520,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setState) {
@@ -1265,7 +1283,7 @@ class _MedicalRecordFormDialogForPatientState
                     const SizedBox(height: 16),
                     InkWell(
                       onTap: () async {
-                        final d = await showDatePicker(
+                        final d = await FloatingWindowManager.showDatePicker(
                           context: context,
                           initialDate: selectedDate,
                           firstDate: DateTime.now(),
@@ -1287,7 +1305,7 @@ class _MedicalRecordFormDialogForPatientState
                     const SizedBox(height: 16),
                     InkWell(
                       onTap: () async {
-                        final t = await showTimePicker(
+                        final t = await FloatingWindowManager.showTimePicker(
                           context: context,
                           initialTime: TimeOfDay.now(),
                         );
@@ -1439,8 +1457,11 @@ class _MedicalRecordFormDialogForPatientState
     DateTime dateCertificat = DateTime.now();
     final dateFormat = DateFormat('dd/MM/yyyy');
 
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Créer un Arrêt de Travail',
+      defaultWidth: 580,
+      defaultHeight: 560,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setState) {
@@ -1504,7 +1525,7 @@ class _MedicalRecordFormDialogForPatientState
                         Expanded(
                           child: InkWell(
                             onTap: () async {
-                              final d = await showDatePicker(
+                              final d = await FloatingWindowManager.showDatePicker(
                                 context: context,
                                 initialDate: dateDebut,
                                 firstDate: DateTime(2020),
@@ -1555,7 +1576,7 @@ class _MedicalRecordFormDialogForPatientState
                     const SizedBox(height: 16),
                     InkWell(
                       onTap: () async {
-                        final d = await showDatePicker(
+                        final d = await FloatingWindowManager.showDatePicker(
                           context: context,
                           initialDate: dateCertificat,
                           firstDate: DateTime(2020),
@@ -1655,8 +1676,11 @@ class _MedicalRecordFormDialogForPatientState
     final bilanCtrl = TextEditingController();
     context.read<BilanCubit>().loadBilanTypes();
 
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Nouvelle Demande d\'Analyses (Bilan)',
+      defaultWidth: 640,
+      defaultHeight: 620,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
@@ -1819,8 +1843,11 @@ class _MedicalRecordFormDialogForPatientState
     final backPageTitleCtrl = TextEditingController();
     bool printTitleOnBack = false;
 
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Nouvelle Lettre de Liaison',
+      defaultWidth: 660,
+      defaultHeight: 640,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
@@ -2028,8 +2055,11 @@ class _MedicalRecordFormDialogForPatientState
   void _showMaladieChroniqueDialog() {
     final maladieCtrl = TextEditingController();
 
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Nouveau Certificat Maladie Chronique',
+      defaultWidth: 520,
+      defaultHeight: 340,
       builder: (ctx) {
         return AlertDialog(
           title: const Text('Nouveau Certificat Maladie Chronique'),
@@ -2111,8 +2141,11 @@ class _MedicalRecordFormDialogForPatientState
 
   void _showDispenseSportDialog() {
     final motifCtrl = TextEditingController();
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Certificat de Dispense de Sport',
+      defaultWidth: 520,
+      defaultHeight: 340,
       builder: (ctx) {
         return AlertDialog(
           title: const Text('Certificat de Dispense de Sport'),
@@ -2186,8 +2219,11 @@ class _MedicalRecordFormDialogForPatientState
   }
 
   void _showBonneSanteDialog() {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Nouveau Certificat de Bonne Santé',
+      defaultWidth: 460,
+      defaultHeight: 280,
       builder: (ctx) {
         return AlertDialog(
           title: const Text('Nouveau Certificat de Bonne Santé'),
@@ -2248,8 +2284,11 @@ class _MedicalRecordFormDialogForPatientState
 
   void _showPrenuptialDialog() {
     String? selectedBloodGroup = 'A+';
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Nouveau Certificat Prénuptial',
+      defaultWidth: 520,
+      defaultHeight: 360,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setState) {
@@ -2368,8 +2407,11 @@ class _MedicalRecordFormDialogForPatientState
       'Autres',
     ];
 
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Certificat Médical Initial (Coups et Blessures)',
+      defaultWidth: 660,
+      defaultHeight: 660,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setStateDlg) {
@@ -2394,7 +2436,7 @@ class _MedicalRecordFormDialogForPatientState
                           Expanded(
                             child: InkWell(
                               onTap: () async {
-                                final d = await showDatePicker(
+                                final d = await FloatingWindowManager.showDatePicker(
                                   context: context,
                                   initialDate: dateFaits ?? DateTime.now(),
                                   firstDate: DateTime(2000),
@@ -2630,8 +2672,11 @@ class _MedicalRecordFormDialogForPatientState
       'Pratique scolaire / EPS',
     ];
 
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Certificat d\'Aptitude au Sport',
+      defaultWidth: 640,
+      defaultHeight: 620,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setStateDlg) {
@@ -2847,8 +2892,11 @@ class _MedicalRecordFormDialogForPatientState
       });
     }
 
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Compte-rendu d\'Interprétation ECG',
+      defaultWidth: 700,
+      defaultHeight: 660,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setStateDlg) {
@@ -3190,8 +3238,11 @@ class _MedicalRecordFormDialogForPatientState
     bool includeDate = _includeDateInOrdonnance;
     PrintTemplate selectedTemplate = _selectedTemplate;
 
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Prière de Faire',
+      defaultWidth: 680,
+      defaultHeight: 640,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (dialogContext, setDialogState) {
@@ -3239,7 +3290,7 @@ class _MedicalRecordFormDialogForPatientState
                         children: [
                           InkWell(
                             onTap: () async {
-                              final picked = await showDatePicker(
+                              final picked = await FloatingWindowManager.showDatePicker(
                                 context: dialogContext,
                                 initialDate: selectedDate,
                                 firstDate: DateTime(2000),
@@ -3747,8 +3798,11 @@ class _MedicalRecordFormDialogForPatientState
     bool isLoading = false;
     bool isSubmitting = false;
 
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Vérification CNAS',
+      defaultWidth: 540,
+      defaultHeight: 460,
       barrierDismissible: false,
       builder: (BuildContext dialogContext) {
         return StatefulBuilder(
@@ -3793,8 +3847,10 @@ class _MedicalRecordFormDialogForPatientState
                   final message = chosen.status == 'already_consulted'
                       ? "Alerte: Le patient a déjà effectué une consultation aujourd'hui."
                       : 'Alerte: La date de fin de droit a expiré pour tous les bénéficiaires.';
-                  showDialog(
+                  FloatingWindowManager.showDialog<void>(
                     context: dialogContext,
+                    defaultWidth: 460,
+                    defaultHeight: 280,
                     builder: (context) => AlertDialog(
                       title: Row(
                         children: [
@@ -3912,8 +3968,10 @@ class _MedicalRecordFormDialogForPatientState
                                     final message = first.status == 'already_consulted'
                                         ? "Alerte: Le patient a déjà effectué une consultation aujourd'hui."
                                         : 'Alerte: La date de fin de droit a expiré pour tous les bénéficiaires.';
-                                    showDialog(
+                                    FloatingWindowManager.showDialog<void>(
                                       context: dialogContext,
+                                      defaultWidth: 460,
+                                      defaultHeight: 280,
                                       builder: (context) => AlertDialog(
                                         title: Row(
                                           children: [
@@ -4106,8 +4164,10 @@ class _MedicalRecordFormDialogForPatientState
 
                                   if (success) {
                                     Navigator.pop(dialogContext);
-                                    showDialog(
+                                    FloatingWindowManager.showDialog<void>(
                                       context: context,
+                                      defaultWidth: 460,
+                                      defaultHeight: 280,
                                       builder: (context) => AlertDialog(
                                         title: const Row(
                                           children: [
@@ -4128,8 +4188,10 @@ class _MedicalRecordFormDialogForPatientState
                                       ),
                                     );
                                   } else {
-                                    showDialog(
+                                    FloatingWindowManager.showDialog<void>(
                                       context: context,
+                                      defaultWidth: 460,
+                                      defaultHeight: 280,
                                       builder: (context) => AlertDialog(
                                         title: const Row(
                                           children: [
@@ -4209,6 +4271,7 @@ class _MedicalRecordFormDialogForPatientState
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = context.isMobile;
     return BlocListener<MedicalRecordCubit, MedicalRecordState>(
       listener: (context, state) {
         // Guard against state pollution from other tabs/dialogs
@@ -4344,35 +4407,38 @@ class _MedicalRecordFormDialogForPatientState
               ),
             ),
           ),
-          body: Padding(
-            padding: EdgeInsets.all(
-              context.isMobile ? 12.0 : 24.0,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      widget.recordToEdit != null
-                          ? 'Edit Medical Record'
-                          : 'New Medical Record',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: _requestClose,
-                    ),
-                  ],
+          body: Stack(
+            children: [
+              Padding(
+                padding: EdgeInsets.all(
+                  isMobile ? 12.0 : 24.0,
                 ),
-                const Divider(),
-                Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final isWide = MediaQuery.of(context).size.width >= 1100;
-                      final formWidget = SingleChildScrollView(
-                        child: Form(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          widget.recordToEdit != null
+                              ? 'Edit Medical Record'
+                              : 'New Medical Record',
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: _requestClose,
+                        ),
+                      ],
+                    ),
+                    const Divider(),
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final isWide = MediaQuery.of(context).size.width >= 1100;
+                          final formWidget = SingleChildScrollView(
+                            padding: EdgeInsets.only(bottom: isMobile ? 88.0 : 0.0),
+                            child: Form(
                           key: _formKey,
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -4660,9 +4726,18 @@ class _MedicalRecordFormDialogForPatientState
                                 icon: const Icon(Icons.search, size: 18),
                                 label: const Text('Assistant Pathologie IA'),
                                 onPressed: () {
-                                  showDialog(
-                                    context: context,
-                                    builder: (context) => PathologySearchDialog(
+                                  final winId =
+                                      'pathology_search_${DateTime.now().millisecondsSinceEpoch}';
+                                  FloatingWindowManager.show(
+                                    context,
+                                    id: winId,
+                                    title: 'Assistant Médical IA - Pathologies',
+                                    defaultWidth: 780,
+                                    defaultHeight: 620,
+                                    content: PathologySearchDialog(
+                                      isFloating: true,
+                                      onClose: () =>
+                                          FloatingWindowManager.close(winId),
                                       onInsertTreatment: (treatment) {
                                         setState(() {
                                           if (_prescriptionsFieldController.text.isNotEmpty) {
@@ -4937,7 +5012,7 @@ class _MedicalRecordFormDialogForPatientState
                               Expanded(
                                 child: InkWell(
                                   onTap: () async {
-                                    final pickedDate = await showDatePicker(
+                                    final pickedDate = await FloatingWindowManager.showDatePicker(
                                       context: context,
                                       initialDate: _prescriptionDate,
                                       firstDate: DateTime(2000),
@@ -5505,17 +5580,22 @@ class _MedicalRecordFormDialogForPatientState
                                             Row(
                                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                               children: [
-                                                Row(
-                                                  children: [
-                                                    Icon(Icons.medical_services_outlined, size: 18, color: Colors.blue.shade700),
-                                                    const SizedBox(width: 8),
-                                                    Text(
-                                                      '1. Actes Médicaux (Consultations, Gestes)',
-                                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blue.shade900),
-                                                    ),
-                                                  ],
+                                                Expanded(
+                                                  child: Row(
+                                                    children: [
+                                                      Icon(Icons.medical_services_outlined, size: 18, color: Colors.blue.shade700),
+                                                      const SizedBox(width: 8),
+                                                      Expanded(
+                                                        child: Text(
+                                                          '1. Actes Médicaux (Consultations, Gestes)',
+                                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blue.shade900),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
                                                 ),
-                                                if (_totalActsAmount > 0)
+                                                if (_totalActsAmount > 0) ...[
+                                                  const SizedBox(width: 8),
                                                   Container(
                                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                                     decoration: BoxDecoration(
@@ -5527,6 +5607,7 @@ class _MedicalRecordFormDialogForPatientState
                                                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue.shade900),
                                                     ),
                                                   ),
+                                                ],
                                               ],
                                             ),
                                             const SizedBox(height: 10),
@@ -5648,17 +5729,22 @@ class _MedicalRecordFormDialogForPatientState
                                             Row(
                                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                               children: [
-                                                Row(
-                                                  children: [
-                                                    Icon(Icons.vaccines_outlined, size: 18, color: Colors.teal.shade700),
-                                                    const SizedBox(width: 8),
-                                                    Text(
-                                                      '2. Soins & Injections (Médicaments administrés)',
-                                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.teal.shade900),
-                                                    ),
-                                                  ],
+                                                Expanded(
+                                                  child: Row(
+                                                    children: [
+                                                      Icon(Icons.vaccines_outlined, size: 18, color: Colors.teal.shade700),
+                                                      const SizedBox(width: 8),
+                                                      Expanded(
+                                                        child: Text(
+                                                          '2. Soins & Injections (Médicaments administrés)',
+                                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.teal.shade900),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
                                                 ),
-                                                if (_totalSoinsAmount > 0)
+                                                if (_totalSoinsAmount > 0) ...[
+                                                  const SizedBox(width: 8),
                                                   Container(
                                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                                     decoration: BoxDecoration(
@@ -5670,6 +5756,7 @@ class _MedicalRecordFormDialogForPatientState
                                                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal.shade900),
                                                     ),
                                                   ),
+                                                ],
                                               ],
                                             ),
                                             const SizedBox(height: 10),
@@ -6241,15 +6328,67 @@ class _MedicalRecordFormDialogForPatientState
                     },
                   ),
                 ),
-                const Divider(),
-                Padding(
-                  padding: const EdgeInsets.only(top: 12.0),
-                  child: _buildFooter(context),
+                    if (!isMobile) ...[
+                      const Divider(),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12.0),
+                        child: _buildFooter(context),
+                      ),
+                    ],
+                  ],
                 ),
-              ],
-            ),
+              ),
+              if (isMobile)
+                Positioned.fill(
+                  child: RecordActionsSpeedDial(
+                    selectedTemplate: _selectedTemplate,
+                    onTemplateChanged: (template) {
+                      setState(() => _selectedTemplate = template);
+                    },
+                    includeDateInOrdonnance: _includeDateInOrdonnance,
+                    onToggleIncludeDate: () {
+                      setState(
+                        () => _includeDateInOrdonnance = !_includeDateInOrdonnance,
+                      );
+                    },
+                    onCancel: _requestClose,
+                    onBlankOrdonnance: _printBlankOrdonnance,
+                    onPreview: _previewOrdonnance,
+                    onPrint: _printOrdonnance,
+                    onSubmit: _submit,
+                    isEditing: widget.recordToEdit != null,
+                    isLoading: _isLoading,
+                  ),
+                ),
+            ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _previewOrdonnance() {
+    if (_prescriptionsFieldController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No prescription entered.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    final weight = _weightController.text.trim().isNotEmpty
+        ? _weightController.text.trim()
+        : null;
+    showPdfPreview(
+      context: context,
+      generatedPdfBytes: generateOrdonnancePdf(
+        patient: _currentPatient,
+        weight: weight,
+        prescriptionText: _prescriptionsFieldController.text,
+        template: _selectedTemplate,
+        includeDate: _includeDateInOrdonnance,
+        date: _prescriptionDate,
       ),
     );
   }
@@ -6260,31 +6399,7 @@ class _MedicalRecordFormDialogForPatientState
     final small = context.isMobile || context.screenWidth < 1050;
 
     final previewBtn = OutlinedButton.icon(
-      onPressed: () {
-        if (_prescriptionsFieldController.text.trim().isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No prescription entered.'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-          return;
-        }
-        final weight = _weightController.text.trim().isNotEmpty
-            ? _weightController.text.trim()
-            : null;
-        showPdfPreview(
-          context: context,
-          generatedPdfBytes: generateOrdonnancePdf(
-            patient: _currentPatient,
-            weight: weight,
-            prescriptionText: _prescriptionsFieldController.text,
-            template: _selectedTemplate,
-            includeDate: _includeDateInOrdonnance,
-            date: _prescriptionDate,
-          ),
-        );
-      },
+      onPressed: _previewOrdonnance,
       icon: const Icon(Icons.visibility),
       label: const Text('Preview'),
     );
@@ -6523,8 +6638,11 @@ class _MedicalRecordFormDialogForPatientState
   Future<String?> _showInsuranceNumberDialog(BuildContext context, String currentVal) async {
     final controller = TextEditingController(text: currentVal);
     final formKey = GlobalKey<FormState>();
-    return showDialog<String>(
+    return FloatingWindowManager.showDialog<String>(
       context: context,
+      title: 'Numéro d\'assurance requis',
+      defaultWidth: 460,
+      defaultHeight: 290,
       barrierDismissible: false,
       builder: (ctx) {
         return AlertDialog(

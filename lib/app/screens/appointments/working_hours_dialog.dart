@@ -1,4 +1,5 @@
 import 'package:chifa/app/cubits/doctor_working_hours_cubit.dart';
+import 'package:chifa/app/widgets/floating_window.dart';
 import 'package:chifa/services/db/models/doctor_working_hours.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -25,7 +26,7 @@ class _WorkingHoursDialogState extends State<WorkingHoursDialog> {
   }
 
   Future<void> _selectDate() async {
-    final picked = await showDatePicker(
+    final picked = await FloatingWindowManager.showDatePicker(
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime.now(),
@@ -37,7 +38,7 @@ class _WorkingHoursDialogState extends State<WorkingHoursDialog> {
   }
 
   Future<void> _selectTime(bool start) async {
-    final picked = await showTimePicker(
+    final picked = await FloatingWindowManager.showTimePicker(
       context: context,
       initialTime: TimeOfDay.now(),
     );

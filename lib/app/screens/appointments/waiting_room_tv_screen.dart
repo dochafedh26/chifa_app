@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:chifa/services/db/database_manager.dart';
 import 'package:chifa/services/db/models/models.dart';
 import 'package:chifa/app/utils/responsive.dart';
+import 'package:chifa/app/widgets/floating_window.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -200,8 +201,11 @@ class _WaitingRoomTvScreenState extends State<WaitingRoomTvScreen>
   }
 
   void _showCabinetSelector() {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Sélectionner un Cabinet',
+      defaultWidth: 460,
+      defaultHeight: 380,
       builder: (ctx) {
         final cabinets = [
           'Cabinet N° 1 (Dr. BENALI)',

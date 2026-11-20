@@ -1,6 +1,7 @@
 import 'package:chifa/app/cubits/billing_cubit.dart';
 import 'package:chifa/app/cubits/soins_service_cubit.dart';
 import 'package:chifa/app/utils/responsive.dart';
+import 'package:chifa/app/widgets/floating_window.dart';
 import 'package:chifa/services/db/models/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -31,22 +32,31 @@ class _ServicesSettingsTabState extends State<ServicesSettingsTab> {
   }
 
   void _openAddEditServiceDialog({Service? service}) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: service == null ? 'Nouvel Acte Médical' : 'Modifier Acte Médical',
+      defaultWidth: 520,
+      defaultHeight: 420,
       builder: (context) => _ActServiceDialog(service: service),
     );
   }
 
   void _openAddEditSoinDialog({SoinsService? soin}) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: soin == null ? 'Nouveau Soin' : 'Modifier Soin',
+      defaultWidth: 520,
+      defaultHeight: 420,
       builder: (context) => _SoinServiceDialog(soin: soin),
     );
   }
 
   void _confirmDeleteService(Service service) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: "Supprimer l'acte médical",
+      defaultWidth: 440,
+      defaultHeight: 260,
       builder: (ctx) => AlertDialog(
         title: const Text("Supprimer l'acte médical"),
         content: Text('Voulez-vous vraiment supprimer "${service.serviceName}" ?'),
@@ -71,8 +81,11 @@ class _ServicesSettingsTabState extends State<ServicesSettingsTab> {
   }
 
   void _confirmDeleteSoin(SoinsService soin) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Supprimer le soin',
+      defaultWidth: 440,
+      defaultHeight: 260,
       builder: (ctx) => AlertDialog(
         title: const Text('Supprimer le soin'),
         content: Text('Voulez-vous vraiment supprimer "${soin.nom}" ?'),

@@ -9,6 +9,7 @@ import 'package:chifa/services/db/models/payment_service.dart';
 import 'package:chifa/services/db/models/service.dart';
 import 'package:chifa/services/db/models/soins_service.dart';
 import 'package:chifa/app/cubits/soins_service_cubit.dart';
+import 'package:chifa/app/widgets/floating_window.dart';
 
 import 'package:chifa/services/db/repositories/payment_repository.dart';
 
@@ -262,7 +263,7 @@ class _InvoiceFormDialogState extends State<InvoiceFormDialog> {
   }
 
   void _selectPaymentDate() async {
-    final picked = await showDatePicker(
+    final picked = await FloatingWindowManager.showDatePicker(
       context: context,
       initialDate: _paymentDate,
       firstDate: DateTime(2020),

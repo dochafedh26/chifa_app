@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:chifa/app/theme/app_theme.dart';
+import 'package:chifa/app/widgets/floating_window.dart';
 import 'package:chifa/services/xampp_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -16,8 +17,11 @@ class XamppConnectionDialog extends StatefulWidget {
     String? errorMessage,
     VoidCallback? onRetry,
   }) {
-    return showDialog(
+    return FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Configuration Base de Données',
+      defaultWidth: 560,
+      defaultHeight: 540,
       barrierDismissible: false,
       builder: (context) =>
           XamppConnectionDialog(errorMessage: errorMessage, onRetry: onRetry),

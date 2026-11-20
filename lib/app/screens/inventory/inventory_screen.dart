@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:chifa/app/utils/responsive.dart';
+import 'package:chifa/app/widgets/floating_window.dart';
 
 /// Inventory Management Screen
 class InventoryScreen extends StatefulWidget {
@@ -38,15 +39,21 @@ class _InventoryScreenState extends State<InventoryScreen>
   }
 
   void _showCreateDialog() {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Nouvel Article Inventaire',
+      defaultWidth: 580,
+      defaultHeight: 540,
       builder: (context) => const InventoryFormDialog(),
     );
   }
 
   void _showStockDialog(InventoryItem item) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Ajustement Stock',
+      defaultWidth: 460,
+      defaultHeight: 360,
       builder: (context) => _StockAdjustmentDialog(item: item),
     );
   }

@@ -1,11 +1,17 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../../services/pathology/pathology_scraper_service.dart';
 
 class PathologySearchDialog extends StatefulWidget {
   final Function(String) onInsertTreatment;
+  final bool isFloating;
+  final VoidCallback? onClose;
 
-  const PathologySearchDialog({super.key, required this.onInsertTreatment});
+  const PathologySearchDialog({
+    super.key,
+    required this.onInsertTreatment,
+    this.isFloating = false,
+    this.onClose,
+  });
 
   @override
   State<PathologySearchDialog> createState() => _PathologySearchDialogState();
@@ -66,130 +72,138 @@ class _PathologySearchDialogState extends State<PathologySearchDialog> {
     final theme = Theme.of(context);
     final primaryColor = theme.primaryColor;
 
+    final body = Padding(
+      padding: EdgeInsets.all(widget.isFloating ? 16.0 : 24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (!widget.isFloating) ...[
+            // Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.search_outlined, color: primaryColor, size: 28),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Assistant Médical IA - Pathologies',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: primaryColor,
+                      ),
+                    ),
+                  ],
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // Search Input Box
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Saisir le nom de la pathologie (ex: AVC, Asthme, Angine...)',
+                    prefixIcon: const Icon(Icons.medication_liquid_outlined),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    isDense: true,
+                  ),
+                  onSubmitted: (_) => _search(),
+                ),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: _isLoading ? null : _search,
+                icon: _isLoading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Icon(Icons.search),
+                label: const Text('Rechercher'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Suggestions / Error or Loading or Results
+          Expanded(
+            child: _isLoading
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text('Génération du guide clinique par l\'IA en cours...'),
+                      ],
+                    ),
+                  )
+                : _error != null
+                    ? Center(
+                        child: Card(
+                          color: Colors.red.shade50,
+                          child: Padding(
+                            padding: const EdgeInsets.all(24.0),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                                const SizedBox(height: 12),
+                                Text(
+                                  _error!,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      )
+                    : _result == null
+                        ? const Center(
+                            child: Text(
+                              'Saisissez une pathologie pour que l\'Assistant IA génère les recommandations et prescriptions.',
+                              style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+                            ),
+                          )
+                        : _buildResultsTabs(context, _result!),
+          ),
+        ],
+      ),
+    );
+
+    if (widget.isFloating) {
+      return body;
+    }
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       elevation: 8,
       child: SizedBox(
         width: MediaQuery.of(context).size.width * 0.85,
         height: MediaQuery.of(context).size.height * 0.85,
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.search_outlined, color: primaryColor, size: 28),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Assistant Médical IA - Pathologies',
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: primaryColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Search Input Box
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: 'Saisir le nom de la pathologie (ex: AVC, Asthme, Angine...)',
-                        prefixIcon: const Icon(Icons.medication_liquid_outlined),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        isDense: true,
-                      ),
-                      onSubmitted: (_) => _search(),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  ElevatedButton.icon(
-                    onPressed: _isLoading ? null : _search,
-                    icon: _isLoading
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : const Icon(Icons.search),
-                    label: const Text('Rechercher'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Suggestions / Error or Loading or Results
-              Expanded(
-                child: _isLoading
-                    ? const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            CircularProgressIndicator(),
-                            SizedBox(height: 16),
-                            Text('Génération du guide clinique par l\'IA en cours...'),
-                          ],
-                        ),
-                      )
-                    : _error != null
-                        ? Center(
-                            child: Card(
-                              color: Colors.red.shade50,
-                              child: Padding(
-                                padding: const EdgeInsets.all(24.0),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.error_outline, color: Colors.red, size: 48),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      _error!,
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          )
-                        : _result == null
-                            ? const Center(
-                                child: Text(
-                                  'Saisissez une pathologie pour que l\'Assistant IA génère les recommandations et prescriptions.',
-                                  style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
-                                ),
-                              )
-                            : _buildResultsTabs(context, _result!),
-              ),
-            ],
-          ),
-        ),
+        child: body,
       ),
     );
   }
@@ -347,7 +361,11 @@ class _PathologySearchDialogState extends State<PathologySearchDialog> {
           ElevatedButton.icon(
             onPressed: () {
               widget.onInsertTreatment(content);
-              Navigator.pop(context);
+              if (widget.isFloating) {
+                widget.onClose?.call();
+              } else {
+                Navigator.pop(context);
+              }
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text('Traitements insérés dans l\'ordonnance'),

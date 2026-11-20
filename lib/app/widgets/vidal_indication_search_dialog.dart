@@ -1,3 +1,4 @@
+import 'package:chifa/app/widgets/floating_window.dart';
 import 'package:flutter/material.dart';
 import '../../services/vidal/vidal_indication_service.dart';
 import '../../services/db/database.dart';
@@ -15,8 +16,12 @@ class VidalIndicationSearchDialog extends StatefulWidget {
     BuildContext context, {
     String? initialQuery,
   }) {
-    return showDialog<VidalMedicationItem>(
+    return FloatingWindowManager.showDialog<VidalMedicationItem>(
       context: context,
+      title: 'Recherche VIDAL par Indication',
+      defaultWidth: 840,
+      defaultHeight: 660,
+      icon: Icons.manage_search_rounded,
       builder: (context) => VidalIndicationSearchDialog(initialQuery: initialQuery),
     );
   }

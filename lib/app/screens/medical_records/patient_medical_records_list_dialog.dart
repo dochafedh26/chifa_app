@@ -16,6 +16,7 @@ import 'package:chifa/app/widgets/rich_text_viewer.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:chifa/app/utils/responsive.dart';
+import 'package:chifa/app/widgets/floating_window.dart';
 
 class PatientMedicalRecordsListDialog extends StatefulWidget {
   final Patient patient;
@@ -291,8 +292,11 @@ class _PatientMedicalRecordsListDialogState
                         color: Colors.purple,
                       ),
                       onPressed: () {
-                        showDialog(
+                        FloatingWindowManager.showDialog<void>(
                           context: context,
+                          title: 'Record Details',
+                          defaultWidth: 680,
+                          defaultHeight: 560,
                           builder: (ctx) => AlertDialog(
                             title: Text(
                               'Record Details - ${DateFormat('MMM dd, yyyy').format(record.recordDate)}',
@@ -420,8 +424,11 @@ class _PatientMedicalRecordsListDialogState
                         }
                         bool includeDate = true;
                         final ctx = context;
-                        await showDialog(
+                        await FloatingWindowManager.showDialog<void>(
                           context: ctx,
+                          title: 'Options d\'impression',
+                          defaultWidth: 420,
+                          defaultHeight: 260,
                           builder: (ctx) => StatefulBuilder(
                             builder: (ctx, setDialogState) => AlertDialog(
                               title: const Text('Options d\'impression'),
@@ -536,8 +543,11 @@ class _PatientMedicalRecordsListDialogState
                           color: Colors.red,
                         ),
                         onPressed: () {
-                          showDialog(
+                          FloatingWindowManager.showDialog<void>(
                             context: context,
+                            title: 'Delete Record',
+                            defaultWidth: 440,
+                            defaultHeight: 260,
                             builder: (ctx) => AlertDialog(
                               title: const Text('Delete Record'),
                               content: const Text(

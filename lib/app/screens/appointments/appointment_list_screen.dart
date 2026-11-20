@@ -18,6 +18,7 @@ import 'package:intl/intl.dart';
 import 'package:qr_code_vision/qr_code_vision.dart' as qrcv;
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:chifa/app/utils/responsive.dart';
+import 'package:chifa/app/widgets/floating_window.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class AppointmentListScreen extends StatefulWidget {
@@ -117,7 +118,7 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
   Future<void> _pickPeriod() async {
     if (_dateFilterMode == AppointmentDateFilterMode.allTime) return;
 
-    final picked = await showDatePicker(
+    final picked = await FloatingWindowManager.showDatePicker(
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime(2000),
@@ -223,8 +224,11 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
   }
 
   void _showAddDialog(BuildContext context) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Nouveau Rendez-vous',
+      defaultWidth: 620,
+      defaultHeight: 620,
       builder: (dialogContext) => AppointmentFormDialog(
         selectedDate: _selectedDate,
         onSave: (appointment) {
@@ -1365,8 +1369,12 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
       );
       if (!mounted) return;
       if (payment != null) {
-        showDialog(
+        FloatingWindowManager.showDialog<void>(
           context: context,
+          title: 'Facture / Reçu',
+          defaultWidth: 780,
+          defaultHeight: 660,
+          icon: Icons.receipt_long_outlined,
           builder: (context) => InvoicePrintDialog(payment: payment),
         );
       } else {
@@ -1379,8 +1387,12 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
         if (!mounted) return;
         if (anyResults.isNotEmpty) {
           final p = Payment.fromMap(anyResults.first);
-          showDialog(
+          FloatingWindowManager.showDialog<void>(
             context: context,
+            title: 'Facture / Reçu',
+            defaultWidth: 780,
+            defaultHeight: 660,
+            icon: Icons.receipt_long_outlined,
             builder: (context) => InvoicePrintDialog(payment: p),
           );
         } else {
@@ -1534,8 +1546,11 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
   }
 
   void _showQuickCheckInDialog(BuildContext context) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Check-In Rapide',
+      defaultWidth: 560,
+      defaultHeight: 540,
       builder: (ctx) => _QuickCheckInDialog(
         onCheckedIn: () {
           _loadAppointments();
@@ -1797,8 +1812,11 @@ class _QuickCheckInDialogState extends State<_QuickCheckInDialog> {
     Timer? pollTimer;
     bool isDialogClosed = false;
 
-    await showDialog(
+    await FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Scanner QR Code',
+      defaultWidth: 480,
+      defaultHeight: 560,
       barrierDismissible: true,
       builder: (dialogContext) {
         pollTimer = Timer.periodic(const Duration(milliseconds: 1300), (timer) async {
@@ -1816,7 +1834,8 @@ class _QuickCheckInDialogState extends State<_QuickCheckInDialog> {
               final scanResult = data['scanResult'] as String?;
               if (scanResult != null && scanResult.trim().isNotEmpty) {
                 timer.cancel();
-                if (!isDialogClosed && dialogContext.mounted && Navigator.canPop(dialogContext)) {
+                if (!isDialogClosed && dialogContext.mounted) {
+                  isDialogClosed = true;
                   Navigator.pop(dialogContext);
                 }
                 if (mounted) {

@@ -1,4 +1,5 @@
 import 'package:chifa/app/cubits/inventory_cubit.dart';
+import 'package:chifa/app/widgets/floating_window.dart';
 import 'package:chifa/services/db/models/inventory_item.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -35,7 +36,7 @@ class _InventoryFormDialogState extends State<InventoryFormDialog> {
   }
 
   Future<void> _selectExpirationDate() async {
-    final picked = await showDatePicker(
+    final picked = await FloatingWindowManager.showDatePicker(
       context: context,
       initialDate: DateTime.now().add(const Duration(days: 365)),
       firstDate: DateTime.now(),
@@ -47,7 +48,7 @@ class _InventoryFormDialogState extends State<InventoryFormDialog> {
   }
 
   Future<void> _selectPurchaseDate() async {
-    final picked = await showDatePicker(
+    final picked = await FloatingWindowManager.showDatePicker(
       context: context,
       initialDate: _purchaseDate,
       firstDate: DateTime(2020),

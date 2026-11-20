@@ -4,6 +4,7 @@ import 'package:chifa/app/printing/appointment_pdf.dart';
 import 'package:chifa/app/printing/preview.dart';
 import 'package:chifa/app/screens/appointments/pvc_appointment_card_dialog.dart';
 import 'package:chifa/app/utils/responsive.dart';
+import 'package:chifa/app/widgets/floating_window.dart';
 import 'package:chifa/services/db/database_manager.dart';
 import 'package:chifa/services/db/models/appointment.dart';
 import 'package:chifa/services/db/models/employee.dart';
@@ -95,7 +96,7 @@ class _AppointmentFormDialogState extends State<AppointmentFormDialog> {
   }
 
   Future<void> _selectDate() async {
-    final picked = await showDatePicker(
+    final picked = await FloatingWindowManager.showDatePicker(
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime(2000),
@@ -110,7 +111,7 @@ class _AppointmentFormDialogState extends State<AppointmentFormDialog> {
   }
 
   Future<void> _selectTime() async {
-    final picked = await showTimePicker(
+    final picked = await FloatingWindowManager.showTimePicker(
       context: context,
       initialTime: TimeOfDay.now(),
     );
@@ -402,8 +403,11 @@ class _AppointmentFormDialogState extends State<AppointmentFormDialog> {
       if (!mounted) return;
 
       if (!isAvailable) {
-        final confirm = await showDialog<bool>(
+        final confirm = await FloatingWindowManager.showDialog<bool>(
           context: context,
+          title: 'Outside Working Hours',
+          defaultWidth: 460,
+          defaultHeight: 260,
           builder: (ctx) => AlertDialog(
             title: const Text('Outside Working Hours'),
             content: const Text(

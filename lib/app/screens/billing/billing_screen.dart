@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:chifa/app/utils/responsive.dart';
+import 'package:chifa/app/widgets/floating_window.dart';
 
 /// Billing & Invoices Screen
 class BillingScreen extends StatefulWidget {
@@ -87,8 +88,12 @@ class _BillingScreenState extends State<BillingScreen> {
   }
 
   void _showCreateInvoiceDialog() {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Nouvelle Facture / Paiement',
+      defaultWidth: 780,
+      defaultHeight: 660,
+      icon: Icons.receipt_long_outlined,
       builder: (context) => const InvoiceFormDialog(),
     );
   }
@@ -815,7 +820,7 @@ class _BillingScreenState extends State<BillingScreen> {
       label: label,
       child: OutlinedButton.icon(
         onPressed: () async {
-          final picked = await showDatePicker(
+          final picked = await FloatingWindowManager.showDatePicker(
             context: context,
             firstDate: DateTime(2020),
             lastDate: DateTime(2030),
@@ -1095,15 +1100,23 @@ class _PaymentCardState extends State<_PaymentCard> {
   }
 
   void _showDetails(BuildContext context) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Facture / Reçu',
+      defaultWidth: 780,
+      defaultHeight: 660,
+      icon: Icons.receipt_long_outlined,
       builder: (context) => InvoicePrintDialog(payment: widget.payment),
     );
   }
 
   void _editPayment(BuildContext context) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Modifier Paiement',
+      defaultWidth: 780,
+      defaultHeight: 660,
+      icon: Icons.receipt_long_outlined,
       builder: (context) => InvoiceFormDialog(payment: widget.payment),
     );
   }
@@ -1111,8 +1124,11 @@ class _PaymentCardState extends State<_PaymentCard> {
   void _confirmDelete(BuildContext context) {
     final cubit = context.read<BillingCubit>();
 
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Delete Payment',
+      defaultWidth: 440,
+      defaultHeight: 260,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Delete Payment'),
         content: const Text(

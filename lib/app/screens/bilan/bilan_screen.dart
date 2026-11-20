@@ -1,4 +1,4 @@
-﻿import 'package:chifa/services/pdf_generation_service.dart';
+import 'package:chifa/services/pdf_generation_service.dart';
 import 'dart:typed_data';
 
 import 'package:chifa/app/printing/bilan.dart';
@@ -23,6 +23,7 @@ import 'package:chifa/app/utils/role_permissions.dart';
 
 import '../../../services/db/repositories/base_repository.dart';
 import 'package:chifa/app/utils/responsive.dart';
+import 'package:chifa/app/widgets/floating_window.dart';
 
 /// Lab Orders (Bilan) Screen
 class BilanScreen extends StatefulWidget {
@@ -64,8 +65,11 @@ class _BilanScreenState extends State<BilanScreen> {
       );
       return;
     }
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: bilan == null ? 'Nouveau Bilan' : 'Modifier Bilan',
+      defaultWidth: 680,
+      defaultHeight: 640,
       barrierDismissible: false,
       builder: (context) => _BilanFormDialog(bilan: bilan),
     );
@@ -74,8 +78,11 @@ class _BilanScreenState extends State<BilanScreen> {
   void _deleteBilan(Bilan bilan) {
     final role = context.read<AuthCubit>().currentRole;
     if (!RolePermissions.canManageLabTests(role)) return;
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Delete Lab Order',
+      defaultWidth: 440,
+      defaultHeight: 260,
       builder: (context) => AlertDialog(
         title: const Text('Delete Lab Order'),
         content: Text(
@@ -99,8 +106,12 @@ class _BilanScreenState extends State<BilanScreen> {
   }
 
   void _showPrintDialog(Bilan bilan) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Impression Bilan',
+      defaultWidth: 860,
+      defaultHeight: 680,
+      icon: Icons.print_outlined,
       builder: (context) => _BilanPrintDialog(bilan: bilan),
     );
   }

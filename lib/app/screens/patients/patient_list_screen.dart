@@ -11,6 +11,7 @@ import 'package:chifa/services/db/repositories/medical_record_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:chifa/app/utils/responsive.dart';
+import 'package:chifa/app/widgets/floating_window.dart';
 
 class PatientListScreen extends StatefulWidget {
   const PatientListScreen({super.key});
@@ -610,7 +611,7 @@ class _PatientListScreenState extends State<PatientListScreen> {
   }
 
   Future<void> _showDatePicker(BuildContext context) async {
-    final selectedDate = await showDatePicker(
+    final selectedDate = await FloatingWindowManager.showDatePicker(
       context: context,
       initialDate: DateTime.now(),
       firstDate: DateTime(1900),
@@ -662,8 +663,11 @@ class _PatientListScreenState extends State<PatientListScreen> {
   }
 
   void _showAddPatientDialog(BuildContext context) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Nouveau Patient',
+      defaultWidth: 680,
+      defaultHeight: 640,
       builder: (dialogContext) => PatientFormDialog(
         onSave: (patient) {
           context.read<PatientCubit>().createPatient(patient);
@@ -674,8 +678,11 @@ class _PatientListScreenState extends State<PatientListScreen> {
   }
 
   void _showEditPatientDialog(BuildContext context, Patient patient) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Modifier Patient',
+      defaultWidth: 680,
+      defaultHeight: 640,
       builder: (dialogContext) => PatientFormDialog(
         patient: patient,
         onSave: (updatedPatient) {
@@ -690,8 +697,11 @@ class _PatientListScreenState extends State<PatientListScreen> {
   }
 
   void _confirmDelete(BuildContext context, Patient patient) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Delete Patient',
+      defaultWidth: 440,
+      defaultHeight: 260,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Delete Patient'),
         content: Text('Are you sure you want to delete ${patient.fullName}?'),
@@ -732,8 +742,11 @@ class _PatientListScreenState extends State<PatientListScreen> {
   }
 
   void _showPatientRecordsDialog(BuildContext context, Patient patient) {
-    showDialog(
+    FloatingWindowManager.showDialog<void>(
       context: context,
+      title: 'Dossiers Médicaux',
+      defaultWidth: 920,
+      defaultHeight: 700,
       builder: (dialogContext) => BlocProvider.value(
         value: context.read<MedicalRecordCubit>(),
         child: PatientMedicalRecordsListDialog(patient: patient),
