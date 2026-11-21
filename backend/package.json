@@ -1,7 +1,7 @@
 {
-  "name": "chifa-backend",
-  "version": "1.2.1",
-  "description": "Chifa Clinic Management Cloud Backend & Patient Portal",
+  "name": "sinaclinic-backend",
+  "version": "1.4.1",
+  "description": "SinaClinic Management Cloud Backend & Patient Portal",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
