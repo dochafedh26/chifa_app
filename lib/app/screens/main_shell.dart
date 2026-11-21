@@ -177,29 +177,38 @@ class _MainShellState extends State<MainShell> {
               title: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    width: isLandscapePhone ? 26 : 32,
-                    height: isLandscapePhone ? 26 : 32,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [AppTheme.primaryLight, AppTheme.primary],
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.asset(
+                      'assets/icon/icon.png',
+                      width: isLandscapePhone ? 26 : 32,
+                      height: isLandscapePhone ? 26 : 32,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => Container(
+                        width: isLandscapePhone ? 26 : 32,
+                        height: isLandscapePhone ? 26 : 32,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [AppTheme.primaryLight, AppTheme.primary],
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.local_hospital_rounded,
+                          color: Colors.white,
+                          size: isLandscapePhone ? 14 : 18,
+                        ),
                       ),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      Icons.local_hospital_rounded,
-                      color: Colors.white,
-                      size: isLandscapePhone ? 14 : 18,
                     ),
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'CHIFA',
+                    'SinaClinic',
                     style: TextStyle(
                       color: AppTheme.primary,
                       fontSize: isLandscapePhone ? 14 : 16,
                       fontWeight: FontWeight.w800,
-                      letterSpacing: 1,
+                      letterSpacing: 0.5,
                     ),
                   ),
                 ],
@@ -281,28 +290,37 @@ class _MainShellState extends State<MainShell> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [AppTheme.primaryLight, AppTheme.primary],
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(15),
+                    child: Image.asset(
+                      'assets/icon/icon.png',
+                      width: 52,
+                      height: 52,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [AppTheme.primaryLight, AppTheme.primary],
+                          ),
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        child: const Icon(
+                          Icons.local_hospital_rounded,
+                          color: Colors.white,
+                          size: 28,
+                        ),
                       ),
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    child: const Icon(
-                      Icons.local_hospital_rounded,
-                      color: Colors.white,
-                      size: 28,
                     ),
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    'CHIFA CMS',
+                    'SinaClinic',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
-                      letterSpacing: 1,
+                      letterSpacing: 0.6,
                     ),
                   ),
                 ],
@@ -367,38 +385,47 @@ class _MainShellState extends State<MainShell> {
         children: [
           // ── Logo / Brand ──────────────────────────────
           SizedBox(height: isCompactSidebar ? 12 : 16),
-          Container(
-            width: isCompactSidebar ? 40 : 46,
-            height: isCompactSidebar ? 40 : 46,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [AppTheme.primaryLight, AppTheme.primary],
-              ),
-              borderRadius: BorderRadius.circular(isCompactSidebar ? 12 : 14),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.primary.withValues(alpha: 0.4),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(isCompactSidebar ? 12 : 14),
+            child: Image.asset(
+              'assets/icon/icon.png',
+              width: isCompactSidebar ? 40 : 46,
+              height: isCompactSidebar ? 40 : 46,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => Container(
+                width: isCompactSidebar ? 40 : 46,
+                height: isCompactSidebar ? 40 : 46,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [AppTheme.primaryLight, AppTheme.primary],
+                  ),
+                  borderRadius: BorderRadius.circular(isCompactSidebar ? 12 : 14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.primary.withValues(alpha: 0.4),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: Icon(
-              Icons.local_hospital_rounded,
-              color: Colors.white,
-              size: isCompactSidebar ? 20 : 24,
+                child: Icon(
+                  Icons.local_hospital_rounded,
+                  color: Colors.white,
+                  size: isCompactSidebar ? 20 : 24,
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 6),
           Text(
-            'CHIFA',
+            'SINACLINIC',
             style: TextStyle(
               color: AppTheme.sidebarTextActive,
-              fontSize: 10,
+              fontSize: 9.5,
               fontWeight: FontWeight.w800,
-              letterSpacing: 2,
+              letterSpacing: 1.4,
             ),
           ),
           SizedBox(height: isCompactSidebar ? 12 : 20),

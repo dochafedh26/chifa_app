@@ -133,20 +133,30 @@ class _LoginScreenState extends State<LoginScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           // Logo and Title
-                          Icon(
-                            Icons.local_hospital,
-                            size: 80,
-                            color: Theme.of(context).colorScheme.primary,
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(18),
+                            child: Image.asset(
+                              'assets/icon/icon.png',
+                              width: 80,
+                              height: 80,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => Icon(
+                                Icons.local_hospital,
+                                size: 80,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            'Clinic Management',
+                            'SinaClinic',
                             style: Theme.of(context).textTheme.headlineMedium
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Sign in to continue',
+                            'Gestion de Cabinet Médical • par MedevSync',
+                            textAlign: TextAlign.center,
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(color: Colors.grey),
                           ),

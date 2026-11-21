@@ -14,11 +14,14 @@ class ApiConfig {
     return null;
   }
 
-  // Octenium Cloud backend API base URL (isolated on chifa.medevsync.com)
+  // Octenium Cloud backend API base URL (sinaclinic.medevsync.com)
   static String get baseUrl {
     if (kIsWeb) {
       final currentOrigin = Uri.base.origin;
       final path = Uri.base.path;
+      if (path.startsWith('/sinaclinic')) {
+        return '$currentOrigin/sinaclinic/api';
+      }
       if (path.startsWith('/chifa')) {
         return '$currentOrigin/chifa/api';
       }
@@ -32,7 +35,7 @@ class ApiConfig {
         !envUrl.contains('srv50.octenium.net')) {
       return envUrl.replaceAll(RegExp(r'/+$'), '');
     }
-    return 'https://chifa.medevsync.com/api';
+    return 'https://sinaclinic.medevsync.com/api';
   }
 
   static String get syncKey =>

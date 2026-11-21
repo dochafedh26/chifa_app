@@ -51,12 +51,12 @@ class _WaitingRoomTvScreenState extends State<WaitingRoomTvScreen>
   late Animation<double> _pulseAnimation;
 
   final List<String> _healthTips = [
-    'Bienvenue à la Clinique Chifa • Nous prenons soin de votre santé.',
+    'Bienvenue à la Clinique SinaClinic • Nous prenons soin de votre santé.',
     'Merci de préparer votre pièce d\'identité et vos examens récents.',
     'En cas d\'urgence médicale signalée, veuillez avertir l\'accueil immédiatement.',
     'Veuillez respecter le calme et couper la sonnerie de votre téléphone.',
     'Le port du masque reste recommandé en cas de symptômes grippaux.',
-    'Portail patient disponible en scannant le QR code sur votre carte Chifa.',
+    'Portail patient disponible en scannant le QR code sur votre carte SinaClinic.',
   ];
   int _tipIndex = 0;
   Timer? _tipTimer;
@@ -475,7 +475,7 @@ class _WaitingRoomTvScreenState extends State<WaitingRoomTvScreen>
                   ),
                   const SizedBox(width: 16),
                   const Text(
-                    'chifa.medevsync.com',
+                    'sinaclinic.medevsync.com',
                     style: TextStyle(
                       color: Color(0xFF38BDF8),
                       fontSize: 13,

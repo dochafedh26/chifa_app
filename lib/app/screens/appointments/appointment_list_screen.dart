@@ -1521,11 +1521,11 @@ class _AppointmentListScreenState extends State<AppointmentListScreen> {
         'dd/MM/yyyy à HH:mm',
       ).format(appointment.appointmentDate);
       final portalUrl =
-          'https://chifa.medevsync.com/?phone=${patient.phone ?? patient.patientId}&pin=${patient.dateOfBirth.year}';
+          'https://sinaclinic.medevsync.com/?phone=${patient.phone ?? patient.patientId}&pin=${patient.dateOfBirth.year}';
 
       final message =
           'Bonjour ${patient.firstName} ${patient.lastName},\n\n'
-          'La Clinique Chifa vous rappelle votre rendez-vous prévu le *$dateFormatted*.\n\n'
+          'La Clinique SinaClinic vous rappelle votre rendez-vous prévu le *$dateFormatted*.\n\n'
           '📱 Vous pouvez consulter vos documents sur votre espace patient :\n$portalUrl\n\n'
           'Merci de bien vouloir nous confirmer votre présence.';
 
@@ -1615,16 +1615,16 @@ class _QuickCheckInDialogState extends State<_QuickCheckInDialog> {
       dynamic resolvedPatientId;
       String? resolvedPhone;
 
-      // 1. Détection format JSON (Carte PVC Chifa)
+      // 1. Détection format JSON (Carte PVC SinaClinic / Chifa)
       if (query.startsWith('{') && query.endsWith('}')) {
         try {
           final data = jsonDecode(query) as Map<String, dynamic>;
-          resolvedPatientId = data['chifa_id'] ?? data['id'];
+          resolvedPatientId = data['sinaclinic_id'] ?? data['chifa_id'] ?? data['id'];
           resolvedPhone = data['tel']?.toString();
         } catch (_) {}
       }
-      // 2. Détection format URL (medevsync.com/chifa/?phone=...&id=...)
-      else if (query.contains('http') || query.contains('chifa') || query.contains('portal')) {
+      // 2. Détection format URL (sinaclinic.medevsync.com/?phone=...&id=...)
+      else if (query.contains('http') || query.contains('sinaclinic') || query.contains('chifa') || query.contains('portal')) {
         try {
           final uri = Uri.parse(query);
           resolvedPatientId = uri.queryParameters['id'] ?? uri.queryParameters['patient_id'];
@@ -1807,7 +1807,7 @@ class _QuickCheckInDialogState extends State<_QuickCheckInDialog> {
 
   Future<void> _openCameraOrPhoneScanner() async {
     final sessionId = 'scan_${DateTime.now().millisecondsSinceEpoch.toRadixString(36)}';
-    final scannerUrl = 'https://chifa.medevsync.com/scanner?session=$sessionId';
+    final scannerUrl = 'https://sinaclinic.medevsync.com/scanner?session=$sessionId';
 
     Timer? pollTimer;
     bool isDialogClosed = false;
@@ -1826,7 +1826,7 @@ class _QuickCheckInDialogState extends State<_QuickCheckInDialog> {
           }
           try {
             final res = await http.get(
-              Uri.parse('https://chifa.medevsync.com/api/tv/scan-session/$sessionId'),
+              Uri.parse('https://sinaclinic.medevsync.com/api/tv/scan-session/$sessionId'),
             ).timeout(const Duration(seconds: 2));
 
             if (res.statusCode == 200) {

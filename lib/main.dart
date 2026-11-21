@@ -250,7 +250,7 @@ class MyApp extends StatelessWidget {
           BlocProvider(create: (context) => WorkspaceCubit()),
         ],
         child: MaterialApp(
-          title: 'Chifa - Clinic Management',
+          title: 'SinaClinic — Gestion de Cabinet Médical',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.lightTheme,
           localizationsDelegates: const [
@@ -291,14 +291,23 @@ class SplashScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.medical_services,
-              size: 80,
-              color: Theme.of(context).colorScheme.primary,
+            ClipRRect(
+              borderRadius: BorderRadius.circular(22),
+              child: Image.asset(
+                'assets/icon/icon.png',
+                width: 96,
+                height: 96,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => Icon(
+                  Icons.medical_services,
+                  size: 80,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
             ),
             const SizedBox(height: 24),
             Text(
-              'CHIFA',
+              'SinaClinic',
               style: Theme.of(context).textTheme.headlineLarge?.copyWith(
                 fontWeight: FontWeight.bold,
                 color: Theme.of(context).colorScheme.primary,
@@ -306,7 +315,7 @@ class SplashScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Clinic Management System',
+              'Gestion de Cabinet & Dossier Patient • par MedevSync',
               style: Theme.of(
                 context,
               ).textTheme.bodyMedium?.copyWith(color: Colors.grey),

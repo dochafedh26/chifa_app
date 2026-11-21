@@ -1,17 +1,23 @@
-name: Build and Release
+name: SinaClinic Build, Release & Octenium Deploy
 
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version Name (ex: 1.4.0)'
+        required: false
+        default: '1.4.0'
+        type: string
 
 permissions:
   contents: write
 
 jobs:
   build-android:
-    name: Build Android
+    name: Build Android (APK + AAB)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -27,6 +33,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          cache: true
 
       - name: Prepare environment file
         run: cp .env.example .env
@@ -49,7 +56,7 @@ jobs:
             build/app/outputs/bundle/release/app-release.aab
 
   build-windows:
-    name: Build Windows
+    name: Build Windows (Setup .exe + Portable .zip)
     runs-on: windows-latest
     steps:
       - name: Checkout Code
@@ -59,6 +66,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          cache: true
 
       - name: Prepare environment file
         run: cp .env.example .env
@@ -66,25 +74,73 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
+      - name: Install Inno Setup
+        run: choco install innosetup --yes --no-progress
+
       - name: Build Windows
         run: flutter build windows --release
 
-      - name: Package Windows Release
+      - name: Build Windows Setup Installer (.exe)
         shell: pwsh
         run: |
-          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath chifa-windows.zip
+          $VERSION = "${{ inputs.version || github.ref_name }}".TrimStart('v')
+          if (-not $VERSION -or $VERSION -eq 'main') { $VERSION = "1.4.0" }
+          New-Item -ItemType Directory -Force -Path "win-dist"
+          $iscc = "iscc"
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) {
+            $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          }
+          & $iscc /DMyAppVersion="$VERSION" windows/installer/sinaclinic_setup.iss
+
+      - name: Package Windows Portable
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "win-dist"
+          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath win-dist/sinaclinic-windows.zip -Force
 
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
-          path: chifa-windows.zip
+          path: win-dist/*
+
+  build-web:
+    name: Build Web (Octenium /app/)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Prepare environment file
+        run: cp .env.example .env
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Build Web
+        run: flutter build web --release --base-href /app/
+
+      - name: Archive Web Build
+        run: |
+          mkdir -p web-dist
+          cd build/web && zip -r ../../web-dist/sinaclinic-web.zip . && cd ../..
+
+      - name: Upload Web Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: web-dist/sinaclinic-web.zip
 
   create-release:
-    name: Create GitHub Release
-    needs: [build-android, build-windows]
+    name: Publish GitHub Release & Deploy to Octenium
+    needs: [build-android, build-windows, build-web]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -101,23 +157,98 @@ jobs:
           name: windows-build
           path: windows-release
 
-      - name: Prepare Release Assets
+      - name: Download Web Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: web-build
+          path: web-release
+
+      - name: Prepare Release Assets & Octenium Bundle (Web + Portal + TV + Scanner)
         run: |
-          mkdir -p release-assets
+          mkdir -p release-assets backend/public/app
+          unzip -q -o web-release/sinaclinic-web.zip -d backend/public/app
           node backend/package_deploy.js
-          cp backend/chifa-backend-octenium.zip release-assets/chifa-backend-octenium.zip
-          find android-release -name "*.apk" -exec cp {} release-assets/chifa-android.apk \;
-          find android-release -name "*.aab" -exec cp {} release-assets/chifa-android.aab \;
-          find windows-release -name "*.zip" -exec cp {} release-assets/chifa-windows.zip \;
+          cp backend/sinaclinic-backend-octenium.zip release-assets/sinaclinic-backend-octenium.zip
+          cp web-release/sinaclinic-web.zip release-assets/sinaclinic-web.zip
+          find android-release -name "*.apk" -exec cp {} release-assets/sinaclinic-android.apk \;
+          find android-release -name "*.aab" -exec cp {} release-assets/sinaclinic-android.aab \;
+          find windows-release -name "*Setup.exe" -exec cp {} release-assets/SinaClinic_Windows_Setup.exe \;
+          find windows-release -name "sinaclinic-windows.zip" -exec cp {} release-assets/sinaclinic-windows.zip \;
           ls -la release-assets/
 
+      - name: Deploy to Octenium Hosting (FTP)
+        env:
+          FTP_HOST: ${{ secrets.OCTENIUM_FTP_HOST }}
+          FTP_USER: ${{ secrets.OCTENIUM_FTP_USER }}
+          FTP_PASS: ${{ secrets.OCTENIUM_FTP_PASSWORD }}
+          FTP_ROOT: ${{ secrets.OCTENIUM_SINACLINIC_WEB_DIR || 'sinaclinic' }}
+        run: |
+          if [ -z "$FTP_HOST" ] || [ -z "$FTP_USER" ] || [ -z "$FTP_PASS" ]; then
+            echo "OCTENIUM_FTP_* secrets not set; skipping automated FTP upload. Use sinaclinic-backend-octenium.zip in Release assets."
+            exit 0
+          fi
+          python3 - << 'PY'
+          import ftplib, os
+          from pathlib import Path
+
+          ftp = ftplib.FTP_TLS(os.environ['FTP_HOST'])
+          ftp.login(os.environ['FTP_USER'], os.environ['FTP_PASS'])
+          ftp.prot_p()
+
+          root_dir = os.environ['FTP_ROOT'].strip('/')
+          def ensure_dir(path_str):
+              curr = ''
+              for part in path_str.split('/'):
+                  if not part:
+                      continue
+                  curr = f'{curr}/{part}'.strip('/')
+                  try:
+                      ftp.mkd(curr)
+                  except Exception:
+                      pass
+
+          ensure_dir(f'{root_dir}/app')
+          ensure_dir(f'{root_dir}/download')
+
+          web_dir = Path('backend/public/app')
+          for r, _, files in os.walk(web_dir):
+              rel = Path(r).relative_to(web_dir).as_posix()
+              remote_dir = f'{root_dir}/app' if rel == '.' else f'{root_dir}/app/{rel}'
+              ensure_dir(remote_dir)
+              for f in files:
+                  with open(Path(r) / f, 'rb') as fp:
+                      ftp.storbinary(f'STOR {remote_dir}/{f}', fp)
+
+          for local_name, remote_name in [
+              ('release-assets/sinaclinic-android.apk', f'{root_dir}/download/sinaclinic.apk'),
+              ('release-assets/SinaClinic_Windows_Setup.exe', f'{root_dir}/download/sinaclinic-setup.exe'),
+              ('release-assets/sinaclinic-backend-octenium.zip', f'{root_dir}/sinaclinic-backend-octenium.zip'),
+          ]:
+              if os.path.exists(local_name):
+                  with open(local_name, 'rb') as fp:
+                      ftp.storbinary(f'STOR {remote_name}', fp)
+
+          ftp.quit()
+          print('Deployed SinaClinic Web & downloads to Octenium successfully!')
+          PY
+
       - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          name: "SinaClinic ${{ github.ref_name }}"
+          body: |
+            ### SinaClinic par MedevSync (${{ github.ref_name }})
+            - **Android**: `sinaclinic-android.apk` & `sinaclinic-android.aab`
+            - **Windows**: `SinaClinic_Windows_Setup.exe` & `sinaclinic-windows.zip`
+            - **Web App**: `sinaclinic-web.zip`
+            - **Octenium Full Bundle (Web App `/app` + Patient Portal `/portal` + Smart TV `/tv` + QR Scanner `/scanner` + `/api`)**: `sinaclinic-backend-octenium.zip`
           files: |
-            release-assets/chifa-android.apk
-            release-assets/chifa-android.aab
-            release-assets/chifa-windows.zip
-            release-assets/chifa-backend-octenium.zip
+            release-assets/sinaclinic-android.apk
+            release-assets/sinaclinic-android.aab
+            release-assets/SinaClinic_Windows_Setup.exe
+            release-assets/sinaclinic-windows.zip
+            release-assets/sinaclinic-web.zip
+            release-assets/sinaclinic-backend-octenium.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

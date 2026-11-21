@@ -2,9 +2,9 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-console.log('[Deploy] Preparing Chifa Backend deployment archive for chifa.medevsync.com...');
+console.log('[Deploy] Preparing SinaClinic Backend deployment archive for sinaclinic.medevsync.com...');
 
-const targetZip = path.join(__dirname, 'chifa-backend-octenium.zip');
+const targetZip = path.join(__dirname, 'sinaclinic-backend-octenium.zip');
 if (fs.existsSync(targetZip)) {
   fs.unlinkSync(targetZip);
 }
@@ -55,9 +55,9 @@ try {
   }
 }
 
-console.log('\n[Deploy] Ready! To deploy on Octenium cPanel (https://chifa.medevsync.com):');
-console.log('1. In cPanel > "Domains", create subdomain: chifa.medevsync.com');
-console.log('2. In cPanel > "Setup Node.js App", create/edit the app for Application URL: chifa.medevsync.com and Startup File: server.js');
-console.log('3. Upload and extract chifa-backend-octenium.zip into the application root directory.');
+console.log('\n[Deploy] Ready! To deploy on Octenium cPanel (https://sinaclinic.medevsync.com):');
+console.log('1. In cPanel > "Domains", create subdomain: sinaclinic.medevsync.com');
+console.log('2. In cPanel > "Setup Node.js App", create/edit the app for Application URL: sinaclinic.medevsync.com and Startup File: server.js');
+console.log('3. Upload and extract sinaclinic-backend-octenium.zip into the application root directory.');
 console.log('4. Click "Run NPM Install" then "Restart" in cPanel Node.js App Manager.');
-console.log('5. Verify health endpoint: https://chifa.medevsync.com/api/health');
+console.log('5. Verify health endpoint: https://sinaclinic.medevsync.com/api/health');

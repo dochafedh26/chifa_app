@@ -160,11 +160,13 @@ const setAppStaticHeaders = (res, filePath) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
 };
 
+app.use('/sinaclinic/app', express.static(appStaticDir, { setHeaders: setAppStaticHeaders }));
 app.use('/chifa/app', express.static(appStaticDir, { setHeaders: setAppStaticHeaders }));
 app.use('/app', express.static(appStaticDir, { setHeaders: setAppStaticHeaders }));
 
 // Respond with 200 to any legacy or cached .env asset requests so it never yields 403
 app.get([
+  '/sinaclinic/app/assets/.env',
   '/chifa/app/assets/.env',
   '/app/assets/.env',
   '*/assets/.env'
@@ -174,6 +176,9 @@ app.get([
 
 // Fallback index.html for client-side GoRouter navigation
 app.get([
+  '/sinaclinic/app',
+  '/sinaclinic/app/',
+  '/sinaclinic/app/*',
   '/chifa/app',
   '/chifa/app/',
   '/chifa/app/*',
@@ -190,7 +195,7 @@ app.get([
     res.setHeader('Content-Type', 'text/html');
     res.sendFile(filePath);
   } else {
-    res.status(404).send('Application Chifa Web non encore déployée.');
+    res.status(404).send('Application SinaClinic Web non encore déployée.');
   }
 });
 
@@ -199,12 +204,12 @@ app.get([
 const portalStaticDir = path.join(__dirname, 'public', 'portal');
 
 // Explicit asset handlers to guarantee correct MIME types under Passenger
-app.get(['/style.css', '/portal/style.css', '/chifa/style.css', '/chifa/portal/style.css'], (req, res) => {
+app.get(['/style.css', '/portal/style.css', '/sinaclinic/style.css', '/sinaclinic/portal/style.css', '/chifa/style.css', '/chifa/portal/style.css'], (req, res) => {
   res.type('text/css');
   res.sendFile(path.join(portalStaticDir, 'style.css'));
 });
 
-app.get(['/app.js', '/portal/app.js', '/chifa/app.js', '/chifa/portal/app.js'], (req, res) => {
+app.get(['/app.js', '/portal/app.js', '/sinaclinic/app.js', '/sinaclinic/portal/app.js', '/chifa/app.js', '/chifa/portal/app.js'], (req, res) => {
   res.type('application/javascript');
   res.sendFile(path.join(portalStaticDir, 'app.js'));
 });
@@ -212,6 +217,8 @@ app.get(['/app.js', '/portal/app.js', '/chifa/app.js', '/chifa/portal/app.js'], 
 // Serve static assets from all mount points
 app.use(express.static(portalStaticDir));
 app.use('/portal', express.static(portalStaticDir));
+app.use('/sinaclinic', express.static(portalStaticDir));
+app.use('/sinaclinic/portal', express.static(portalStaticDir));
 app.use('/chifa', express.static(portalStaticDir));
 app.use('/chifa/portal', express.static(portalStaticDir));
 
@@ -225,8 +232,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// Direct POST to / or /chifa or /chifa/ (auto-detects sync query, sync push, activation, or portal login)
-app.post(['/', '/chifa', '/chifa/'], (req, res, next) => {
+// Direct POST to / or /sinaclinic or /chifa (auto-detects sync query, sync push, activation, or portal login)
+app.post(['/', '/sinaclinic', '/sinaclinic/', '/chifa', '/chifa/'], (req, res, next) => {
   if (req.body && typeof req.body.sql === 'string') {
     req.url = '/query';
     return syncRoutes(req, res, next);
@@ -246,9 +253,14 @@ app.post(['/', '/chifa', '/chifa/'], (req, res, next) => {
   next();
 });
 
-// Serve index.html for root, /chifa, /chifa/, /portal, /portal/, and /chifa/portal
+// Serve index.html for root, /sinaclinic, /chifa, /portal
 app.get([
   '/', 
+  '/sinaclinic',
+  '/sinaclinic/',
+  '/sinaclinic/portal',
+  '/sinaclinic/portal/',
+  '/sinaclinic/portal/index.html',
   '/chifa', 
   '/chifa/', 
   '/portal', 
@@ -267,11 +279,15 @@ app.get([
 // ─── STATIC SMART TV DISPLAY ──────────────────────────────────────────────────
 const tvStaticDir = path.join(__dirname, 'public', 'tv');
 app.use('/tv', express.static(tvStaticDir));
+app.use('/sinaclinic/tv', express.static(tvStaticDir));
 app.use('/chifa/tv', express.static(tvStaticDir));
 app.get([
   '/tv',
   '/tv/',
   '/tv/index.html',
+  '/sinaclinic/tv',
+  '/sinaclinic/tv/',
+  '/sinaclinic/tv/index.html',
   '/chifa/tv',
   '/chifa/tv/',
   '/chifa/tv/index.html'
@@ -282,11 +298,15 @@ app.get([
 // ─── STATIC WEBCAM / SMARTPHONE SCANNER ───────────────────────────────────────
 const scannerStaticDir = path.join(__dirname, 'public', 'scanner');
 app.use('/scanner', express.static(scannerStaticDir));
+app.use('/sinaclinic/scanner', express.static(scannerStaticDir));
 app.use('/chifa/scanner', express.static(scannerStaticDir));
 app.get([
   '/scanner',
   '/scanner/',
   '/scanner/index.html',
+  '/sinaclinic/scanner',
+  '/sinaclinic/scanner/',
+  '/sinaclinic/scanner/index.html',
   '/chifa/scanner',
   '/chifa/scanner/',
   '/chifa/scanner/index.html'
@@ -296,7 +316,7 @@ app.get([
 
 
 // ─── API ROUTES ───────────────────────────────────────────────────────────────
-// Support /chifa/api, /api, /chifa, and /portal/api prefixes
+// Support /sinaclinic/api, /chifa/api, /api, /sinaclinic, /chifa, and /portal/api prefixes
 const registerApiRoutes = (prefix) => {
   app.use(`${prefix}/activation`, activationRoutes);
   app.use(`${prefix}/auth`, authRoutes);
@@ -306,15 +326,19 @@ const registerApiRoutes = (prefix) => {
   app.use(`${prefix}/tv`, tvRoutes);
 };
 
+registerApiRoutes('/sinaclinic/api');
 registerApiRoutes('/chifa/api');
 registerApiRoutes('/api');
+registerApiRoutes('/sinaclinic');
 registerApiRoutes('/chifa');
 registerApiRoutes('/portal/api');
 
 // ─── HEALTH CHECKS ────────────────────────────────────────────────────────────
-const healthHandler = (req, res) => res.json({ status: 'ok', service: 'chifa-backend', time: new Date() });
+const healthHandler = (req, res) => res.json({ status: 'ok', service: 'sinaclinic-backend', time: new Date() });
 app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
+app.get('/sinaclinic/health', healthHandler);
+app.get('/sinaclinic/api/health', healthHandler);
 app.get('/chifa/health', healthHandler);
 app.get('/chifa/api/health', healthHandler);
 
@@ -340,7 +364,7 @@ if (PORT === 'passenger') {
 }
 
 const server = app.listen(PORT, () => {
-  console.log(`[Chifa Backend] Server running on port ${PORT}`);
+  console.log(`[SinaClinic Backend] Server running on port ${PORT}`);
 });
 
 server.on('error', (err) => {

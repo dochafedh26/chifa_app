@@ -95,8 +95,8 @@ class PvcAppointmentCardPdf {
     PvcCardSize cardSize = PvcCardSize.cr80,
     PvcPrintMode printMode = PvcPrintMode.both,
     int targetSlotIndex = 1,
-    String clinicName = 'CLINIQUE MÉDICALE CHIFA',
-    String clinicAddress = 'Cabinet Médical Chifa',
+    String clinicName = 'CLINIQUE MÉDICALE SINACLINIC',
+    String clinicAddress = 'Cabinet Médical SinaClinic',
     String clinicPhone = '05 50 00 00 00',
     String doctorName = 'Dr. Médecin Traitant',
   }) async {
@@ -259,7 +259,7 @@ class PvcAppointmentCardPdf {
       'nin': patient.nationalId ?? '',
       'adresse': patient.address ?? '',
       'portal_url':
-          'https://chifa.medevsync.com/?phone=${patient.phone ?? patient.patientId}&pin=${patient.dateOfBirth.year}',
+          'https://sinaclinic.medevsync.com/?phone=${patient.phone ?? patient.patientId}&pin=${patient.dateOfBirth.year}',
       'uuid': patient.uuid ?? '',
       'cree_le': dateFormat.format(patient.createdAt),
     });

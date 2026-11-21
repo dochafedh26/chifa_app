@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SinaClinic par MedevSync — Logiciel Cabinet Médical Hors-Ligne</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 12mm;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: #0f172a;
+      background: #ffffff;
+      font-size: 10.2pt;
+      line-height: 1.42;
+    }
+
+    .sheet {
+      max-width: 190mm;
+      margin: 0 auto;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #0f172a 0%, #0f766e 100%);
+      color: #ffffff;
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .brand-title {
+      font-size: 20pt;
+      font-weight: 800;
+      margin: 0 0 2px 0;
+      letter-spacing: -0.3px;
+    }
+
+    .brand-sub {
+      font-size: 9.5pt;
+      color: #ccfbf1;
+      margin: 0;
+      font-weight: 600;
+    }
+
+    .pilot-pill {
+      background: rgba(255, 255, 255, 0.16);
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-size: 8.5pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      white-space: nowrap;
+    }
+
+    .lead {
+      background: #f0fdfa;
+      border-left: 4px solid #0d9488;
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      font-size: 10pt;
+      color: #134e4a;
+      font-weight: 600;
+    }
+
+    h2 {
+      font-size: 11.5pt;
+      font-weight: 800;
+      color: #0f766e;
+      margin: 12px 0 8px 0;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      border-bottom: 1.5px solid #e2e8f0;
+      padding-bottom: 3px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 9px;
+      padding: 10px 12px;
+    }
+
+    .card-accent {
+      background: #f0fdfa;
+      border-color: #99f6e4;
+    }
+
+    .card h3 {
+      margin: 0 0 4px 0;
+      font-size: 10pt;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    .card p {
+      margin: 0;
+      font-size: 8.8pt;
+      color: #475569;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 8.8pt;
+      margin-bottom: 12px;
+    }
+
+    th {
+      background: #0f766e;
+      color: #ffffff;
+      text-align: left;
+      padding: 7px 9px;
+      font-weight: 700;
+    }
+
+    td {
+      padding: 6px 9px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    tr:nth-child(even) td {
+      background: #f8fafc;
+    }
+
+    .price-card {
+      border: 1.5px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: #ffffff;
+    }
+
+    .price-card.featured {
+      border-color: #0d9488;
+      background: #f0fdfa;
+    }
+
+    .price-name {
+      font-weight: 800;
+      font-size: 10pt;
+      color: #0f172a;
+    }
+
+    .price-amount {
+      font-size: 14pt;
+      font-weight: 900;
+      color: #0f766e;
+      margin: 3px 0;
+    }
+
+    .price-setup {
+      font-size: 8.3pt;
+      font-weight: 700;
+      color: #475569;
+      margin-bottom: 4px;
+    }
+
+    .price-desc {
+      font-size: 8.3pt;
+      color: #475569;
+    }
+
+    .contact-bar {
+      background: #0f172a;
+      color: #ffffff;
+      border-radius: 10px;
+      padding: 11px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 8px;
+      font-size: 9pt;
+    }
+
+    .contact-bar strong {
+      color: #5eead4;
+    }
+
+    .disclaimer {
+      margin-top: 8px;
+      font-size: 7.8pt;
+      color: #64748b;
+      text-align: center;
+      line-height: 1.35;
+    }
+  </style>
+</head>
+<body>
+  <div class="sheet">
+    <div class="header">
+      <div>
+        <h1 class="brand-title">SinaClinic <span style="font-weight:500; font-size:12pt; color:#99f6e4;">par MedevSync</span></h1>
+        <p class="brand-sub">Gestion de Cabinet Médical &amp; Dossier Patient • Compatible nomenclature CNAS / Chifa</p>
+      </div>
+      <div class="pilot-pill">Pilote Blida &amp; Alger • 30 Jours</div>
+    </div>
+
+    <div class="lead">
+      Conçu pour les médecins algériens : continuez vos consultations, ordonnances DCI et encaissements même lorsque Internet est coupé — tout en gardant 100 % de vos dossiers sur votre propre poste.
+    </div>
+
+    <h2>4 Piliers Cliniques &amp; Opérationnels</h2>
+    <div class="grid-2">
+      <div class="card card-accent">
+        <h3>1. Zéro Panne : 100 % Hors-Ligne (SQLite)</h3>
+        <p>Base locale ultra-rapide sur votre PC d'accueil et de consultation. Coupure ADSL ou 4G ? Vos dossiers, constantes et RDV restent ouverts en &lt; 100 ms.</p>
+      </div>
+      <div class="card">
+        <h3>2. Ordonnance DCI en 20 Secondes</h3>
+        <p>Nomenclature médicamenteuse locale (DCI &amp; marques), alertes d'allergies visibles dès l'ouverture et impression A4/A5 sans rature.</p>
+      </div>
+      <div class="card">
+        <h3>3. Portail Patient &amp; Carte QR</h3>
+        <p>Carte patient imprimable et partage ciblé des documents pour limiter les appels répétitifs au secrétariat.</p>
+      </div>
+      <div class="card card-accent">
+        <h3>4. Souveraineté &amp; Export 1-Clic</h3>
+        <p>Export instantané vers Excel (CSV UTF-8) + archive JSON complète. Maîtrise locale alignée sur les principes de la Loi 18-07 / Loi 25-11.</p>
+      </div>
+    </div>
+
+    <h2>ROI Quotidien vs. Registres Papier</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Indicateur Cabinet</th>
+          <th>Registre Papier</th>
+          <th>Logiciel Cloud Uniquement</th>
+          <th>SinaClinic (Local-First)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Continuité sans Wi-Fi / 4G</td>
+          <td>Oui</td>
+          <td>Activité bloquée</td>
+          <td><strong>100 % Opérationnel (SQLite)</strong></td>
+        </tr>
+        <tr>
+          <td>Recherche dossier + rédaction Rx</td>
+          <td>3 à 6 minutes</td>
+          <td>Variable selon débit</td>
+          <td><strong>~25 secondes</strong></td>
+        </tr>
+        <tr>
+          <td>Gain estimé (20 patients/jour)</td>
+          <td>Référence</td>
+          <td>Variable</td>
+          <td><strong>+45 min/j récupérées (~2–3 consultations)</strong></td>
+        </tr>
+        <tr>
+          <td>Récupération intégrale si arrêt</td>
+          <td>Manuelle</td>
+          <td>Dépend du fournisseur</td>
+          <td><strong>Export 1-Clic CSV + JSON inclus</strong></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Tarifs Transparents (DZD)</h2>
+    <div class="grid-3">
+      <div class="price-card">
+        <div class="price-name">Solo Cabinet</div>
+        <div class="price-amount">3 500 DZD <span style="font-size:8.5pt; font-weight:600; color:#475569;">/ mois</span></div>
+        <div class="price-setup">+ 15 000 DZD installation &amp; formation</div>
+        <div class="price-desc">1 médecin + accueil, dossiers, ordonnances DCI, factures &amp; export 1-clic.</div>
+      </div>
+      <div class="price-card featured">
+        <div class="price-name">Cabinet Multi-Médecins</div>
+        <div class="price-amount">6 500 DZD <span style="font-size:8.5pt; font-weight:600; color:#475569;">/ mois</span></div>
+        <div class="price-setup">+ 25 000 DZD installation &amp; formation</div>
+        <div class="price-desc">2 à 4 praticiens, file d'attente partagée, portail patient QR &amp; sauvegarde locale.</div>
+      </div>
+      <div class="price-card">
+        <div class="price-name">Polyclinique</div>
+        <div class="price-amount">12 000 DZD <span style="font-size:8.5pt; font-weight:600; color:#475569;">/ mois</span></div>
+        <div class="price-setup">+ 40 000 DZD déploiement complet</div>
+        <div class="price-desc">5+ médecins, gestion multi-rôles (Admin / Médecin / Assistant) &amp; suivi prioritaire.</div>
+      </div>
+    </div>
+
+    <div class="contact-bar">
+      <div>
+        <strong>Démo « Wi-Fi Coupé » sur site à Blida &amp; Alger (15 min)</strong><br />
+        Installation complète en 45 min • Accompagnement secrétariat inclus
+      </div>
+      <div style="text-align:right;">
+        WhatsApp / Tél : <strong>+213 660 67 52 79</strong><br />
+        Email : <strong>support@medsina.com</strong>
+      </div>
+    </div>
+
+    <p class="disclaimer">
+      SinaClinic est un logiciel indépendant édité par MedevSync, compatible avec la nomenclature médicale CNAS/Chifa. Non affilié à la CNAS. Logiciel d'aide à l'organisation de cabinet ne revendiquant pas d'agrément ANPDP.
+    </p>
+  </div>
+</body>
+</html>
