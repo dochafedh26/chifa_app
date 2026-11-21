@@ -181,7 +181,7 @@ jobs:
           FTP_HOST: ${{ secrets.OCTENIUM_FTP_HOST }}
           FTP_USER: ${{ secrets.OCTENIUM_FTP_USER }}
           FTP_PASS: ${{ secrets.OCTENIUM_FTP_PASSWORD }}
-          FTP_ROOT: ${{ secrets.OCTENIUM_SINACLINIC_WEB_DIR || 'sinaclinic' }}
+          FTP_ROOT: ${{ secrets.OCTENIUM_SINACLINIC_WEB_DIR || 'sinaclinic.medevsync.com' }}
         run: |
           if [ -z "$FTP_HOST" ] || [ -z "$FTP_USER" ] || [ -z "$FTP_PASS" ]; then
             echo "OCTENIUM_FTP_* secrets not set; skipping automated FTP upload. Use sinaclinic-backend-octenium.zip in Release assets."
@@ -191,9 +191,16 @@ jobs:
           import ftplib, os
           from pathlib import Path
 
-          ftp = ftplib.FTP_TLS(os.environ['FTP_HOST'])
-          ftp.login(os.environ['FTP_USER'], os.environ['FTP_PASS'])
-          ftp.prot_p()
+          host = os.environ['FTP_HOST']
+          user = os.environ['FTP_USER']
+          passwd = os.environ['FTP_PASS']
+          try:
+              ftp = ftplib.FTP_TLS(host, timeout=60)
+              ftp.login(user, passwd)
+              ftp.prot_p()
+          except Exception:
+              ftp = ftplib.FTP(host, timeout=60)
+              ftp.login(user, passwd)
 
           root_dir = os.environ['FTP_ROOT'].strip('/')
           def ensure_dir(path_str):

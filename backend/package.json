@@ -1,6 +1,6 @@
 {
   "name": "sinaclinic-backend",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "SinaClinic Management Cloud Backend & Patient Portal",
   "main": "server.js",
   "scripts": {
